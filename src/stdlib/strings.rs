@@ -12,13 +12,13 @@ pub(crate) fn split(vm: &mut VM, (s, at): (String, Option<String>)) -> RantStdRe
       .collect::<Vec<String>>()
   }.try_into_rant().into_runtime_result()?;
 
-  vm.cur_frame_mut().write_value(list);
+  vm.cur_frame_mut().write(list);
   Ok(())
 }
 
 pub(crate) fn lines(vm: &mut VM, s: String) -> RantStdResult {
   let lines: Vec<RantValue> = s.lines().map(|line| RantValue::String(line.into())).collect();
-  vm.cur_frame_mut().write_value(RantValue::List(RantList::from(lines).into_handle()));
+  vm.cur_frame_mut().write(lines);
   Ok(())
 }
 
@@ -44,5 +44,10 @@ pub(crate) fn upper(vm: &mut VM, s: String) -> RantStdResult {
 
 pub(crate) fn lower(vm: &mut VM, s: String) -> RantStdResult {
   vm.cur_frame_mut().write_frag(s.to_lowercase().as_str());
+  Ok(())
+}
+
+pub(crate) fn string_replace(vm: &mut VM, (input, query, replacement): (RantString, RantString, RantString)) -> RantStdResult {
+  vm.cur_frame_mut().write_frag(input.as_str().replace(query.as_str(), replacement.as_str()).as_str());
   Ok(())
 }

@@ -4,7 +4,7 @@ use once_cell::sync::OnceCell;
 use smallvec::{SmallVec};
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::{TryFromRant, InternalString, TryIntoRant, RantList, RantValue, ValueError, util, RantTuple};
+use crate::{InternalString, RantList, RantValue, util, RantTuple};
 
 type Graphemes = SmallVec<[(usize, usize); 1]>;
 
@@ -235,24 +235,5 @@ impl PartialEq for RantString {
 impl PartialOrd for RantString {
   fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
     self.raw.partial_cmp(&other.raw)
-  }
-}
-
-impl TryFromRant for RantString {
-  fn try_from_rant(val: RantValue) -> Result<Self, ValueError> {
-    if let RantValue::String(s) = val.into_string_value() {
-      return Ok(s)
-    }
-    unreachable!()
-  }
-
-  fn is_rant_optional() -> bool {
-    false
-  }
-}
-
-impl TryIntoRant for RantString {
-  fn try_into_rant(self) -> Result<RantValue, ValueError> {
-    Ok(RantValue::String(self))
   }
 }

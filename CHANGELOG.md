@@ -3,6 +3,9 @@
 ## 4.0.0-alpha.28 (unreleased)
 
 ## New
+* Added infallible `IntoRant` and `FromRant` traits
+* Added stdlib functions:
+  * `[string-replace]`
 
 ## Changes
 * Renamed stdlib functions:

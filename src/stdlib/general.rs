@@ -10,12 +10,12 @@ use crate::lang::{VarAccessMode};
 /// Prints the first argument that isn't an `empty`.
 pub(crate) fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> RantStdResult {
   if !a.is_empty() {
-    vm.cur_frame_mut().write_value(a);
+    vm.cur_frame_mut().write(a);
     Ok(())
   } else {
     for val in b.drain(..) {
       if !val.is_empty() {
-        vm.cur_frame_mut().write_value(val);
+        vm.cur_frame_mut().write(val);
         break
       }
     }
@@ -38,7 +38,7 @@ pub(crate) fn call(vm: &mut VM, (func, args): (RantFunctionHandle, Option<Vec<Ra
 pub(crate) fn cat(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult {
   let frame = vm.cur_frame_mut();
   for val in args.drain(..) {
-    frame.write_value(val);
+    frame.write(val);
   }
   
   Ok(())
@@ -48,11 +48,11 @@ pub(crate) fn print(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult 
   if args.len() < 2 {
     let frame = vm.cur_frame_mut();
     for val in args.drain(..) {
-      frame.write_value(val);
+      frame.write(val);
     }
   } else if let Some(frame) = vm.parent_frame_mut(1) {
     for val in args.drain(..) {
-      frame.write_value(val);
+      frame.write(val);
     }
   }
   
@@ -63,7 +63,7 @@ pub(crate) fn print(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult 
 ///
 /// Returns a copy of a value.
 pub(crate) fn copy(vm: &mut VM, val: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value(val.shallow_copy());
+  vm.cur_frame_mut().write(val.shallow_copy());
   Ok(())
 }
 
@@ -72,7 +72,7 @@ pub(crate) fn copy(vm: &mut VM, val: RantValue) -> RantStdResult {
 /// Prints `a` if `cond` is true, or `b` otherwise.
 pub(crate) fn either(vm: &mut VM, (cond, a, b): (bool, RantValue, RantValue)) -> RantStdResult {
   let val = if cond { a } else { b };
-  vm.cur_frame_mut().write_value(val);
+  vm.cur_frame_mut().write(val);
   Ok(())
 }
 
@@ -120,12 +120,12 @@ pub(crate) fn seed(vm: &mut VM, _: ()) -> RantStdResult {
     mem::transmute::<u64, i64>(vm.rng().seed())
   };
   let frame = vm.cur_frame_mut();
-  frame.write_value(RantValue::Int(signed_seed));
+  frame.write(RantValue::Int(signed_seed));
   Ok(())
 }
 
 pub(crate) fn len(vm: &mut VM, val: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value(RantValue::Int(val.len() as i64));
+  vm.cur_frame_mut().write(val.len().try_into_rant().into_runtime_result()?);
   Ok(())
 }
 
@@ -147,7 +147,7 @@ pub(crate) fn range(vm: &mut VM, (a, b, step): (i64, Option<i64>, Option<u64>)) 
     RantRange::new(0, a, step)
   };
 
-  vm.cur_frame_mut().write_value(RantValue::Range(range));
+  vm.cur_frame_mut().write(range);
   Ok(())
 }
 
@@ -160,7 +160,7 @@ pub(crate) fn irange(vm: &mut VM, (a, b, step): (i64, Option<i64>, Option<u64>))
     RantRange::new(0, a + if a >= 0 { 1 } else { -1 }, step)
   };
 
-  vm.cur_frame_mut().write_value(RantValue::Range(range));
+  vm.cur_frame_mut().write(range);
   Ok(())
 }
 
@@ -209,7 +209,7 @@ pub(crate) fn data(vm: &mut VM, (data_source_name, data_source_args): (InternalS
   match vm.context().data_source(data_source_name.as_str()) {
     Some(ds) => {
       let result = ds.request_data(data_source_args.into_vec()).into_runtime_result()?;
-      vm.cur_frame_mut().write_value(result);
+      vm.cur_frame_mut().write(result);
     },
     None => {
       runtime_error!(RuntimeErrorType::DataSourceError(DataSourceError::User(format!("data source '{}' not found", &data_source_name))))

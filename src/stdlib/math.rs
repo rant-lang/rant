@@ -6,12 +6,12 @@ use super::*;
 ///
 /// Adds two values.
 pub(crate) fn add(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
-  vm.cur_frame_mut().write_value(lhs + rhs);
+  vm.cur_frame_mut().write(lhs + rhs);
   Ok(())
 }
 
 pub(crate) fn clamp(vm: &mut VM, (value, a, b): (RantValue, RantValue, RantValue)) -> RantStdResult {
-  vm.cur_frame_mut().write_value(util::clamp(value, a, b));
+  vm.cur_frame_mut().write(util::clamp(value, a, b));
   Ok(())
 }
 
@@ -19,7 +19,7 @@ pub(crate) fn clamp(vm: &mut VM, (value, a, b): (RantValue, RantValue, RantValue
 ///
 /// Multiplies two values.
 pub(crate) fn mul(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
-  vm.cur_frame_mut().write_value(lhs * rhs);
+  vm.cur_frame_mut().write(lhs * rhs);
   Ok(())
 }
 
@@ -27,7 +27,7 @@ pub(crate) fn mul(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdRes
 ///
 /// Multiplies two values, then adds a third value to the result.
 pub(crate) fn mul_add(vm: &mut VM, (lhs, mhs, rhs): (RantValue, RantValue, RantValue)) -> RantStdResult {
-  vm.cur_frame_mut().write_value(lhs * mhs + rhs);
+  vm.cur_frame_mut().write(lhs * mhs + rhs);
   Ok(())
 }
 
@@ -35,7 +35,7 @@ pub(crate) fn mul_add(vm: &mut VM, (lhs, mhs, rhs): (RantValue, RantValue, RantV
 ///
 /// Subtracts one value from another.
 pub(crate) fn sub(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
-  vm.cur_frame_mut().write_value(lhs - rhs);
+  vm.cur_frame_mut().write(lhs - rhs);
   Ok(())
 }
 
@@ -43,7 +43,7 @@ pub(crate) fn sub(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdRes
 ///
 /// Divides one number by another.
 pub(crate) fn div(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
-  vm.cur_frame_mut().write_value((lhs / rhs).into_runtime_result()?);
+  vm.cur_frame_mut().write((lhs / rhs).into_runtime_result()?);
   Ok(())
 }
 
@@ -51,7 +51,7 @@ pub(crate) fn div(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdRes
 ///
 /// Gets the modulus of two values.
 pub(crate) fn mod_(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
-  vm.cur_frame_mut().write_value((lhs % rhs).into_runtime_result()?);
+  vm.cur_frame_mut().write((lhs % rhs).into_runtime_result()?);
   Ok(())
 }
 
@@ -59,7 +59,7 @@ pub(crate) fn mod_(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdRe
 ///
 /// Negates a value.
 pub(crate) fn neg(vm: &mut VM, val: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value(-val);
+  vm.cur_frame_mut().write(-val);
   Ok(())
 }
 
@@ -67,7 +67,7 @@ pub(crate) fn neg(vm: &mut VM, val: RantValue) -> RantStdResult {
 ///
 /// Gets the reciproval of a value.
 pub(crate) fn recip(vm: &mut VM, val: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value((RantValue::Float(1.0) / val).into_runtime_result()?);
+  vm.cur_frame_mut().write((RantValue::Float(1.0) / val).into_runtime_result()?);
   Ok(())
 }
 
@@ -80,7 +80,7 @@ pub(crate) fn floor(vm: &mut VM, val: RantValue) -> RantStdResult {
     RantValue::Int(i) => RantValue::Int(i),
     other => runtime_error!(RuntimeErrorType::ArgumentError, "cannot use floor function on '{}' value")
   };
-  vm.cur_frame_mut().write_value(val_result);
+  vm.cur_frame_mut().write(val_result);
   Ok(())
 }
 
@@ -93,7 +93,7 @@ pub(crate) fn ceil(vm: &mut VM, val: RantValue) -> RantStdResult {
     RantValue::Int(i) => RantValue::Int(i),
     other => runtime_error!(RuntimeErrorType::ArgumentError, "cannot use ceil function on '{}' value")
   };
-  vm.cur_frame_mut().write_value(val_result);
+  vm.cur_frame_mut().write(val_result);
   Ok(())
 }
 
@@ -105,7 +105,7 @@ pub(crate) fn frac(vm: &mut VM, val: RantValue) -> RantStdResult {
     RantValue::Float(f) => RantValue::Float(f.fract()),
     other => runtime_error!(RuntimeErrorType::ArgumentError, "cannot use frac function on '{}' value")
   };
-  vm.cur_frame_mut().write_value(val_result);
+  vm.cur_frame_mut().write(val_result);
   Ok(())
 }
 
@@ -113,7 +113,7 @@ pub(crate) fn frac(vm: &mut VM, val: RantValue) -> RantStdResult {
 ///
 /// Calculates the absolute value of `num`.
 pub(crate) fn abs(vm: &mut VM, num: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value(num.abs().into_runtime_result()?);
+  vm.cur_frame_mut().write(num.abs().into_runtime_result()?);
   Ok(())
 }
 
@@ -121,7 +121,7 @@ pub(crate) fn abs(vm: &mut VM, num: RantValue) -> RantStdResult {
 ///
 /// Raises `lhs` to the `rhs` power.
 pub(crate) fn pow(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
-  vm.cur_frame_mut().write_value(lhs.pow(rhs).into_runtime_result()?);
+  vm.cur_frame_mut().write(lhs.pow(rhs).into_runtime_result()?);
   Ok(())
 }
 
@@ -129,7 +129,7 @@ pub(crate) fn pow(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdRes
 ///
 /// Calculates the sine of `x` (in radians).
 pub(crate) fn sin(vm: &mut VM, x: f64) -> RantStdResult {
-  vm.cur_frame_mut().write_value(RantValue::Float(x.sin()));
+  vm.cur_frame_mut().write(x.sin());
   Ok(())
 }
 
@@ -137,7 +137,7 @@ pub(crate) fn sin(vm: &mut VM, x: f64) -> RantStdResult {
 ///
 /// Calculates the arcsine (in radians) of `x`.
 pub(crate) fn asin(vm: &mut VM, x: f64) -> RantStdResult {
-  vm.cur_frame_mut().write_value(RantValue::Float(x.asin()));
+  vm.cur_frame_mut().write(x.asin());
   Ok(())
 }
 
@@ -145,7 +145,7 @@ pub(crate) fn asin(vm: &mut VM, x: f64) -> RantStdResult {
 ///
 /// Calculates the cosine of `x` (in radians).
 pub(crate) fn cos(vm: &mut VM, x: f64) -> RantStdResult {
-  vm.cur_frame_mut().write_value(RantValue::Float(x.cos()));
+  vm.cur_frame_mut().write(x.cos());
   Ok(())
 }
 
@@ -153,7 +153,7 @@ pub(crate) fn cos(vm: &mut VM, x: f64) -> RantStdResult {
 ///
 /// Calculates the arccosine (in radians) of `x`.
 pub(crate) fn acos(vm: &mut VM, x: f64) -> RantStdResult {
-  vm.cur_frame_mut().write_value(RantValue::Float(x.acos()));
+  vm.cur_frame_mut().write(x.acos());
   Ok(())
 }
 
@@ -161,7 +161,7 @@ pub(crate) fn acos(vm: &mut VM, x: f64) -> RantStdResult {
 ///
 /// Calculates the tangent of `x` (in radians).
 pub(crate) fn tan(vm: &mut VM, x: f64) -> RantStdResult {
-  vm.cur_frame_mut().write_value(RantValue::Float(x.tan()));
+  vm.cur_frame_mut().write(x.tan());
   Ok(())
 }
 
@@ -169,7 +169,7 @@ pub(crate) fn tan(vm: &mut VM, x: f64) -> RantStdResult {
 ///
 /// Calculates the arctangent (in radians) of `x`.
 pub(crate) fn atan(vm: &mut VM, x: f64) -> RantStdResult {
-  vm.cur_frame_mut().write_value(RantValue::Float(x.atan()));
+  vm.cur_frame_mut().write(x.atan());
   Ok(())
 }
 
@@ -177,20 +177,19 @@ pub(crate) fn atan(vm: &mut VM, x: f64) -> RantStdResult {
 ///
 /// Calculates the four-quadrant arctangent (in radians) of `y / x`.
 pub(crate) fn atan2(vm: &mut VM, (y, x): (f64, f64)) -> RantStdResult {
-  vm.cur_frame_mut().write_value(RantValue::Float(y.atan2(x)));
+  vm.cur_frame_mut().write(y.atan2(x));
   Ok(())
 }
 
 /// `[sqrt: num (int|float)]`
 ///
 /// Calculates the square root of `num`.
-pub(crate) fn sqrt(vm: &mut VM, num: RantValue) -> RantStdResult {
+pub(crate) fn sqrt(vm: &mut VM, num: RantNumber) -> RantStdResult {
   let result = match num {
-    RantValue::Int(i) => RantValue::Float((i as f64).sqrt()),
-    RantValue::Float(f) => RantValue::Float(f.sqrt()),
-    other => runtime_error!(RuntimeErrorType::ArgumentError, "can't take square root of type '{}'", other.type_name())
+    RantNumber::Int(i) => (i as f64).sqrt(),
+    RantNumber::Float(f) => f.sqrt(),
   };
-  vm.cur_frame_mut().write_value(result);
+  vm.cur_frame_mut().write(result);
   Ok(())
 }
 
@@ -218,7 +217,7 @@ pub(crate) fn min(vm: &mut VM, values: RequiredVarArgs<RantValue>) -> RantStdRes
     }
   }
 
-  vm.cur_frame_mut().write_value(match min.unwrap() {
+  vm.cur_frame_mut().write(match min.unwrap() {
     Cow::Owned(val) => val,
     Cow::Borrowed(val) => val.clone(),
   });
@@ -250,7 +249,7 @@ pub(crate) fn max(vm: &mut VM, values: RequiredVarArgs<RantValue>) -> RantStdRes
     }
   }
 
-  vm.cur_frame_mut().write_value(match max.unwrap() {
+  vm.cur_frame_mut().write(match max.unwrap() {
     Cow::Owned(val) => val,
     Cow::Borrowed(val) => val.clone(),
   });

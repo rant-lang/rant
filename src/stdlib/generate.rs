@@ -2,13 +2,13 @@ use super::*;
 
 pub(crate) fn rand(vm: &mut VM, (a, b): (i64, i64)) -> RantStdResult {
   let n = vm.rng().next_i64(a, b);
-  vm.cur_frame_mut().write_value(RantValue::Int(n));
+  vm.cur_frame_mut().write(n);
   Ok(())
 }
 
 pub(crate) fn randf(vm: &mut VM, (a, b): (f64, f64)) -> RantStdResult {
   let n = vm.rng().next_f64(a, b);
-  vm.cur_frame_mut().write_value(RantValue::Float(n));
+  vm.cur_frame_mut().write(n);
   Ok(())
 }
 
@@ -18,7 +18,7 @@ pub(crate) fn rand_list(vm: &mut VM, (a, b, n): (i64, i64, usize)) -> RantStdRes
   for _ in 0..n {
     list.push(RantValue::Int(rng.next_i64(a, b)));
   }
-  vm.cur_frame_mut().write_value(RantValue::List(RantList::from(list).into_handle()));
+  vm.cur_frame_mut().write(list);
   Ok(())
 }
 
@@ -28,7 +28,7 @@ pub(crate) fn randf_list(vm: &mut VM, (a, b, n): (f64, f64, usize)) -> RantStdRe
   for _ in 0..n {
     list.push(RantValue::Float(rng.next_f64(a, b)));
   }
-  vm.cur_frame_mut().write_value(RantValue::List(RantList::from(list).into_handle()));
+  vm.cur_frame_mut().write(list);
   Ok(())
 }
 
@@ -118,7 +118,7 @@ pub(crate) fn rand_list_sum(vm: &mut VM, (value, n, variance): (RantValue, i64, 
         *cell += shift;
       }
 
-      vm.cur_frame_mut().write_value(shreds.try_into_rant().into_runtime_result()?);
+      vm.cur_frame_mut().write(shreds);
     },
     RantValue::Float(m) => {
       let mut shreds = vec![];
@@ -143,7 +143,7 @@ pub(crate) fn rand_list_sum(vm: &mut VM, (value, n, variance): (RantValue, i64, 
         *cell += shift;
       }
 
-      vm.cur_frame_mut().write_value(shreds.try_into_rant().into_runtime_result()?);
+      vm.cur_frame_mut().write(shreds);
     },
     other => {
       return Err(RuntimeError {
@@ -159,6 +159,6 @@ pub(crate) fn rand_list_sum(vm: &mut VM, (value, n, variance): (RantValue, i64, 
 
 pub(crate) fn maybe(vm: &mut VM, p: Option<f64>) -> RantStdResult {
   let b = vm.rng().next_bool(p.unwrap_or(0.5));
-  vm.cur_frame_mut().write_value(RantValue::Boolean(b));
+  vm.cur_frame_mut().write(b);
   Ok(())
 }

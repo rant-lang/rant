@@ -166,7 +166,7 @@ impl<'rant> VM<'rant> {
       match intent {
         Intent::PrintLast => {
           let val = self.pop_val()?;
-          self.cur_frame_mut().write_value(val);
+          self.cur_frame_mut().write(val);
         },
         Intent::ReturnLast => {
           let val = self.pop_val()?;
@@ -524,7 +524,7 @@ impl<'rant> VM<'rant> {
                 return Ok(true)
               } else {
                 // If there are no more steps in the chain, just print the pipeval and let this intent die
-                self.cur_frame_mut().write_value(next_pipeval);
+                self.cur_frame_mut().write(next_pipeval);
               }
             },
             InvokePipeStepState::PreTemporalCall { step_function, args, temporal_state } => {
@@ -586,7 +586,7 @@ impl<'rant> VM<'rant> {
                 return Ok(true)
               } else {
                 // If there are no more steps in the chain, just print the pipeval and let this intent die
-                self.cur_frame_mut().write_value(next_piprval);
+                self.cur_frame_mut().write(next_piprval);
               }
             },
           }
@@ -674,7 +674,7 @@ impl<'rant> VM<'rant> {
 
           // Check if the list is complete
           if index >= init.len() {
-            self.cur_frame_mut().write_value(RantValue::List(RantList::from(list).into_handle()))
+            self.cur_frame_mut().write(list)
           } else {
             // Continue list creation
             let val_expr = Rc::clone(&init[index]);
@@ -691,7 +691,7 @@ impl<'rant> VM<'rant> {
 
           // Check if the tuple is complete
           if index >= init.len() {
-            self.cur_frame_mut().write_value(RantValue::Tuple(RantTuple::from(items).into_handle()))
+            self.cur_frame_mut().write(RantTuple::from(items))
           } else {
             // Continue tuple creation
             let val_expr = Rc::clone(&init[index]);
@@ -715,7 +715,7 @@ impl<'rant> VM<'rant> {
 
           // Check if the map is completed
           if pair_index >= init.len() {
-            self.cur_frame_mut().write_value(RantValue::Map(map.into_handle()));
+            self.cur_frame_mut().write(map);
           } else {
             // Continue map creation
             self.cur_frame_mut().push_intent(Intent::BuildMap { init: Rc::clone(&init), pair_index: pair_index + 1, map });
@@ -961,7 +961,7 @@ impl<'rant> VM<'rant> {
         },
         Expression::Depth(vname, access_kind, fallback) => {
           match (self.get_var_depth(vname, *access_kind), fallback) {
-            (Ok(depth), _) => self.cur_frame_mut().write_value(RantValue::Int(depth as i64)),
+            (Ok(depth), _) => self.cur_frame_mut().write(depth as i64),
             (Err(_), Some(fallback)) => {
               self.cur_frame_mut().push_intent(Intent::PrintLast);
               self.push_frame(Rc::clone(fallback), true)?;
@@ -1055,7 +1055,7 @@ impl<'rant> VM<'rant> {
             flavor: None,
           }));
 
-          self.cur_frame_mut().write_value(func);
+          self.cur_frame_mut().write(func);
         },
         Expression::FuncCall(fcall) => {
           let FunctionCall {
@@ -1102,17 +1102,17 @@ impl<'rant> VM<'rant> {
         },
         Expression::PipeValue => {
           let pipeval = self.get_var_value(PIPE_VALUE_NAME, VarAccessMode::Local, false)?;
-          self.cur_frame_mut().write_value(pipeval);
+          self.cur_frame_mut().write(pipeval);
         },
         Expression::DebugCursor(info) => {
           self.cur_frame_mut().set_debug_info(info);
         },
         Expression::Fragment(frag) => self.cur_frame_mut().write_frag(frag),
         Expression::Whitespace(ws) => self.cur_frame_mut().write_ws(ws),
-        Expression::Integer(n) => self.cur_frame_mut().write_value(RantValue::Int(*n)),
-        Expression::Float(n) => self.cur_frame_mut().write_value(RantValue::Float(*n)),
-        Expression::EmptyValue => self.cur_frame_mut().write_value(RantValue::Empty),
-        Expression::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
+        Expression::Integer(n) => self.cur_frame_mut().write(*n),
+        Expression::Float(n) => self.cur_frame_mut().write(*n),
+        Expression::EmptyValue => self.cur_frame_mut().write(RantEmpty),
+        Expression::Boolean(b) => self.cur_frame_mut().write(*b),
         Expression::Nop => {},
         Expression::Return(expr) => {
           if let Some(expr) = expr {
@@ -1679,7 +1679,7 @@ impl<'rant> VM<'rant> {
     if override_print {
       self.push_val(getter_value)?;
     } else {
-      self.cur_frame_mut().write_value(getter_value);
+      self.cur_frame_mut().write(getter_value);
     }
 
     Ok(())
@@ -1777,7 +1777,7 @@ impl<'rant> VM<'rant> {
             },
             // Print the separator if it's a non-function value
             val => {
-              self.cur_frame_mut().write_value(val);
+              self.cur_frame_mut().write(val);
             }
           }
         }
@@ -1986,7 +1986,7 @@ impl<'rant> VM<'rant> {
         for i in 0..=block_depth {
           let old_frame_output = self.pop_frame()?.into_output();
           if i < block_depth {
-            self.cur_frame_mut().write_value(old_frame_output);
+            self.cur_frame_mut().write(old_frame_output);
           } else {
             self.push_val(old_frame_output)?;
           }
@@ -2031,7 +2031,7 @@ impl<'rant> VM<'rant> {
 
           // Handle output
           if i < block_depth {
-            self.cur_frame_mut().write_value(old_frame_output);
+            self.cur_frame_mut().write(old_frame_output);
           } else {
             self.push_val(old_frame_output)?;
           }

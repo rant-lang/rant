@@ -35,26 +35,26 @@ pub(crate) fn mut_(vm: &mut VM, mutator_func: Option<RantFunctionHandle>) -> Ran
 
 pub(crate) fn step_index(vm: &mut VM, _: ()) -> RantStdResult {
   let n = vm.resolver().active_block().map_or(0, |block| block.step_index());
-  vm.cur_frame_mut().write_value(RantValue::Int(n as i64));
+  vm.cur_frame_mut().write(n as i64);
   Ok(())
 }
 
 pub(crate) fn step(vm: &mut VM, _: ()) -> RantStdResult {
   let n = vm.resolver().active_block().map_or(0, |block| block.step());
-  vm.cur_frame_mut().write_value(RantValue::Int(n as i64));
+  vm.cur_frame_mut().write(n as i64);
   Ok(())
 }
 
 pub(crate) fn step_count(vm: &mut VM, _: ()) -> RantStdResult {
   let n = vm.resolver().active_block().map_or(0, |block| block.step_count());
-  vm.cur_frame_mut().write_value(RantValue::Int(n as i64));
+  vm.cur_frame_mut().write(n as i64);
   Ok(())
 }
 
 pub(crate) fn mksel(vm: &mut VM, mode: SelectorMode) -> RantStdResult {
   let selector = Rc::new(RefCell::new(Selector::new(mode)));
   let special = RantSpecial::Selector(selector);
-  vm.cur_frame_mut().write_value(RantValue::Special(special));
+  vm.cur_frame_mut().write(special);
   Ok(())
 }
 

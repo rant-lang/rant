@@ -764,7 +764,7 @@ impl TryFromRant for RantNumber {
     }
   }
 
-  fn is_rant_optional() -> bool {
+  fn is_optional_param_type() -> bool {
     false
   }
 }

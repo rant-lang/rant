@@ -1,0 +1,9 @@
+[%wavy: s] {
+  <%sync = [mksel: forward]>
+  [cat: **<s> 
+    |> !{ [sel: <sync>] { <lower> | <upper> } }
+  ]
+}
+
+[wavy: The quick brown fox jumps over the lazy dog.]
+

@@ -1,31 +1,31 @@
 use super::*;
 
 pub(crate) fn to_int(vm: &mut VM, value: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value(value.into_int_value());
+  vm.cur_frame_mut().write(value.into_int_value());
   Ok(())
 }
 
 pub(crate) fn to_float(vm: &mut VM, value: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value(value.into_float_value());
+  vm.cur_frame_mut().write(value.into_float_value());
   Ok(())
 }
 
 pub(crate) fn to_string(vm: &mut VM, value: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value(value.into_string_value());
+  vm.cur_frame_mut().write(value.into_string_value());
   Ok(())
 }
 
 pub(crate) fn to_bool(vm: &mut VM, value: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value(value.into_bool_value());
+  vm.cur_frame_mut().write(value.into_bool_value());
   Ok(())
 }
 
 pub(crate) fn to_list(vm: &mut VM, collection: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value(collection.into_list_value());
+  vm.cur_frame_mut().write(collection.into_list_value());
   Ok(())
 }
 
 pub(crate) fn to_tuple(vm: &mut VM, collection: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value(collection.into_tuple_value());
+  vm.cur_frame_mut().write(collection.into_tuple_value());
   Ok(())
 }

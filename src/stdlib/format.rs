@@ -19,7 +19,7 @@ pub(crate) fn ws_fmt(vm: &mut VM, (mode, custom): (Option<String>, Option<RantVa
     let frame = vm.cur_frame_mut();
     match mode {
       WhitespaceNormalizationMode::Custom(custom_val) => {
-        frame.write_value(custom_val);
+        frame.write(custom_val);
       },
       other => frame.write_frag(match other {
         WhitespaceNormalizationMode::Default =>   "default",
@@ -127,7 +127,7 @@ pub(crate) fn num_fmt(vm: &mut VM, (options, depth): (Option<RantMapHandle>, Opt
     fmt_map.raw_set(KEY_GROUP_SEP, fmt.group_sep.unwrap_or_default().try_into_rant().into_runtime_result()?);
     fmt_map.raw_set(KEY_DECIMAL_SEP, fmt.decimal_sep.unwrap_or_default().try_into_rant().into_runtime_result()?);
 
-    vm.cur_frame_mut().write_value(fmt_map.try_into_rant().into_runtime_result()?);
+    vm.cur_frame_mut().write(fmt_map);
   }
 
   Ok(())
@@ -148,7 +148,7 @@ pub(crate) fn num_fmt_system(vm: &mut VM, (system, depth): (Option<NumeralSystem
       None => Default::default(),
     }.try_into_rant().into_runtime_result()?;
       
-    vm.cur_frame_mut().write_value(cur_system);
+    vm.cur_frame_mut().write(cur_system);
   }
   
   Ok(())
@@ -168,7 +168,7 @@ pub(crate) fn num_fmt_alt(vm: &mut VM, (alt, depth): (Option<bool>, Option<usize
       Some(frame) => frame.output().format().num_format.alternate,
       None => false
     }.try_into_rant().into_runtime_result()?;
-    vm.cur_frame_mut().write_value(cur_alternate);
+    vm.cur_frame_mut().write(cur_alternate);
   }
 
   Ok(())
@@ -188,7 +188,7 @@ pub(crate) fn num_fmt_padding(vm: &mut VM, (padding, depth): (Option<u16>, Optio
         Some(frame) => frame.output().format().num_format.padding,
         None => 0,
     }.try_into_rant().into_runtime_result()?;
-    vm.cur_frame_mut().write_value(cur_padding);
+    vm.cur_frame_mut().write(cur_padding);
   }
   
   Ok(())
@@ -209,7 +209,7 @@ pub(crate) fn num_fmt_precision(vm: &mut VM, (precision, depth): (Option<i16>, O
         Some(frame) => frame.output().format().num_format.precision.map(|p| p as i64).unwrap_or(-DEFAULT_PRECISION),
         None => DEFAULT_PRECISION,
     }.try_into_rant().into_runtime_result()?;
-    vm.cur_frame_mut().write_value(cur_precision);
+    vm.cur_frame_mut().write(cur_precision);
   }
   
   Ok(())
@@ -229,7 +229,7 @@ pub(crate) fn num_fmt_upper(vm: &mut VM, (upper, depth): (Option<bool>, Option<u
       Some(frame) => frame.output().format().num_format.uppercase,
       None => false
     }.try_into_rant().into_runtime_result()?;
-    vm.cur_frame_mut().write_value(cur_upper);
+    vm.cur_frame_mut().write(cur_upper);
   }
 
   Ok(())
@@ -249,7 +249,7 @@ pub(crate) fn num_fmt_endian(vm: &mut VM, (endianness, depth): (Option<Endiannes
       Some(frame) => frame.output().format().num_format.endianness,
       None => Default::default()
     }.try_into_rant().into_runtime_result()?;
-    vm.cur_frame_mut().write_value(cur_endianness);
+    vm.cur_frame_mut().write(cur_endianness);
   }
 
   Ok(())
@@ -269,7 +269,7 @@ pub(crate) fn num_fmt_sign(vm: &mut VM, (sign_style, depth): (Option<SignStyle>,
       Some(frame) => frame.output().format().num_format.sign,
       None => Default::default()
     }.try_into_rant().into_runtime_result()?;
-    vm.cur_frame_mut().write_value(cur_sign_style);
+    vm.cur_frame_mut().write(cur_sign_style);
   }
 
   Ok(())
@@ -289,7 +289,7 @@ pub(crate) fn num_fmt_infinity(vm: &mut VM, (infinity_style, depth): (Option<Inf
       Some(frame) => frame.output().format().num_format.infinity,
       None => Default::default()
     }.try_into_rant().into_runtime_result()?;
-    vm.cur_frame_mut().write_value(cur_infinity_style);
+    vm.cur_frame_mut().write(cur_infinity_style);
   }
 
   Ok(())
@@ -310,7 +310,7 @@ pub(crate) fn num_fmt_group_sep(vm: &mut VM, (group_sep, depth): (Option<Interna
       None => Default::default()
     }.try_into_rant().into_runtime_result()?;
 
-    vm.cur_frame_mut().write_value(cur_group_sep);
+    vm.cur_frame_mut().write(cur_group_sep);
   }
 
   Ok(())
@@ -331,7 +331,7 @@ pub(crate) fn num_fmt_decimal_sep(vm: &mut VM, (decimal_sep, depth): (Option<Int
       None => Default::default()
     }.try_into_rant().into_runtime_result()?;
 
-    vm.cur_frame_mut().write_value(cur_decimal_sep);
+    vm.cur_frame_mut().write(cur_decimal_sep);
   }
 
   Ok(())

@@ -99,7 +99,7 @@ impl TryFromRant for SignStyle {
     })
   }
 
-  fn is_rant_optional() -> bool {
+  fn is_optional_param_type() -> bool {
     false
   }
 }
@@ -152,7 +152,7 @@ impl TryFromRant for InfinityStyle {
     })
   }
 
-  fn is_rant_optional() -> bool {
+  fn is_optional_param_type() -> bool {
     false
   }
 }
@@ -239,7 +239,7 @@ impl TryFromRant for NumeralSystem {
     })
   }
 
-  fn is_rant_optional() -> bool {
+  fn is_optional_param_type() -> bool {
     false
   }
 }
@@ -328,7 +328,7 @@ impl TryFromRant for Endianness {
     })
   }
 
-  fn is_rant_optional() -> bool {
+  fn is_optional_param_type() -> bool {
     false
   }
 }

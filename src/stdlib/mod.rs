@@ -140,7 +140,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     list_push as "push", list_pop as "pop", oxford_join as "oxford-join", zip,
 
     // String functions
-    lower, upper, seg, split, lines, indent,
+    lower, upper, seg, split, lines, indent, string_replace as "string-replace",
 
     // Error functions
     error
