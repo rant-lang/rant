@@ -196,6 +196,8 @@ enum SequenceEndType {
   FunctionArgEndBreak,
   /// Function argument sequence was terminated by `PipeOp`.
   FunctionArgEndToPipe,
+  /// Function argument sequence was terminated by `RightAngle`.
+  FunctionArgEndToAssignPipe,
   /// Function body sequence was terminated by `RightBrace`.
   FunctionBodyEnd,
   /// Dynamic key sequencce was terminated by `RightBrace`.
@@ -1029,17 +1031,24 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Variable access end
         RightAngle => no_flags!({
           match mode {
+            SequenceParseMode::FunctionArg => return Ok(ParsedSequence {
+              sequence: sequence.with_name_str("argument"),
+              end_type: SequenceEndType::FunctionArgEndToAssignPipe,
+              is_auto_hinted: is_seq_text,
+              extras: None,
+              next_infix_op: None,
+            }),
             SequenceParseMode::VariableAssignment => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("setter value"),
               end_type: SequenceEndType::VariableAccessEnd,
-              is_auto_hinted: true,
+              is_auto_hinted: is_seq_text,
               extras: None,
               next_infix_op: None,
             }),
             SequenceParseMode::AccessorFallbackValue => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("fallback value"),
               end_type: SequenceEndType::AccessorFallbackValueToEnd,
-              is_auto_hinted: true,
+              is_auto_hinted: is_seq_text,
               extras: None,
               next_infix_op: None,
             }),
@@ -1980,6 +1989,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       
       // List of calls in chain. This will only contain one call if it's non-piped (chain of one).
       let mut calls: Vec<FunctionCall> = vec![];
+      // Target of assignment pipe
+      let mut assignment_pipe = None;
       // Flag indicating whether call is piped (has multiple chained function calls)
       let mut is_piped = false;
       // Indicates whether the last call in the chain has been parsed
@@ -2077,6 +2088,26 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   is_piped = true;
                   break
                 },
+                SequenceEndType::FunctionArgEndToAssignPipe => {
+                  let (path, path_span) = self.parse_access_path(true)?;
+                  self.reader.skip_ws();
+                  // Don't allow assignment to known anonymous values
+                  if path.is_anonymous_target() {
+                    self.report_error(Problem::AnonValueAssignment, &path_span);
+                  }
+                  // Don't allow assignment to known constants
+                  self.track_variable_access(&path, true, false, &path_span, None);
+
+                  // We expect the function accessor to end here
+                  if !self.reader.eat(RantToken::RightBracket) {
+                    self.report_expected_token_error("]", &self.reader.last_token_span());
+                  }
+
+                  is_piped = true;
+                  is_finished = true;
+                  assignment_pipe = Some(Rc::new(path));
+                  break
+                },
                 SequenceEndType::ProgramEnd => {
                   self.report_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
                   return Err(())
@@ -2086,7 +2117,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           }}
         }
-
+        
         /// If the pipe value wasn't used, inserts it as the first argument.
         macro_rules! fallback_pipe {
           () => {
@@ -2199,6 +2230,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           Expression::PipedCall(PipedCall {
             is_temporal: is_chain_temporal,
             steps: Rc::new(calls),
+            assignment_pipe,
           })
         } else {
           Expression::FuncCall(calls.drain(..).next().unwrap())
@@ -2770,7 +2802,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
 
   #[inline]
-  fn track_variable_access(&mut self, path: &AccessPath, is_write: bool, fallback_hint: bool, span: &Range<usize>, out_auto_hinted_read: Option<&mut bool>) {
+  fn track_variable_access(&mut self, path: &AccessPath, is_write: bool, has_fallback: bool, span: &Range<usize>, out_auto_hinted_read: Option<&mut bool>) {
     let mut out_auto_hinted_read_value = false;
 
     // Handle access stats
@@ -2796,7 +2828,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             self.report_error(Problem::ConstantReassignment(id.to_string()), span);
           }
         } else {
-          tracker.add_read(!fallback_hint);
+          tracker.add_read(!has_fallback);
           out_auto_hinted_read_value = tracker.is_auto_hinted;
 
           // Error if user is accessing a fallible optional argument without a fallback
@@ -3051,7 +3083,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               let assign_end_span = self.reader.last_token_span();
               let setter_span = super_range(&access_start_span, &assign_end_span);
               // Don't allow setters directly on anonymous values
-              if var_path.is_anonymous() && var_path.len() == 1 {
+              if var_path.is_anonymous_target() {
                 self.report_error(Problem::AnonValueAssignment, &setter_span);
               }
 

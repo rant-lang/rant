@@ -246,13 +246,19 @@ impl AccessPath {
   /// Determines whether the root of the access path is an inline value.
   #[inline]
   pub fn is_anonymous(&self) -> bool {
-    matches!(self.first(), Some(AccessPathComponent::AnonymousValue(..)))
+    matches!(self.first(), Some(AccessPathComponent::AnonymousValue(..) | AccessPathComponent::PipeValue))
   }
 
   /// Determines whether the access path targets *only* a variable (i.e. no child access).
   #[inline]
   pub fn is_variable_target(&self) -> bool {
     self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::Name(..) | AccessPathComponent::DynamicKey(..) | AccessPathComponent::PipeValue))
+  }
+
+  /// Determines whether the access path targets *only* an anonymous (non-variable) value (i.e. no child access).
+  #[inline]
+  pub fn is_anonymous_target(&self) -> bool {
+    self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::AnonymousValue(..) | AccessPathComponent::PipeValue))
   }
 
   /// Gets the kind access path this is.
@@ -562,6 +568,8 @@ pub struct FunctionCall {
 pub struct PipedCall {
   /// The function calls in the chain.
   pub steps: Rc<Vec<FunctionCall>>,
+  /// Optional access path to assign the final piped value to.
+  pub assignment_pipe: Option<Rc<AccessPath>>,
   /// Determines whether the call executes temporally.
   pub is_temporal: bool,
 }

@@ -55,6 +55,8 @@ pub enum Intent {
     state: InvokePipeStepState,
     /// The pipe value from the last step
     pipeval: Option<RantValue>,
+    /// Optional assignment pipe
+    assignment_pipe: Option<Rc<AccessPath>>,
   },
   /// Evaluates each sequence in `default_arg_exprs` in order and assigns their results to local constants with their associated `Identifier`.
   CreateDefaultArgs { context: RantFunctionHandle, default_arg_exprs: Vec<(Rc<Sequence>, usize)>, eval_index: usize, },

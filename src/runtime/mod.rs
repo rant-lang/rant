@@ -386,6 +386,7 @@ impl<'rant> VM<'rant> {
           step_index, 
           state,
           pipeval,
+          assignment_pipe,
         } => {          
           match state {
             InvokePipeStepState::EvaluatingFunc => {
@@ -397,6 +398,7 @@ impl<'rant> VM<'rant> {
                 step_index,
                 state: InvokePipeStepState::EvaluatingArgs { num_evaluated: 0 },
                 pipeval,
+                assignment_pipe,
               });
 
               match &step.target {
@@ -431,6 +433,7 @@ impl<'rant> VM<'rant> {
                     num_evaluated: num_evaluated + 1,
                   },
                   pipeval,
+                  assignment_pipe,
                 });
 
                 // Push current argument expression to call stack
@@ -492,6 +495,7 @@ impl<'rant> VM<'rant> {
                   steps,
                   step_index,
                   pipeval,
+                  assignment_pipe,
                 });
               }
               return Ok(true)
@@ -503,6 +507,7 @@ impl<'rant> VM<'rant> {
                 step_index,
                 state: InvokePipeStepState::PostCall,
                 pipeval,
+                assignment_pipe,
               });
 
               // Call it and interrupt
@@ -520,11 +525,33 @@ impl<'rant> VM<'rant> {
                   step_index: next_step_index,
                   state: InvokePipeStepState::EvaluatingFunc,
                   pipeval: Some(next_pipeval),
+                  assignment_pipe,
                 });
                 return Ok(true)
               } else {
-                // If there are no more steps in the chain, just print the pipeval and let this intent die
-                self.cur_frame_mut().write(next_pipeval);
+                // If there are no more steps in the chain, handle the pipe result and let this intent die
+                if let Some(path) = &assignment_pipe {
+                  // Get list of dynamic expressions in path
+                  let exprs = path.dynamic_exprs();
+
+                  if exprs.is_empty() {
+                    // Setter is static, so run it directly
+                    self.cur_frame_mut().push_intent(Intent::SetValue { path: Rc::clone(path), write_mode: VarWriteMode::SetOnly, expr_count: 0 });
+                    self.push_val(next_pipeval)?;
+                  } else {
+                    // Build dynamic keys before running setter
+                    self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter {
+                      expr_count: exprs.len(),
+                      write_mode: VarWriteMode::SetOnly,
+                      path: Rc::clone(path),
+                      pending_exprs: exprs,
+                      val_source: SetterValueSource::FromValue(next_pipeval)
+                    });
+                  }
+                  return Ok(true)
+                } else {
+                  self.cur_frame_mut().write(next_pipeval);
+                }
               }
             },
             InvokePipeStepState::PreTemporalCall { step_function, args, temporal_state } => {
@@ -550,13 +577,14 @@ impl<'rant> VM<'rant> {
                   args,
                 },
                 pipeval,
+                assignment_pipe,
               });
 
               self.call_func(step_function, targs, true)?;
               return Ok(true)
             },
             InvokePipeStepState::PostTemporalCall { step_function, args, mut temporal_state } => {
-              let next_piprval = self.pop_val()?;
+              let next_pipeval = self.pop_val()?;
               let next_step_index = step_index + 1;
               let step_count = steps.len();
 
@@ -571,6 +599,7 @@ impl<'rant> VM<'rant> {
                     args,
                   },
                   pipeval,
+                  assignment_pipe: assignment_pipe.as_ref().map(Rc::clone),
                 })
               }
 
@@ -581,12 +610,34 @@ impl<'rant> VM<'rant> {
                   steps,
                   step_index: next_step_index,
                   state: InvokePipeStepState::EvaluatingFunc,
-                  pipeval: Some(next_piprval),
+                  pipeval: Some(next_pipeval),
+                  assignment_pipe,
                 });
                 return Ok(true)
               } else {
-                // If there are no more steps in the chain, just print the pipeval and let this intent die
-                self.cur_frame_mut().write(next_piprval);
+                // If there are no more steps in the chain, handle the pipe result and let this intent die
+                if let Some(path) = &assignment_pipe {
+                  // Get list of dynamic expressions in path
+                  let exprs = path.dynamic_exprs();
+
+                  if exprs.is_empty() {
+                    // Setter is static, so run it directly
+                    self.cur_frame_mut().push_intent(Intent::SetValue { path: Rc::clone(path), write_mode: VarWriteMode::SetOnly, expr_count: 0 });
+                    self.push_val(next_pipeval)?;
+                  } else {
+                    // Build dynamic keys before running setter
+                    self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter {
+                      expr_count: exprs.len(),
+                      write_mode: VarWriteMode::SetOnly,
+                      path: Rc::clone(path),
+                      pending_exprs: exprs,
+                      val_source: SetterValueSource::FromValue(next_pipeval)
+                    });
+                  }
+                  return Ok(true)
+                } else {
+                  self.cur_frame_mut().write(next_pipeval);
+                }
               }
             },
           }
@@ -1091,12 +1142,13 @@ impl<'rant> VM<'rant> {
           }
           return Ok(true)
         },
-        Expression::PipedCall(compcall) => {     
+        Expression::PipedCall(piped_call) => {     
           self.cur_frame_mut().push_intent(Intent::InvokePipeStep {
-            steps: Rc::clone(&compcall.steps),
+            steps: Rc::clone(&piped_call.steps),
             step_index: 0,
             state: InvokePipeStepState::EvaluatingFunc,
             pipeval: None,
+            assignment_pipe: piped_call.assignment_pipe.as_ref().map(Rc::clone),
           });
           return Ok(true)
         },
@@ -1493,7 +1545,7 @@ impl<'rant> VM<'rant> {
         setter_target = Some(dynamic_values.next().unwrap());
         None
       },
-      other => runtime_error!(RuntimeErrorType::InternalError, format!("setter key unsupported: '{:?}'; the access path was probably miscompiled", other))
+      other => runtime_error!(RuntimeErrorType::InternalError, format!("setter key unsupported: '{:?}'; this is a bug", other))
     };
 
     // Evaluate the path
