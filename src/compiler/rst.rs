@@ -9,5 +9,6 @@ pub enum RST<'a> {
     NamedFunctionCall{ name: &'a str, args: Vec<RST<'a>> },
     Fragment(&'a str),
     Whitespace(&'a str),
-    Number(u64)
+    Number(u64),
+    Nop
 }

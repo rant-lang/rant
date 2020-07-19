@@ -1,3 +1,5 @@
+use parser::SyntaxErrorType;
+
 pub(crate) mod lexer;
 pub mod reader; // TODO: Hide this after testing is done
 pub(crate) mod parser;
@@ -11,11 +13,8 @@ pub struct CompilerError {
 }
 
 pub enum CompilerErrorInfo {
-    UnclosedBlock,
-    ExpectedToken(String),
-    UnexpectedToken(String),
-    OrphanedSink,
-    OrphanedHint,
+    SyntaxError(SyntaxErrorType),
+    Other
 }
 
 pub struct RantCompiler {

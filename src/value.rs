@@ -1,6 +1,6 @@
 use crate::{vm::VM, compiler::rst::RST};
 use std::collections::HashMap;
-use std::{fmt::Debug, rc::Rc};
+use std::{fmt::Debug, rc::Rc, ops::Not};
 
 /// Rant variable value.
 #[derive(Clone)]
@@ -38,18 +38,6 @@ impl Debug for RantFunction<'_> {
     }
 }
 
-#[derive(Debug)]
-pub struct RantMap<'a> {
-    map: HashMap<&'a str, RantValue<'a>>,
-    prototype: Option<Rc<RantMap<'a>>>
-}
-
-impl RantMap<'_> {
-    pub fn len(&self) -> usize {
-        self.map.len()
-    }
-}
-
 impl Debug for RantValue<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -69,7 +57,7 @@ impl PartialEq for RantValue<'_> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (RantValue::None, RantValue::None) => true,
-            (RantValue::String(a), RantValue::String(b)) => a.eq(b),
+            (RantValue::String(a), RantValue::String(b)) => a == b,
             (RantValue::Integer(a), RantValue::Integer(b)) => a == b,
             (RantValue::Integer(a), RantValue::Float(b)) => *a as f64 == *b,
             (RantValue::Float(a), RantValue::Float(b)) => a == b,
@@ -78,6 +66,17 @@ impl PartialEq for RantValue<'_> {
             (RantValue::List(a), RantValue::List(b)) => Rc::as_ptr(a) == Rc::as_ptr(b),
             (RantValue::Map(a), RantValue::Map(b)) => Rc::as_ptr(a) == Rc::as_ptr(b),
             _ => false
+        }
+    }
+}
+
+impl Not for RantValue<'_> {
+    type Output = Self;
+    fn not(self) -> Self::Output {
+        match self {
+            RantValue::None => RantValue::Boolean(true),
+            RantValue::Boolean(b) => RantValue::Boolean(!b),
+            _ => self
         }
     }
 }
@@ -111,5 +110,17 @@ impl RantValue<'_> {
 
     pub fn coerce_string(&self) -> RantValue {
         todo!()
+    }
+}
+
+#[derive(Debug)]
+pub struct RantMap<'a> {
+    map: HashMap<&'a str, RantValue<'a>>,
+    prototype: Option<Rc<RantMap<'a>>>
+}
+
+impl RantMap<'_> {
+    pub fn len(&self) -> usize {
+        self.map.len()
     }
 }
