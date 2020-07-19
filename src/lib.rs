@@ -1,6 +1,8 @@
 pub mod compiler;
 mod rantpgm;
 mod value;
+mod table;
+mod vm;
 
 pub use rantpgm::*;
 pub use value::*;

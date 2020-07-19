@@ -20,4 +20,4 @@ path = "src/tools/repl/main.rs"
 [dependencies]
 embedded-triple = "0.1.0"
 logos = "0.11.4"
-line-col = "0.1.1"
+line-col = "0.2.0"

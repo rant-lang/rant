@@ -1,4 +1,5 @@
 use rant::*;
+use rant::compiler::reader::RantTokenReader;
 use std::io::{self, Write};
 use embedded_triple;
 use line_col::*;
@@ -12,15 +13,12 @@ fn main() {
         let mut input = String::new();
         match io::stdin().read_line(&mut input) {
             Ok(_) => {
-                let mut lexer = rant::compiler::lexer::lex(input.as_str());
-                loop {
-                    if let (Some(token), slice) = (lexer.next(), lexer.slice()) {
-                        let lookup = LineColLookup::new(input.as_str());
-                        let (line, col) = lookup.get(lexer.span().start);
-                        println!("{:?}: \"{}\" @ {},{}", token, slice, line, col);
-                    } else {
-                        break
-                    }
+                let source = input.as_str();
+                let lexer = RantTokenReader::new(source);
+                let lookup = LineColLookup::new(source);
+                for (token, range) in lexer {
+                    let (line, col) = lookup.get(range.start);
+                    println!("{:?}: \"{}\" @ {},{}", token, &source[range], line, col);
                 }
             },
             Err(_) => println!("Failed to read input")
