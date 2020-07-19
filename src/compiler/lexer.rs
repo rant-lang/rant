@@ -39,6 +39,12 @@ pub enum RantToken {
     #[token("$")]
     Dollar,
 
+    #[token("'")]
+    Hint,
+
+    #[token("_")]
+    Sink,
+
     #[regex(r"\s+", filter_bs, priority = 2)]
     Whitespace,
 

@@ -1,4 +1,4 @@
-use crate::compiler::rst::RST;
+use crate::{vm::VM, compiler::rst::RST};
 use std::collections::HashMap;
 use std::{fmt::Debug, rc::Rc};
 
@@ -9,14 +9,38 @@ pub enum RantValue<'a> {
     Float(f64),
     Integer(i64),
     Boolean(bool),
-    Function(Rc<RST<'a>>),
+    Function(Rc<RantClosure<'a>>),
     List(Rc<Vec<RantValue<'a>>>),
     Map(Rc<RantMap<'a>>),
     None
 }
 
+/// Closure type used to implement all Rant functions.
+#[derive(Debug)]
+pub struct RantClosure<'a> {
+    func: RantFunction<'a>,
+    locals: Option<RantMap<'a>>
+}
+
+/// Defines endpoint variants for Rant functions.
+#[derive(Clone)]
+pub enum RantFunction<'a> {
+    Native(Rc<dyn FnMut(&VM, Vec<RantValue>)>),
+    User(Rc<RST<'a>>)
+}
+
+impl Debug for RantFunction<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RantFunction::Native(func) => write!(f, "{:?}", Rc::as_ptr(func)),
+            RantFunction::User(func) => write!(f, "{:?}", Rc::as_ptr(func))
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct RantMap<'a> {
-    map: HashMap<String, RantValue<'a>>,
+    map: HashMap<&'a str, RantValue<'a>>,
     prototype: Option<Rc<RantMap<'a>>>
 }
 
@@ -27,13 +51,13 @@ impl RantMap<'_> {
 }
 
 impl Debug for RantValue<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             RantValue::String(str) => write!(f, "{}", str),
             RantValue::Float(n) => write!(f, "{}", n),
             RantValue::Integer(n) => write!(f, "{}", n),
             RantValue::Boolean(b) => write!(f, "{}", b),
-            RantValue::Function(_) => write!(f, "(function)"), // TODO: Add params
+            RantValue::Function(func) => write!(f, "(function: {:?})", func),
             RantValue::List(_) => write!(f, "(list)"),
             RantValue::Map(_) => write!(f, "(map)"),
             RantValue::None => write!(f, "<>")

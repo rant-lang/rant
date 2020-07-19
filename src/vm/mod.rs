@@ -1,6 +1,6 @@
 use crate::{RantEngine, RantProgram};
 
-pub(crate) struct VM<'engine, 'pgm> {
+pub struct VM<'engine, 'pgm> {
     engine: &'engine mut RantEngine,
     program: &'pgm RantProgram
 }

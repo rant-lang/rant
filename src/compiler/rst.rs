@@ -7,7 +7,7 @@ pub enum RST<'a> {
     Box{ params: Vec<&'a str>, block: Vec<RST<'a>> },
     AnonymousFunctionCall{ name: Box<RST<'a>>, args: Vec<RST<'a>> },
     NamedFunctionCall{ name: &'a str, args: Vec<RST<'a>> },
-    TextChunk(&'a str),
+    Fragment(&'a str),
     Whitespace(&'a str),
     Number(u64)
 }
