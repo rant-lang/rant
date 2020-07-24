@@ -39,6 +39,12 @@ impl<'source> RantTokenReader<'source> {
         }
     }
 
+    pub fn skip_whitespace_tokens(&mut self) {
+        while let Some((RantToken::Whitespace, _)) = self.peek() {
+            self.next();
+        }
+    }
+
     pub fn peek(&mut self) -> Option<&(RantToken, Range<usize>)> {
         // If a peek was already performed, return a reference to it
         if self.peeked.is_some() {

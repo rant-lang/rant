@@ -30,6 +30,7 @@ pub enum SyntaxErrorType {
 }
 
 #[repr(u8)]
+#[derive(Copy, Clone)]
 enum PrintFlag {
     None,
     Hint,
@@ -106,22 +107,31 @@ impl<'source> RantParser<'source> {
                 };
             }
 
+            // TODO: Queued whitespace should not carry between lines
             macro_rules! whitespace {
                 (allow) => {
                     if let Some(ws) = pending_whitespace.take() {
                         sequence.push(RST::Whitespace(ws));
                     }
                 };
-                (ignore) => {
-                    pending_whitespace = None;
-                };
                 (queue $ws:expr) => {
                     pending_whitespace = Some($ws);
-                }
+                };
+                (ignore prev) => {
+                    pending_whitespace = None;
+                };
+                (ignore next) => {
+                    self.reader.skip_whitespace_tokens();
+                };
+                (ignore both) => {
+                    whitespace!(ignore prev);
+                    whitespace!(ignore next);
+                };
             }
 
             // Parse next sequence item
             match token {
+
                 // Hint
                 RantToken::Hint => ban_flags!({
                     whitespace!(allow);
@@ -129,28 +139,48 @@ impl<'source> RantParser<'source> {
                     next_print_flag = PrintFlag::Hint;
                     continue
                 }),
+
                 // Sink
                 RantToken::Sink => ban_flags!({
                     // Ignore pending whitespace
-                    whitespace!(ignore);
+                    whitespace!(ignore prev);
                     next_print_flag = PrintFlag::Sink;
                     continue
                 }),
-                // Block
+
+                // Block start
                 RantToken::LeftBrace => {
+                    // Read in the entire block
                     let block = self.parse_block(next_print_flag, span.start)?;
-                    // Inherit hints from inner blocks
-                    if let RST::HintedBlock(_) = block {
-                        whitespace!(allow);
-                        is_seq_printing = true;
+
+                    // Decide what to do with surrounding whitespace
+                    match next_print_flag {                        
+                        // If hinted, allow pending whitespace
+                        PrintFlag::Hint => {
+                            whitespace!(allow);
+                            is_seq_printing = true;
+                        },
+
+                        // If sinked, hold pending whitespace and do nothing
+                        PrintFlag::Sink => {},
+
+                        // If no flag, take a hint
+                        PrintFlag::None => {
+                            // Inherit hints from inner blocks
+                            if let RST::HintedBlock(_) = block {
+                                whitespace!(allow);
+                                is_seq_printing = true;
+                            }
+                        }
                     }
-                    sequence.push(block);
                     
+                    sequence.push(block);                    
                 },
+
                 // Block element delimiter (when in block parsing mode)
                 RantToken::Pipe => ban_flags!({
                     // Ignore pending whitespace
-                    whitespace!(ignore);
+                    whitespace!(ignore prev);
                     match mode {
                         SequenceParseMode::BlockElement => {
                             return Ok((RST::Sequence(sequence), SequenceEndType::BlockDelim, is_seq_printing))
@@ -158,10 +188,11 @@ impl<'source> RantParser<'source> {
                         _ => unexpected_token_error!()
                     }
                 }),
+
                 // Block end (when in block parsing mode)
                 RantToken::RightBrace => ban_flags!({
                     // Ignore pending whitespace
-                    whitespace!(ignore);
+                    whitespace!(ignore prev);
                     match mode {
                         SequenceParseMode::BlockElement => {
                             return Ok((RST::Sequence(sequence), SequenceEndType::BlockEnd, is_seq_printing))
@@ -169,6 +200,7 @@ impl<'source> RantParser<'source> {
                         _ => unexpected_token_error!()
                     }
                 }),
+
                 // Fragment
                 RantToken::Fragment => ban_flags!({
                     whitespace!(allow);
@@ -176,12 +208,14 @@ impl<'source> RantParser<'source> {
                     let frag = self.reader.gen_last_token_string();
                     sequence.push(RST::Fragment(frag));
                 }),
+
                 // Whitespace (only if sequence isn't empty)
                 RantToken::Whitespace if sequence.len() > 0 => ban_flags!({
                     // Don't set is_printing here; whitespace tokens always appear with other printing tokens
                     let ws = self.reader.gen_last_token_string();
                     whitespace!(queue ws);
                 }),
+
                 // Escape sequences
                 // TODO: Combine these with adjacent fragments somehow
                 RantToken::Escape(ch) => ban_flags!({
@@ -189,17 +223,19 @@ impl<'source> RantParser<'source> {
                     is_seq_printing = true;
                     sequence.push(RST::Fragment(ch.to_string()));
                 }),
-                // ???
+
+                // Treat unsupported sequence tokens as errors
                 _ => {
                     unexpected_token_error!();
                 }
+
             }
 
-            // Clear hint/sink
+            // Clear flag
             next_print_flag = PrintFlag::None;
         }
 
-        // This should only get hit for top-level blocks
+        // This should only get hit for top-level sequences
         if sequence.len() > 0 {
             Ok((RST::Sequence(sequence), SequenceEndType::ProgramEnd, is_seq_printing))
         } else {
