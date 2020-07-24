@@ -24,6 +24,10 @@ impl<'source> RantTokenReader<'source> {
         }
     }
 
+    pub fn gen_last_token_string(&self) -> String {
+        self.lexer.slice().to_owned()
+    }
+
     /// Get the next non-whitespace token.
     pub fn next_solid(&mut self) -> Option<(RantToken, Range<usize>)> {
         loop {

@@ -1,4 +1,4 @@
-use crate::{vm::VM, compiler::rst::RST};
+use crate::{runtime::VM, compiler::syntax::RST, RantResult, RantError};
 use std::collections::HashMap;
 use std::{fmt::Debug, rc::Rc, ops::Not};
 
@@ -18,18 +18,18 @@ pub enum RantValue<'a> {
 /// Closure type used to implement all Rant functions.
 #[derive(Debug)]
 pub struct RantClosure<'a> {
-    func: RantFunction<'a>,
-    locals: Option<RantMap<'a>>
+    func: RantFunction,
+    locals: Option<RantMap<'a>>,
 }
 
 /// Defines endpoint variants for Rant functions.
 #[derive(Clone)]
-pub enum RantFunction<'a> {
+pub enum RantFunction {
     Native(Rc<dyn FnMut(&VM, Vec<RantValue>)>),
-    User(Rc<RST<'a>>)
+    User(Rc<RST>)
 }
 
-impl Debug for RantFunction<'_> {
+impl Debug for RantFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RantFunction::Native(func) => write!(f, "{:?}", Rc::as_ptr(func)),
@@ -124,3 +124,42 @@ impl RantMap<'_> {
         self.map.len()
     }
 }
+
+pub trait ToRant {
+    fn to_rant<'a>(self) -> RantValue<'a>;
+}
+
+pub trait FromRant: Sized {
+    fn from_rant<'a>(val: RantValue<'a>) -> RantResult<Self>;
+}
+
+macro_rules! rant_int_conversions {
+    ($int_type: ty) => {
+        impl ToRant for $int_type {
+            fn to_rant<'a>(self) -> RantValue<'a> {
+                RantValue::Integer(self as i64)
+            }
+        }
+        impl FromRant for $int_type {
+            fn from_rant<'a>(val: RantValue<'a>) -> RantResult<Self> {
+                if let RantValue::Integer(i) = val {
+                    return Ok(i as Self)
+                }
+
+                let src_type = val.type_name();
+                let dest_type = stringify!{$int_type};
+                Err(RantError::ValueConversionError {
+                    from: src_type,
+                    to: dest_type,
+                    message: Some(format!("Rant type '{}' cannot be converted to native type '{}'.", src_type, dest_type))
+                })
+            }
+        }
+    };
+    ($int_type: ty, $($int_type2: ty), +) => {
+        rant_int_conversions! { $int_type }
+        rant_int_conversions! { $($int_type2), + }
+    };
+}
+
+rant_int_conversions! { u8, i8, u16, i16, u32, i32, u64, i64, isize, usize }
