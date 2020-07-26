@@ -1,52 +1,9 @@
 #![allow(dead_code)]
 
-use super::{syntax::RST, reader::RantTokenReader, lexer::RantToken};
+use super::{syntax::{RST, PrintFlag}, reader::RantTokenReader, lexer::RantToken, error::*};
 use std::ops::Range;
 
 type ParseResult<T> = Result<T, SyntaxError>;
-
-/// Describes the location and nature of a syntax error.
-#[derive(Debug)]
-pub struct SyntaxError {
-    span: Range<usize>,
-    info: SyntaxErrorType
-}
-
-impl SyntaxError {
-    pub(crate) fn new(info: SyntaxErrorType, span: Range<usize>) -> Self {
-        Self {
-            info,
-            span
-        }
-    }
-
-    pub fn span(&self) -> Range<usize> {
-        self.span.clone()
-    }
-
-    pub fn info<'a>(&'a self) -> &'a SyntaxErrorType {
-        &self.info
-    }
-}
-
-/// The information describing a syntax error as seen by the parser.
-#[derive(Debug)]
-pub enum SyntaxErrorType {
-    UnclosedBlock,
-    ExpectedToken(String),
-    UnexpectedToken(String),
-    MissingIdentifier,
-    InvalidSink,
-    InvalidHint,
-}
-
-#[repr(u8)]
-#[derive(Copy, Clone, PartialEq)]
-enum PrintFlag {
-    None,
-    Hint,
-    Sink
-}
 
 enum SequenceParseMode {
     TopLevel,
@@ -199,7 +156,11 @@ impl<'source> RantParser<'source> {
                     whitespace!(ignore prev);
                     match mode {
                         SequenceParseMode::BlockElement => {
-                            return Ok((RST::Sequence(sequence), SequenceEndType::BlockDelim, is_seq_printing))
+                            return if sequence.len() > 0 {
+                                Ok((RST::Sequence(sequence), SequenceEndType::BlockDelim, is_seq_printing))
+                            } else {
+                                Ok((RST::Nop, SequenceEndType::BlockDelim, is_seq_printing))
+                            }
                         },
                         _ => unexpected_token_error!()
                     }
@@ -211,7 +172,11 @@ impl<'source> RantParser<'source> {
                     whitespace!(ignore prev);
                     match mode {
                         SequenceParseMode::BlockElement => {
-                            return Ok((RST::Sequence(sequence), SequenceEndType::BlockEnd, is_seq_printing))
+                            return if sequence.len() > 0 {
+                                Ok((RST::Sequence(sequence), SequenceEndType::BlockEnd, is_seq_printing))
+                            } else {
+                                Ok((RST::Nop, SequenceEndType::BlockEnd, is_seq_printing))
+                            }
                         },
                         _ => unexpected_token_error!()
                     }

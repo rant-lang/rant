@@ -1,5 +1,17 @@
 use std::fmt::Display;
 
+/// Printflags indicate to the compiler whether a given program element is likely to print something or not.
+#[repr(u8)]
+#[derive(Copy, Clone, PartialEq)]
+pub enum PrintFlag {
+    /// Use default printing behavior.
+    None,
+    /// Treat the marked element as printing.
+    Hint,
+    /// Treat the marked element as non-printing.
+    Sink
+}
+
 /// Component in a variable accessor chain
 #[derive(Debug)]
 pub enum IdentifierComponent {

@@ -1,9 +1,10 @@
-use parser::SyntaxErrorType;
+use error::SyntaxErrorType;
 
 pub(crate) mod lexer;
 pub(crate) mod reader;
 pub mod parser;
 pub(crate) mod syntax;
+pub(crate) mod error;
 
 pub struct CompilerError {
     info: CompilerErrorInfo,
