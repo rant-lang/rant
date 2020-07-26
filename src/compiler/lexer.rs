@@ -51,8 +51,11 @@ pub enum RantToken {
     #[regex(r"[\r\n]+\s*|\s*[\r\n]+", logos::skip, priority = 3)]
     Blackspace,
 
-    #[regex(r"[0-9]+(\.[0-9]+)?", parse_number, priority = 2)]
-    Number(f64),
+    #[regex(r"\-?[0-9]+", parse_integer, priority = 2)]
+    Integer(i64),
+
+    #[regex(r"\-?[0-9]+\.[0-9]+", parse_float, priority = 3)]
+    Float(f64),
 
     #[regex(r"\s*##([^#]|#[^#])*(##\s*)?", logos::skip, priority = 6)]
     #[regex(r"\s*#([^#][^\r\n]*)?\n?", logos::skip, priority = 5)]
@@ -88,8 +91,14 @@ fn parse_code_point_escape<'a>(lex: &mut Lexer<'a, RantToken>) -> Option<char> {
     Some(codepoint as char)
 }
 
-fn parse_number<'a>(lex: &mut Lexer<'a, RantToken>) -> Option<f64> {
+fn parse_float<'a>(lex: &mut Lexer<'a, RantToken>) -> Option<f64> {
     let slice = lex.slice();
-    let n: f64 = slice.parse().ok()?;
+    let n = slice.parse().ok()?;
+    Some(n)
+}
+
+fn parse_integer<'a>(lex: &mut Lexer<'a, RantToken>) -> Option<i64> {
+    let slice = lex.slice();
+    let n = slice.parse().ok()?;
     Some(n)
 }

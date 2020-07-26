@@ -45,6 +45,10 @@ impl<'source> RantTokenReader<'source> {
         }
     }
 
+    pub fn last_token_pos(&self) -> usize {
+        self.lexer.span().start
+    }
+
     pub fn peek(&mut self) -> Option<&(RantToken, Range<usize>)> {
         // If a peek was already performed, return a reference to it
         if self.peeked.is_some() {

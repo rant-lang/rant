@@ -1,8 +1,8 @@
 use parser::SyntaxErrorType;
 
 pub(crate) mod lexer;
-pub mod reader; // TODO: Hide this after testing is done
-pub(crate) mod parser;
+pub(crate) mod reader;
+pub mod parser;
 pub(crate) mod syntax;
 
 pub struct CompilerError {

@@ -3,9 +3,10 @@
 use super::{syntax::RST, reader::RantTokenReader, lexer::RantToken};
 use std::ops::Range;
 
-pub type ParseResult<T> = Result<T, SyntaxError>;
+type ParseResult<T> = Result<T, SyntaxError>;
 
 /// Describes the location and nature of a syntax error.
+#[derive(Debug)]
 pub struct SyntaxError {
     span: Range<usize>,
     info: SyntaxErrorType
@@ -18,19 +19,29 @@ impl SyntaxError {
             span
         }
     }
+
+    pub fn span(&self) -> Range<usize> {
+        self.span.clone()
+    }
+
+    pub fn info<'a>(&'a self) -> &'a SyntaxErrorType {
+        &self.info
+    }
 }
 
 /// The information describing a syntax error as seen by the parser.
+#[derive(Debug)]
 pub enum SyntaxErrorType {
     UnclosedBlock,
     ExpectedToken(String),
     UnexpectedToken(String),
+    MissingIdentifier,
     InvalidSink,
     InvalidHint,
 }
 
 #[repr(u8)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 enum PrintFlag {
     None,
     Hint,
@@ -71,14 +82,19 @@ impl<'source> RantParser<'source> {
 }
 
 impl<'source> RantParser<'source> {
-    pub fn parse(&mut self) -> ParseResult<RST> {
-        Ok(self.parse_sequence(SequenceParseMode::TopLevel)?.0)
+    pub fn parse(&mut self) -> Result<RST, Vec<SyntaxError>> {
+        match self.parse_sequence(SequenceParseMode::TopLevel) {
+            Ok(..) if self.errors.len() > 0 => Err(self.errors.drain(..).collect()),
+            Ok((rst, ..)) => Ok(rst),
+            Err(hard_error) => Err(self.errors.drain(..).chain(std::iter::once(hard_error)).collect())
+        }
     }
 
     fn soft_error(&mut self, error_type: SyntaxErrorType, span: &Range<usize>) {
         self.errors.push(SyntaxError::new(error_type, span.clone()));
     }
 
+    /// Parses a sequence of items. Items are individual elements of a Rant program (fragments, blocks, function calls, etc.)
     fn parse_sequence<'a>(&mut self, mode: SequenceParseMode) -> ParseResult<(RST, SequenceEndType, bool)> {
         let mut sequence = vec![];
         let mut next_print_flag = PrintFlag::None;
@@ -151,7 +167,7 @@ impl<'source> RantParser<'source> {
                 // Block start
                 RantToken::LeftBrace => {
                     // Read in the entire block
-                    let block = self.parse_block(next_print_flag, span.start)?;
+                    let block = self.parse_block(next_print_flag)?;
 
                     // Decide what to do with surrounding whitespace
                     match next_print_flag {                        
@@ -224,6 +240,20 @@ impl<'source> RantParser<'source> {
                     sequence.push(RST::Fragment(ch.to_string()));
                 }),
 
+                // Integers
+                RantToken::Integer(n) => ban_flags!({
+                    whitespace!(allow);
+                    is_seq_printing = true;
+                    sequence.push(RST::Integer(n));
+                }),
+
+                // Floats
+                RantToken::Float(n) => ban_flags!({
+                    whitespace!(allow);
+                    is_seq_printing = true;
+                    sequence.push(RST::Float(n));
+                }),
+
                 // Treat unsupported sequence tokens as errors
                 _ => {
                     unexpected_token_error!();
@@ -243,16 +273,17 @@ impl<'source> RantParser<'source> {
         }
     }
 
-    fn parse_block<'a>(&mut self, print: PrintFlag, start_index: usize) -> ParseResult<RST> {
-        let mut hinted = match print {
-            PrintFlag::Hint => true,
-            _ => false
-        };
+    /// Parses a block.
+    fn parse_block<'a>(&mut self, flag: PrintFlag) -> ParseResult<RST> {
+        // Get position of starting brace for error reporting
+        let start_index = self.reader.last_token_pos();
 
+        let mut auto_hint = false;
         let mut sequences = vec![];
+
         loop {
             let (seq, seq_end, is_seq_printing) = self.parse_sequence(SequenceParseMode::BlockElement)?;
-            hinted |= is_seq_printing;
+            auto_hint |= is_seq_printing;
 
             match seq_end {
                 SequenceEndType::BlockDelim => {
@@ -270,10 +301,10 @@ impl<'source> RantParser<'source> {
             }
         }
         
-        if hinted {
-            Ok(RST::HintedBlock(sequences))
-        } else {
-            Ok(RST::Block(sequences))
+        match flag {
+            PrintFlag::None if auto_hint => Ok(RST::HintedBlock(sequences)),
+            PrintFlag::Hint => Ok(RST::HintedBlock(sequences)),
+            PrintFlag::Sink | _ => Ok(RST::Block(sequences)),
         }
     }
 }

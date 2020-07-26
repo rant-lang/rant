@@ -1,6 +1,22 @@
 use std::fmt::Display;
 
+/// Component in a variable accessor chain
+#[derive(Debug)]
+pub enum IdentifierComponent {
+    /// Name of variable or map item
+    Name(String),
+    /// List index
+    Index(usize)
+}
+
+/// An identifier consisting of a chain of variable names and indices
+#[derive(Debug)]
+pub struct Identifier {
+    parts: Vec<IdentifierComponent>
+}
+
 /// Rant Syntax Tree
+#[derive(Debug)]
 pub enum RST {
     Sequence(Vec<RST>),
     Block(Vec<RST>),
@@ -8,13 +24,16 @@ pub enum RST {
     List(Vec<RST>),
     Map(Vec<(RST, RST)>),
     Box{ params: Vec<String>, block: Vec<RST> },
-    AnonFunctionCall{ name: Box<RST>, args: Vec<RST> },
-    HintedAnonFunctionCall{ name: Box<RST>, args: Vec<RST> },
-    FunctionCall{ name: String, args: Vec<RST> },
-    HintedFunctionCall{ name: String, args: Vec<RST> },
+    AnonFunctionCall{ funcgen: Box<RST>, args: Vec<RST> },
+    HintedAnonFunctionCall{ funcgen: Box<RST>, args: Vec<RST> },
+    FunctionCall{ id: Identifier, args: Vec<RST> },
+    HintedFunctionCall{ id: Identifier, args: Vec<RST> },
+    VarDef(Identifier, Option<Box<RST>>),
+    VarGet(Identifier),
+    VarSet(Identifier, Box<RST>),
     Fragment(String),
     Whitespace(String),
-    Integer(u64),
+    Integer(i64),
     Float(f64),
     Boolean(bool),
     Nop
@@ -39,6 +58,9 @@ impl RST {
             RST::Float(_) =>                        "float",
             RST::Boolean(_) =>                      "boolean",
             RST::Nop =>                             "nothing",
+            RST::VarDef(_, _) =>                    "variable definition",
+            RST::VarGet(_) =>                       "variable",
+            RST::VarSet(_, _) =>                    "variable assignment"
         }
     }
 
@@ -51,7 +73,9 @@ impl RST {
             RST::Float(_) |
             RST::Boolean(_) |
             RST::Fragment(_) |
-            RST::Whitespace(_) => true,
+            RST::Whitespace(_) |
+            RST::VarGet(_)
+            => true,
             _ => false
         }
     }
