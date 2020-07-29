@@ -1,15 +1,15 @@
 [package]
 name = "rant"
-version = "4.0.0-alpha-1"
+version = "4.0.0-alpha1"
 authors = ["Nicholas Fleck <TheBerkin@users.noreply.github.com>"]
 edition = "2018"
 homepage = "https://berkin.me/rant"
 repository = "https://github.com/TheBerkin/rant"
 license = "MIT"
 readme = "README.md"
-#keywords = ["rant", "rantlang", "procedural", "text", "generation"]
-#categories = ["text-processing", "game-development", "template-engine"]
-description = "(Reserved for future use) The Rant procedural text generation language"
+keywords = ["rant", "rantlang", "procedural", "text", "generation"]
+categories = ["text-processing", "game-development", "template-engine"]
+description = "The Rant procedural text generation and templating language"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -21,3 +21,5 @@ path = "src/tools/repl/main.rs"
 embedded-triple = "0.1.0"
 logos = "0.11.4"
 line-col = "0.2.0"
+rand = "0.7.3"
+rand_xoshiro = "0.4.0"

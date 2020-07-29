@@ -1,9 +1,7 @@
 use rant::*;
-use rant::compiler::parser::*;
 use std::io::{self, Write};
 use std::time::{Instant, Duration};
-use embedded_triple;
-use line_col::*;
+use compiler::RantCompiler;
 
 fn main() {
     println!("Rant {} ({})", RANT_VERSION, embedded_triple::get());
@@ -15,20 +13,15 @@ fn main() {
         match io::stdin().read_line(&mut input) {
             Ok(_) => {
                 let source = input.as_str();
-                let mut parser = RantParser::new(source);
-                let lookup = LineColLookup::new(source);
                 let start_time = Instant::now();
-                let result = parser.parse();
+                let result = RantCompiler::compile_string(source);
                 let parse_time = start_time.elapsed();
                 match result {
-                    Ok(rst) => println!("RST: {:#?}", rst),
+                    Ok(prog) => println!("{:#?}", prog),
                     Err(errors) => {
                         println!("{} error(s) found:", errors.len());
-                        for error in errors.iter() {
-                            let span = error.span();
-                            let (line_start, col_start) = lookup.get(span.start);
-                            let (line_end, col_end) = lookup.get(span.end - 1);
-                            println!("  - ({},{} - {},{}): {}", line_start, col_start, line_end, col_end, error.info());
+                        for (index, error) in errors.iter().enumerate() {
+                            println!("  #{}: ({}) {}", index + 1, error.first_line_col, error.info);
                         }
                     }
                 }

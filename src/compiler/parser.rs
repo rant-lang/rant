@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
-use super::{syntax::{RST, PrintFlag}, reader::RantTokenReader, lexer::RantToken, error::*};
+use super::{reader::RantTokenReader, lexer::RantToken, error::*};
 use std::ops::Range;
+use crate::syntax::{PrintFlag, RST};
 
 type ParseResult<T> = Result<T, SyntaxError>;
 
@@ -41,7 +42,7 @@ impl<'source> RantParser<'source> {
 impl<'source> RantParser<'source> {
     pub fn parse(&mut self) -> Result<RST, Vec<SyntaxError>> {
         match self.parse_sequence(SequenceParseMode::TopLevel) {
-            Ok(..) if self.errors.len() > 0 => Err(self.errors.drain(..).collect()),
+            Ok(..) if !self.errors.is_empty() => Err(self.errors.drain(..).collect()),
             Ok((rst, ..)) => Ok(rst),
             Err(hard_error) => Err(self.errors.drain(..).chain(std::iter::once(hard_error)).collect())
         }
@@ -52,23 +53,44 @@ impl<'source> RantParser<'source> {
     }
 
     /// Parses a sequence of items. Items are individual elements of a Rant program (fragments, blocks, function calls, etc.)
-    fn parse_sequence<'a>(&mut self, mode: SequenceParseMode) -> ParseResult<(RST, SequenceEndType, bool)> {
+    fn parse_sequence(&mut self, mode: SequenceParseMode) -> ParseResult<(RST, SequenceEndType, bool)> {
         let mut sequence = vec![];
         let mut next_print_flag = PrintFlag::None;
+        let mut last_print_flag_span: Option<Range<usize>> = None;
         let mut is_seq_printing = false;
         let mut pending_whitespace = None;
 
         while let Some((token, span)) = self.reader.next() {
             // Macro for prohibiting hints/sinks before certain tokens
-            macro_rules! ban_flags {
+            macro_rules! no_flags {
+                (on $b:block) => {{
+                    let elem = $b;
+                    match next_print_flag {
+                        PrintFlag::None => {},
+                        other => {
+                            if let Some(flag_span) = last_print_flag_span.take() {
+                                self.soft_error(match other {
+                                    PrintFlag::Hint => SyntaxErrorType::InvalidHintOn(elem.display_name()),
+                                    PrintFlag::Sink => SyntaxErrorType::InvalidSinkOn(elem.display_name()),
+                                    PrintFlag::None => unreachable!()
+                                }, &flag_span)
+                            }
+                        }
+                    }
+                    sequence.push(elem);
+                }};
                 ($b:block) => {
                     match next_print_flag {
                         PrintFlag::None => $b,
-                        other => self.soft_error(match other {
-                            PrintFlag::Hint => SyntaxErrorType::InvalidHint,
-                            PrintFlag::Sink => SyntaxErrorType::InvalidSink,
-                            PrintFlag::None => unreachable!()
-                        }, &span)
+                        other => {
+                            if let Some(flag_span) = last_print_flag_span.take() {
+                                self.soft_error(match other {
+                                    PrintFlag::Hint => SyntaxErrorType::InvalidHint,
+                                    PrintFlag::Sink => SyntaxErrorType::InvalidSink,
+                                    PrintFlag::None => unreachable!()
+                                }, &flag_span)
+                            }
+                        }
                     }
                 };
             }
@@ -106,18 +128,20 @@ impl<'source> RantParser<'source> {
             match token {
 
                 // Hint
-                RantToken::Hint => ban_flags!({
+                RantToken::Hint => no_flags!({
                     whitespace!(allow);
                     is_seq_printing = true;
                     next_print_flag = PrintFlag::Hint;
+                    last_print_flag_span = Some(span.clone());
                     continue
                 }),
 
                 // Sink
-                RantToken::Sink => ban_flags!({
+                RantToken::Sink => no_flags!({
                     // Ignore pending whitespace
                     whitespace!(ignore prev);
                     next_print_flag = PrintFlag::Sink;
+                    last_print_flag_span = Some(span.clone());
                     continue
                 }),
 
@@ -140,7 +164,7 @@ impl<'source> RantParser<'source> {
                         // If no flag, take a hint
                         PrintFlag::None => {
                             // Inherit hints from inner blocks
-                            if let RST::HintedBlock(_) = block {
+                            if let RST::Block(PrintFlag::Hint, ..) = block {
                                 whitespace!(allow);
                                 is_seq_printing = true;
                             }
@@ -151,12 +175,12 @@ impl<'source> RantParser<'source> {
                 },
 
                 // Block element delimiter (when in block parsing mode)
-                RantToken::Pipe => ban_flags!({
+                RantToken::Pipe => no_flags!({
                     // Ignore pending whitespace
                     whitespace!(ignore prev);
                     match mode {
                         SequenceParseMode::BlockElement => {
-                            return if sequence.len() > 0 {
+                            return if !sequence.is_empty() {
                                 Ok((RST::Sequence(sequence), SequenceEndType::BlockDelim, is_seq_printing))
                             } else {
                                 Ok((RST::Nop, SequenceEndType::BlockDelim, is_seq_printing))
@@ -167,12 +191,12 @@ impl<'source> RantParser<'source> {
                 }),
 
                 // Block end (when in block parsing mode)
-                RantToken::RightBrace => ban_flags!({
+                RantToken::RightBrace => no_flags!({
                     // Ignore pending whitespace
                     whitespace!(ignore prev);
                     match mode {
                         SequenceParseMode::BlockElement => {
-                            return if sequence.len() > 0 {
+                            return if !sequence.is_empty() {
                                 Ok((RST::Sequence(sequence), SequenceEndType::BlockEnd, is_seq_printing))
                             } else {
                                 Ok((RST::Nop, SequenceEndType::BlockEnd, is_seq_printing))
@@ -183,40 +207,42 @@ impl<'source> RantParser<'source> {
                 }),
 
                 // Fragment
-                RantToken::Fragment => ban_flags!({
+                RantToken::Fragment => no_flags!(on {
                     whitespace!(allow);
                     is_seq_printing = true;
                     let frag = self.reader.gen_last_token_string();
-                    sequence.push(RST::Fragment(frag));
+                    RST::Fragment(frag)
                 }),
 
                 // Whitespace (only if sequence isn't empty)
-                RantToken::Whitespace if sequence.len() > 0 => ban_flags!({
+                RantToken::Whitespace => no_flags!({
                     // Don't set is_printing here; whitespace tokens always appear with other printing tokens
-                    let ws = self.reader.gen_last_token_string();
-                    whitespace!(queue ws);
+                    if !sequence.is_empty() {
+                        let ws = self.reader.gen_last_token_string();
+                        whitespace!(queue ws);
+                    }
                 }),
 
                 // Escape sequences
                 // TODO: Combine these with adjacent fragments somehow
-                RantToken::Escape(ch) => ban_flags!({
+                RantToken::Escape(ch) => no_flags!(on {
                     whitespace!(allow);
                     is_seq_printing = true;
-                    sequence.push(RST::Fragment(ch.to_string()));
+                    RST::Fragment(ch.to_string())
                 }),
 
                 // Integers
-                RantToken::Integer(n) => ban_flags!({
+                RantToken::Integer(n) => no_flags!(on {
                     whitespace!(allow);
                     is_seq_printing = true;
-                    sequence.push(RST::Integer(n));
+                    RST::Integer(n)
                 }),
 
                 // Floats
-                RantToken::Float(n) => ban_flags!({
+                RantToken::Float(n) => no_flags!(on {
                     whitespace!(allow);
                     is_seq_printing = true;
-                    sequence.push(RST::Float(n));
+                    RST::Float(n)
                 }),
 
                 // Treat unsupported sequence tokens as errors
@@ -230,8 +256,26 @@ impl<'source> RantParser<'source> {
             next_print_flag = PrintFlag::None;
         }
 
+        // Reached the whole program has been read
         // This should only get hit for top-level sequences
-        if sequence.len() > 0 {
+
+        // Make sure there are no dangling printflags
+        match next_print_flag {
+            PrintFlag::None => {},
+            PrintFlag::Hint => {
+                if let Some(flag_span) = last_print_flag_span.take() {
+                    self.soft_error(SyntaxErrorType::InvalidHint, &flag_span);
+                }
+            },
+            PrintFlag::Sink => {
+                if let Some(flag_span) = last_print_flag_span.take() {
+                    self.soft_error(SyntaxErrorType::InvalidSink, &flag_span);
+                }
+            }
+        }
+
+        // Return the top-level sequence
+        if !sequence.is_empty() {
             Ok((RST::Sequence(sequence), SequenceEndType::ProgramEnd, is_seq_printing))
         } else {
             Ok((RST::Nop, SequenceEndType::ProgramEnd, is_seq_printing))
@@ -239,7 +283,7 @@ impl<'source> RantParser<'source> {
     }
 
     /// Parses a block.
-    fn parse_block<'a>(&mut self, flag: PrintFlag) -> ParseResult<RST> {
+    fn parse_block(&mut self, flag: PrintFlag) -> ParseResult<RST> {
         // Get position of starting brace for error reporting
         let start_index = self.reader.last_token_pos();
 
@@ -265,11 +309,10 @@ impl<'source> RantParser<'source> {
                 _ => unreachable!()
             }
         }
-        
-        match flag {
-            PrintFlag::None if auto_hint => Ok(RST::HintedBlock(sequences)),
-            PrintFlag::Hint => Ok(RST::HintedBlock(sequences)),
-            PrintFlag::Sink | _ => Ok(RST::Block(sequences)),
+        if auto_hint {
+            Ok(RST::Block(PrintFlag::Hint, sequences))
+        } else {
+            Ok(RST::Block(flag, sequences))
         }
     }
 }

@@ -1,17 +1,29 @@
-use crate::{RantEngine, RantProgram};
+use crate::{Rant, RantProgram};
+use stack::StackFrame;
 
 mod resolver;
+mod output;
+mod stack;
+mod random;
 
-pub struct VM<'engine, 'pgm> {
-    engine: &'engine mut RantEngine,
-    program: &'pgm RantProgram
+pub struct VM<'a> {
+    pub(crate) engine: &'a mut Rant<'a>,
+    pub(crate) program: &'a RantProgram,
+    pub(crate) stack: Vec<StackFrame<'a>>
 }
 
-impl<'engine, 'pgm> VM<'engine, 'pgm> {
-    pub fn new(engine: &'engine mut RantEngine, program: &'pgm RantProgram) -> Self {
+impl<'a> VM<'a> {
+    pub fn new(engine: &'a mut Rant<'a>, program: &'a RantProgram) -> Self {
         Self {
             engine,
-            program
+            program,
+            stack: Default::default()
         }
+    }
+}
+
+impl<'a> VM<'a> {
+    pub fn run() -> String {
+        todo!()
     }
 }

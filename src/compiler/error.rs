@@ -22,6 +22,10 @@ impl SyntaxError {
     pub fn info<'a>(&'a self) -> &'a SyntaxErrorType {
         &self.info
     }
+
+    pub fn consume(self) -> (Range<usize>, SyntaxErrorType) {
+        (self.span, self.info)
+    }
 }
 
 /// The information describing a syntax error as seen by the parser.
@@ -31,6 +35,8 @@ pub enum SyntaxErrorType {
     ExpectedToken(String),
     UnexpectedToken(String),
     MissingIdentifier,
+    InvalidSinkOn(&'static str),
+    InvalidHintOn(&'static str),
     InvalidSink,
     InvalidHint,
 }
@@ -38,12 +44,14 @@ pub enum SyntaxErrorType {
 impl Display for SyntaxErrorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SyntaxErrorType::UnclosedBlock => write!(f, "Unclosed block; expected either '|' or '}}' before end of file"),
+            SyntaxErrorType::UnclosedBlock => write!(f, "Unclosed block; expected '}}'"),
             SyntaxErrorType::ExpectedToken(token) => write!(f, "Expected token: '{}'", token),
             SyntaxErrorType::UnexpectedToken(token) => write!(f, "Unexpected token: '{}'", token),
             SyntaxErrorType::MissingIdentifier => write!(f, "Missing identifier"),
-            SyntaxErrorType::InvalidSink => write!(f, "Element cannot be sinked"),
-            SyntaxErrorType::InvalidHint => write!(f, "Element cannot be hinted")
+            SyntaxErrorType::InvalidSinkOn(elname) => write!(f, "Sink is not valid on {}", elname),
+            SyntaxErrorType::InvalidHintOn(elname) => write!(f, "Hint is not valid on {}", elname),
+            SyntaxErrorType::InvalidSink => write!(f, "Sink is not valid here"),
+            SyntaxErrorType::InvalidHint => write!(f, "Hint is not valid here"),
         }
     }
 }

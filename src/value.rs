@@ -1,4 +1,4 @@
-use crate::{runtime::VM, compiler::syntax::RST, RantResult, RantError};
+use crate::{runtime::VM, syntax::RST, RantResult, RantError};
 use std::collections::HashMap;
 use std::{fmt::Debug, rc::Rc, ops::Not};
 
@@ -15,24 +15,35 @@ pub enum RantValue<'a> {
     None
 }
 
+/// Semantic wrapper around a Vec<T> for use in variadic argument sets.
+pub(crate) struct VarArgs<T>(Vec<T>);
+
+impl<T> VarArgs<T> {
+    pub fn new(args: Vec<T>) -> Self {
+        Self(args)
+    }
+}
+
 /// Closure type used to implement all Rant functions.
 #[derive(Debug)]
 pub struct RantClosure<'a> {
-    func: RantFunction,
+    func: RantFunction<'a>,
     locals: Option<RantMap<'a>>,
 }
 
 /// Defines endpoint variants for Rant functions.
 #[derive(Clone)]
-pub enum RantFunction {
-    Native(Rc<dyn FnMut(&VM, Vec<RantValue>)>),
+pub enum RantFunction<'a> {
+    /// Represents a foreign function as a wrapper function accepting a variable number of arguments.
+    Foreign(Rc<dyn FnMut(&mut VM, Vec<RantValue<'a>>) -> RantResult<()> + 'a>),
+    /// Represents a user function as an RST.
     User(Rc<RST>)
 }
 
-impl Debug for RantFunction {
+impl Debug for RantFunction<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RantFunction::Native(func) => write!(f, "{:?}", Rc::as_ptr(func)),
+            RantFunction::Foreign(func) => write!(f, "{:?}", Rc::as_ptr(func)),
             RantFunction::User(func) => write!(f, "{:?}", Rc::as_ptr(func))
         }
     }
@@ -108,7 +119,7 @@ impl RantValue<'_> {
         }
     }
 
-    pub fn coerce_string(&self) -> RantValue {
+    pub fn as_string(&self) -> String {
         todo!()
     }
 }
@@ -123,43 +134,8 @@ impl RantMap<'_> {
     pub fn len(&self) -> usize {
         self.map.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
 }
-
-pub trait ToRant {
-    fn to_rant<'a>(self) -> RantValue<'a>;
-}
-
-pub trait FromRant: Sized {
-    fn from_rant<'a>(val: RantValue<'a>) -> RantResult<Self>;
-}
-
-macro_rules! rant_int_conversions {
-    ($int_type: ty) => {
-        impl ToRant for $int_type {
-            fn to_rant<'a>(self) -> RantValue<'a> {
-                RantValue::Integer(self as i64)
-            }
-        }
-        impl FromRant for $int_type {
-            fn from_rant<'a>(val: RantValue<'a>) -> RantResult<Self> {
-                if let RantValue::Integer(i) = val {
-                    return Ok(i as Self)
-                }
-
-                let src_type = val.type_name();
-                let dest_type = stringify!{$int_type};
-                Err(RantError::ValueConversionError {
-                    from: src_type,
-                    to: dest_type,
-                    message: Some(format!("Rant type '{}' cannot be converted to native type '{}'.", src_type, dest_type))
-                })
-            }
-        }
-    };
-    ($int_type: ty, $($int_type2: ty), +) => {
-        rant_int_conversions! { $int_type }
-        rant_int_conversions! { $($int_type2), + }
-    };
-}
-
-rant_int_conversions! { u8, i8, u16, i16, u32, i32, u64, i64, isize, usize }
