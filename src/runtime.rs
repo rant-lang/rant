@@ -7,13 +7,13 @@ mod stack;
 mod random;
 
 pub struct VM<'a> {
-    pub(crate) engine: &'a mut Rant<'a>,
+    pub(crate) engine: &'a mut Rant,
     pub(crate) program: &'a RantProgram,
     pub(crate) stack: Vec<StackFrame<'a>>
 }
 
 impl<'a> VM<'a> {
-    pub fn new(engine: &'a mut Rant<'a>, program: &'a RantProgram) -> Self {
+    pub fn new(engine: &'a mut Rant, program: &'a RantProgram) -> Self {
         Self {
             engine,
             program,

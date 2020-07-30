@@ -4,22 +4,22 @@ use std::rc::Rc;
 
 /// Enables conversion from a native type to a `RantValue`.
 pub trait ToRant {
-    fn to_rant<'a>(self) -> RantValue<'a>;
+    fn to_rant(self) -> RantValue;
 }
 
 /// Enables conversion from a `RantValue` to a native type.
-pub trait FromRant<'a>: Sized {
-    fn from_rant(val: RantValue<'a>) -> RantResult<Self>;
+pub trait FromRant: Sized {
+    fn from_rant(val: RantValue) -> RantResult<Self>;
 }
 
 /// Enables conversion from a set of Rant arguments to equivalent supported native types.
-pub trait FromRantArgs<'a>: Sized {
-    fn from_args(&self, args: Vec<RantValue<'a>>) -> RantResult<Self>;
+pub trait FromRantArgs: Sized {
+    fn from_args(&self, args: Vec<RantValue>) -> RantResult<Self>;
 }
 
 /// Converts a Vec<RantValue> to VarArgs<T>
-impl<'a, T: FromRant<'a>> FromRantArgs<'a> for VarArgs<T> {
-    fn from_args(&self, mut args: Vec<RantValue<'a>>) -> RantResult<Self> {
+impl<'a, T: FromRant> FromRantArgs for VarArgs<T> {
+    fn from_args(&self, mut args: Vec<RantValue>) -> RantResult<Self> {
         let vec = args
             .drain(..)
             .map(T::from_rant)
@@ -31,12 +31,12 @@ impl<'a, T: FromRant<'a>> FromRantArgs<'a> for VarArgs<T> {
 macro_rules! rant_int_conversions {
     ($int_type: ty) => {
         impl ToRant for $int_type {
-            fn to_rant<'a>(self) -> RantValue<'a> {
+            fn to_rant(self) -> RantValue {
                 RantValue::Integer(self as i64)
             }
         }
-        impl FromRant<'_> for $int_type {
-            fn from_rant<'a>(val: RantValue<'a>) -> RantResult<Self> {
+        impl FromRant for $int_type {
+            fn from_rant(val: RantValue) -> RantResult<Self> {
                 if let RantValue::Integer(i) = val {
                     return Ok(i as Self)
                 }
@@ -59,18 +59,17 @@ macro_rules! rant_int_conversions {
 
 rant_int_conversions! { u8, i8, u16, i16, u32, i32, u64, i64, isize, usize }
 
-pub trait RantForeignFunc<'a> {
-    fn as_rant_func(&'a self) -> RantFunction<'a>;
+pub trait RantForeignFunc {
+    fn as_rant_func(&'static self) -> RantFunction;
 }
 
 macro_rules! impl_rant_foreign_func_fn {
     ($($generic_types:ident),*) => {
         // Non-variadic implementation
         impl<
-            'a,
-            $($generic_types: FromRant<'a>,)*
-        > RantForeignFunc<'a> for dyn Fn(&mut VM, $($generic_types,)*) -> RantResult<()> + 'a {
-            fn as_rant_func(&'a self) -> RantFunction<'a> {
+            $($generic_types: FromRant,)*
+        > RantForeignFunc for dyn FnMut(&mut VM, $($generic_types,)*) -> RantResult<()> {
+            fn as_rant_func(&'static self) -> RantFunction {
                 RantFunction::Foreign(Rc::new(move |vm, args| {
                     let mut args = args.into_iter();
                     self(vm, $($generic_types::from_rant(args.next().unwrap_or(RantValue::None))?,)*)
@@ -80,11 +79,10 @@ macro_rules! impl_rant_foreign_func_fn {
 
         // Variadic implementation
         impl<
-            'a,
-            $($generic_types: FromRant<'a>,)*
-            Variadic: FromRant<'a>
-        > RantForeignFunc<'a> for dyn Fn(&mut VM, $($generic_types,)* VarArgs<Variadic>) -> RantResult<()> + 'a {
-            fn as_rant_func(&'a self) -> RantFunction<'a> {
+            $($generic_types: FromRant,)*
+            Variadic: FromRant
+        > RantForeignFunc for dyn FnMut(&mut VM, $($generic_types,)* VarArgs<Variadic>) -> RantResult<()> {
+            fn as_rant_func(&'static self) -> RantFunction {
                 RantFunction::Foreign(Rc::new(move |vm, mut args| {
                     let mut args = args.drain(..);
                     self(vm, 

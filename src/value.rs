@@ -4,14 +4,14 @@ use std::{fmt::Debug, rc::Rc, ops::Not};
 
 /// Rant variable value.
 #[derive(Clone)]
-pub enum RantValue<'a> {
+pub enum RantValue {
     String(String),
     Float(f64),
     Integer(i64),
     Boolean(bool),
-    Function(Rc<RantClosure<'a>>),
-    List(Rc<Vec<RantValue<'a>>>),
-    Map(Rc<RantMap<'a>>),
+    Function(Rc<RantClosure>),
+    List(Rc<Vec<RantValue>>),
+    Map(Rc<RantMap>),
     None
 }
 
@@ -26,21 +26,21 @@ impl<T> VarArgs<T> {
 
 /// Closure type used to implement all Rant functions.
 #[derive(Debug)]
-pub struct RantClosure<'a> {
-    func: RantFunction<'a>,
-    locals: Option<RantMap<'a>>,
+pub struct RantClosure {
+    func: RantFunction,
+    locals: Option<RantMap>,
 }
 
 /// Defines endpoint variants for Rant functions.
 #[derive(Clone)]
-pub enum RantFunction<'a> {
+pub enum RantFunction {
     /// Represents a foreign function as a wrapper function accepting a variable number of arguments.
-    Foreign(Rc<dyn FnMut(&mut VM, Vec<RantValue<'a>>) -> RantResult<()> + 'a>),
+    Foreign(Rc<dyn FnMut(&mut VM, Vec<RantValue>) -> RantResult<()>>),
     /// Represents a user function as an RST.
     User(Rc<RST>)
 }
 
-impl Debug for RantFunction<'_> {
+impl Debug for RantFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RantFunction::Foreign(func) => write!(f, "{:?}", Rc::as_ptr(func)),
@@ -49,7 +49,7 @@ impl Debug for RantFunction<'_> {
     }
 }
 
-impl Debug for RantValue<'_> {
+impl Debug for RantValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             RantValue::String(str) => write!(f, "{}", str),
@@ -64,7 +64,7 @@ impl Debug for RantValue<'_> {
     }
 }
 
-impl PartialEq for RantValue<'_> {
+impl PartialEq for RantValue {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (RantValue::None, RantValue::None) => true,
@@ -81,7 +81,7 @@ impl PartialEq for RantValue<'_> {
     }
 }
 
-impl Not for RantValue<'_> {
+impl Not for RantValue {
     type Output = Self;
     fn not(self) -> Self::Output {
         match self {
@@ -92,7 +92,7 @@ impl Not for RantValue<'_> {
     }
 }
 
-impl RantValue<'_> {
+impl RantValue {
     pub fn len(&self) -> usize {
         match self {
             // Length of string is character count
@@ -125,12 +125,19 @@ impl RantValue<'_> {
 }
 
 #[derive(Debug)]
-pub struct RantMap<'a> {
-    map: HashMap<&'a str, RantValue<'a>>,
-    prototype: Option<Rc<RantMap<'a>>>
+pub struct RantMap {
+    map: HashMap<String, RantValue>,
+    prototype: Option<Rc<RantMap>>
 }
 
-impl RantMap<'_> {
+impl RantMap {
+    pub fn new() -> Self {
+        Self {
+            map: Default::default(),
+            prototype: Default::default()
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.map.len()
     }

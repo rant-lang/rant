@@ -2,7 +2,7 @@ use crate::{syntax::RST, RantMap};
 
 pub struct StackFrame<'a> {
     /// Variables local to stack frame
-    locals: RantMap<'a>,
+    locals: RantMap,
     /// RST node that triggered this frame's creation
     caller: &'a RST,
     /// Node sequence being executed by the frame

@@ -1,15 +1,15 @@
-use crate::{RantResult, runtime::{VM}, FromRant, RantValue, ToRant, RantFunction};
-use std::rc::Rc;
+use crate::{RantResult, runtime::VM};
+use crate::{RantValue, convert::RantForeignFunc};
 
-pub fn rant_r(vm: &mut VM, reps: i32) -> RantResult<()> {
+pub fn rep(vm: &mut VM, reps: i32) -> RantResult<()> {
     todo!()
 }
 
-// fn create_rant_func<'a, F, A>(mut func: F) -> RantFunction<'a>
-// where F: FnMut(&mut VM) -> RantResult<()>,
-// A: FromRant
-// {
-//     RantFunction::Native(Rc::new(|vm, args| {
-        
-//     }))
-// }
+fn print_func(name: &str, func: &'static dyn RantForeignFunc) {
+    println!("{} = {:?}", name, func.as_rant_func())
+}
+
+pub fn print_stdlib() 
+{
+    print_func("rep", &rep);
+}

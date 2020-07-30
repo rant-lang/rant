@@ -1,17 +1,17 @@
 use crate::{RantValue};
 use std::{rc::Rc};
 
-pub struct OutputWriter<'a> {
-    buffers: Vec<OutputBuffer<'a>>
+pub struct OutputWriter {
+    buffers: Vec<OutputBuffer>
 }
 
-impl<'a> OutputWriter<'a> {
+impl OutputWriter {
     pub fn write_buffer(&mut self, value: OutputBuffer) {
         
     }
 }
 
-impl<'a> OutputWriter<'a> {
+impl OutputWriter {
     pub fn render(mut self) -> String {
         let mut output = String::new();
         for buf in self.buffers {
@@ -21,19 +21,17 @@ impl<'a> OutputWriter<'a> {
     }
 }
 
-pub enum OutputBuffer<'a> {
+pub enum OutputBuffer {
     String(String),
-    Value(RantValue<'a>),
-    Target(Rc<RantValue<'a>>)
+    Value(RantValue)
 }
 
-impl<'a> OutputBuffer<'a> {
+impl<'a> OutputBuffer {
     /// Consumes the buffer and returns its contents rendered as a single `String`.
     pub(crate) fn render(self) -> String {
         match self {
             OutputBuffer::String(s) => s,
-            OutputBuffer::Value(v) => v.as_string(),
-            OutputBuffer::Target(t) => t.as_string()
+            OutputBuffer::Value(v) => v.as_string()
         }
     }
 }

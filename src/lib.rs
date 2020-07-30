@@ -18,8 +18,8 @@ pub const RANT_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub type RantResult<T> = Result<T, RantError>;
 
 /// Rant execution context
-pub struct Rant<'a> {
-    globals: RantMap<'a>
+pub struct Rant {
+    globals: RantMap
 }
 
 #[derive(Debug)]
