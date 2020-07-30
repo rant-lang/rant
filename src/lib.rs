@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 #![allow(unused_macros)]
 
-mod stdlib;
 mod runtime;
 mod syntax;
 mod convert;
+pub mod stdlib;
 pub mod value;
 pub mod compiler;
 

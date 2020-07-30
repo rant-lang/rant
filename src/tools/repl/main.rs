@@ -1,11 +1,12 @@
 use rant::*;
+use rant::stdlib::print_stdlib;
 use std::io::{self, Write};
 use std::time::{Instant, Duration};
 use compiler::RantCompiler;
 
 fn main() {
     println!("Rant {} ({})", RANT_VERSION, embedded_triple::get());
-
+    print_stdlib();
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
