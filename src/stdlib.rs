@@ -1,5 +1,5 @@
 use crate::{RantResult, runtime::VM};
-use crate::{RantValue, FromRant, AsRantForeignFunc, FromRantArgs};
+use crate::{RantValue, AsRantForeignFunc};
 
 pub fn rep(vm: &mut VM, reps: i32) -> RantResult<()> {
     todo!()

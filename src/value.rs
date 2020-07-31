@@ -92,6 +92,7 @@ impl Not for RantValue {
     }
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl RantValue {
     pub fn len(&self) -> usize {
         match self {
@@ -144,5 +145,11 @@ impl RantMap {
 
     pub fn is_empty(&self) -> bool {
         self.map.is_empty()
+    }
+}
+
+impl Default for RantMap {
+    fn default() -> Self {
+        RantMap::new()
     }
 }

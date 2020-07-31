@@ -1,7 +1,7 @@
 use rant::*;
 use rant::stdlib::print_stdlib;
 use std::io::{self, Write};
-use std::time::{Instant, Duration};
+use std::time::{Instant};
 use compiler::RantCompiler;
 
 fn main() {

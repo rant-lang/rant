@@ -12,7 +12,7 @@ impl OutputWriter {
 }
 
 impl OutputWriter {
-    pub fn render(mut self) -> String {
+    pub fn render(self) -> String {
         let mut output = String::new();
         for buf in self.buffers {
             output.push_str(buf.render().as_str());
