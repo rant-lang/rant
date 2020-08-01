@@ -2,7 +2,7 @@
 
 use super::{reader::RantTokenReader, lexer::RantToken, error::*};
 use std::ops::Range;
-use crate::syntax::{PrintFlag, RST};
+use crate::syntax::{PrintFlag, RST, Sequence, Block};
 
 type ParseResult<T> = Result<T, SyntaxError>;
 
@@ -12,6 +12,7 @@ enum SequenceParseMode {
     TagElement
 }
 
+/// Tells what kind of token ended a sequence
 enum SequenceEndType {
     ProgramEnd,
     BlockDelim,
@@ -54,7 +55,7 @@ impl<'source> RantParser<'source> {
 
     /// Parses a sequence of items. Items are individual elements of a Rant program (fragments, blocks, function calls, etc.)
     fn parse_sequence(&mut self, mode: SequenceParseMode) -> ParseResult<(RST, SequenceEndType, bool)> {
-        let mut sequence = vec![];
+        let mut sequence = Sequence::empty();
         let mut next_print_flag = PrintFlag::None;
         let mut last_print_flag_span: Option<Range<usize>> = None;
         let mut is_seq_printing = false;
@@ -65,32 +66,26 @@ impl<'source> RantParser<'source> {
             macro_rules! no_flags {
                 (on $b:block) => {{
                     let elem = $b;
-                    match next_print_flag {
-                        PrintFlag::None => {},
-                        other => {
-                            if let Some(flag_span) = last_print_flag_span.take() {
-                                self.soft_error(match other {
-                                    PrintFlag::Hint => SyntaxErrorType::InvalidHintOn(elem.display_name()),
-                                    PrintFlag::Sink => SyntaxErrorType::InvalidSinkOn(elem.display_name()),
-                                    PrintFlag::None => unreachable!()
-                                }, &flag_span)
-                            }
+                    if !matches!(next_print_flag, PrintFlag::None) {
+                        if let Some(flag_span) = last_print_flag_span.take() {
+                            self.soft_error(match next_print_flag {
+                                PrintFlag::Hint => SyntaxErrorType::InvalidHintOn(elem.display_name()),
+                                PrintFlag::Sink => SyntaxErrorType::InvalidSinkOn(elem.display_name()),
+                                PrintFlag::None => unreachable!()
+                            }, &flag_span)
                         }
                     }
                     sequence.push(elem);
                 }};
                 ($b:block) => {
-                    match next_print_flag {
-                        PrintFlag::None => $b,
-                        other => {
-                            if let Some(flag_span) = last_print_flag_span.take() {
-                                self.soft_error(match other {
-                                    PrintFlag::Hint => SyntaxErrorType::InvalidHint,
-                                    PrintFlag::Sink => SyntaxErrorType::InvalidSink,
-                                    PrintFlag::None => unreachable!()
-                                }, &flag_span)
-                            }
-                        }
+                    if matches!(next_print_flag, PrintFlag::None) {
+                        $b
+                    } else if let Some(flag_span) = last_print_flag_span.take() {
+                        self.soft_error(match next_print_flag {
+                            PrintFlag::Hint => SyntaxErrorType::InvalidHint,
+                            PrintFlag::Sink => SyntaxErrorType::InvalidSink,
+                            PrintFlag::None => unreachable!()
+                        }, &flag_span)
                     }
                 };
             }
@@ -164,7 +159,7 @@ impl<'source> RantParser<'source> {
                         // If no flag, take a hint
                         PrintFlag::None => {
                             // Inherit hints from inner blocks
-                            if let RST::Block(PrintFlag::Hint, ..) = block {
+                            if let RST::Block(Block { flag: PrintFlag::Hint, ..}) = block {
                                 whitespace!(allow);
                                 is_seq_printing = true;
                             }
@@ -310,9 +305,9 @@ impl<'source> RantParser<'source> {
             }
         }
         if auto_hint {
-            Ok(RST::Block(PrintFlag::Hint, sequences))
+            Ok(RST::Block(Block::new(PrintFlag::Hint, sequences)))
         } else {
-            Ok(RST::Block(flag, sequences))
+            Ok(RST::Block(Block::new(flag, sequences)))
         }
     }
 }

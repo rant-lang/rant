@@ -4,33 +4,36 @@
 mod runtime;
 mod syntax;
 mod convert;
+mod util;
 pub mod stdlib;
 pub mod value;
 pub mod compiler;
 
 pub use value::*;
 pub use convert::*;
-use syntax::RST;
+use syntax::{Sequence};
 
 /// The Rant version according to the crate metadata.
 pub const RANT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub type RantResult<T> = Result<T, RantError>;
 
-/// Rant execution context
+/// A Rant execution context.
+#[derive(Debug)]
 pub struct Rant {
     globals: RantMap
 }
 
+/// A compiled Rant program.
 #[derive(Debug)]
 pub struct RantProgram {
-    rst: RST
+    root: Sequence
 }
 
 impl RantProgram {
-    pub(crate) fn new(pgm_root: RST) -> Self {
+    pub(crate) fn new(root: Sequence) -> Self {
         RantProgram {
-            rst: pgm_root
+            root
         }
     }
 }
@@ -57,6 +60,8 @@ pub enum RuntimeErrorType {
     GeneralError,
     /// Stack overflow
     StackOverflow,
+    /// Stack underflow
+    StackUnderflow,
     /// Variable access error, such as attempting to access a nonexistent variable
     InvalidAccess,
     /// Error in function outside of Rant

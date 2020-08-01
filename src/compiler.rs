@@ -1,4 +1,4 @@
-use crate::RantProgram;
+use crate::{syntax::Sequence, RantProgram};
 use error::SyntaxErrorType;
 use parser::RantParser;
 use line_col::LineColLookup;
@@ -70,7 +70,7 @@ impl RantCompiler {
     pub fn compile_string(source: &str) -> CompileResult {
         let mut parser = RantParser::new(source);
         match parser.parse() {
-            Ok(rst) => Ok(RantProgram::new(rst)),
+            Ok(rst) => Ok(RantProgram::new(Sequence::from(rst))),
             Err(mut errors) => {
                 let lookup = LineColLookup::new(source);
                 Err(errors.drain(..).map(|err| {

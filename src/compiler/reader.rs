@@ -58,6 +58,6 @@ impl<'source> RantTokenReader<'source> {
         // If no previous peek was performed for the current iteration, iterate, store, and return reference to token
         let token = self.next();
         self.peeked = token;
-        return self.peeked.as_ref();
+        self.peeked.as_ref()
     }
 }

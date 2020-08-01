@@ -1,7 +1,7 @@
 //! # Syntax module
 //! The `syntax` module contains Rant's AST implementation and supporting data structures.
 
-use std::fmt::Display;
+use std::{ops::{DerefMut, Deref}, fmt::Display};
 
 /// Printflags indicate to the compiler whether a given program element is likely to print something or not.
 #[repr(u8)]
@@ -30,11 +30,66 @@ pub struct Identifier {
     parts: Vec<IdentifierComponent>
 }
 
+/// A series of Rant program elements.
+#[derive(Debug)]
+pub struct Sequence(Vec<RST>);
+
+impl Sequence {
+    pub fn new(seq: Vec<RST>) -> Self {
+        Self(seq)
+    }
+
+    pub fn one(rst: RST) -> Self {
+        Self(vec![rst])
+    }
+
+    pub fn empty() -> Self {
+        Self::new(vec![])
+    }
+}
+
+impl From<RST> for Sequence {
+    fn from(rst: RST) -> Self {
+        match rst {
+            RST::Sequence(seq) => seq,
+            _ => Sequence::one(rst)
+        }
+    }
+}
+
+impl Deref for Sequence {
+    type Target = Vec<RST>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Sequence {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(Debug)]
+pub struct Block {
+    pub flag: PrintFlag,
+    pub elements: Vec<RST>
+}
+
+impl Block {
+    pub fn new(flag: PrintFlag, elements: Vec<RST>) -> Self {
+        Block {
+            flag,
+            elements
+        }
+    }
+}
+
 /// Rant Syntax Tree
 #[derive(Debug)]
 pub enum RST {
-    Sequence(Vec<RST>),
-    Block(PrintFlag, Vec<RST>),
+    Sequence(Sequence),
+    Block(Block),
     List(Vec<RST>),
     Map(Vec<(RST, RST)>),
     Box{ flag: PrintFlag, params: Vec<String>, block: Vec<RST> },
@@ -75,7 +130,7 @@ impl RST {
 
     pub fn is_printing(&self) -> bool {
         matches!(self, 
-            RST::Block(PrintFlag::Hint, _) |
+            RST::Block(Block { flag: PrintFlag::Hint, .. }) |
             RST::AnonFunctionCall { flag: PrintFlag::Hint, .. } |
             RST::FunctionCall { flag: PrintFlag::Hint, .. } |
             RST::Integer(_) |

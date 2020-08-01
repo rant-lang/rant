@@ -19,7 +19,7 @@ impl SyntaxError {
         self.span.clone()
     }
 
-    pub fn info<'a>(&'a self) -> &'a SyntaxErrorType {
+    pub fn info(&self) -> &SyntaxErrorType {
         &self.info
     }
 

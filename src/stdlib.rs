@@ -1,3 +1,7 @@
+//* # stdlib
+
+#![allow(unused_variables)]
+
 use crate::{RantResult, runtime::VM};
 use crate::{RantValue, AsRantForeignFunc};
 

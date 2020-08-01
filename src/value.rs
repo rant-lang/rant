@@ -1,4 +1,4 @@
-use crate::{runtime::VM, syntax::RST, RantResult, RantError};
+use crate::{runtime::VM, syntax::RST, RantResult};
 use std::collections::HashMap;
 use std::{fmt::Debug, rc::Rc, ops::Not};
 
@@ -135,7 +135,7 @@ impl RantMap {
     pub fn new() -> Self {
         Self {
             map: Default::default(),
-            prototype: Default::default()
+            prototype: None
         }
     }
 

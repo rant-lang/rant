@@ -1,3 +1,6 @@
+//! # rant::convert
+//! Provides conversions between RantValues and native types.
+
 #![allow(unused_mut)]
 #![allow(unused_parens)]
 #![allow(unused_variables)]
