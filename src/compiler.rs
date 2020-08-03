@@ -42,9 +42,23 @@ impl Display for LineCol {
 #[derive(Debug)]
 pub struct CompilerError {
     pub info: CompilerErrorType,
-    pub index_range: Range<usize>,
+    pub span: Range<usize>,
     pub first_line_col: LineCol,
     pub last_line_col: LineCol
+}
+
+impl CompilerError {
+    pub fn message(&self) -> String {
+        self.info.message()
+    }
+
+    pub fn inline_message(&self) -> String {
+        self.info.inline_message()
+    }
+
+    pub fn code(&self) -> &'static str {
+        self.info.code()
+    }
 }
 
 #[derive(Debug)]
@@ -53,11 +67,34 @@ pub enum CompilerErrorType {
     Other
 }
 
+impl CompilerErrorType {
+    pub fn code(&self) -> &'static str {
+        match self {
+            CompilerErrorType::SyntaxError(err) => err.code(),
+            _ => "TODO", // TODO
+        }
+    }
+
+    pub fn message(&self) -> String {
+        match self {
+            CompilerErrorType::SyntaxError(err) => err.message(),
+            _ => "unknown error".to_owned() // TODO
+        }
+    }
+
+    pub fn inline_message(&self) -> String {
+        match self {
+            CompilerErrorType::SyntaxError(err) => err.inline_message(),
+            _ => "unknown error".to_owned() // TODO
+        }
+    }
+}
+
 impl Display for CompilerErrorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CompilerErrorType::SyntaxError(err) => err.fmt(f),
-            CompilerErrorType::Other => write!(f, "(other error"),
+            CompilerErrorType::Other => write!(f, "(other error)"),
         }
     }
 }
@@ -82,7 +119,7 @@ impl RantCompiler {
                     let (line_end, col_end) = lookup.get(span.end.saturating_sub(1));
                     CompilerError {
                         info: CompilerErrorType::SyntaxError(info),
-                        index_range: span,
+                        span: span,
                         first_line_col: LineCol::new((line_start, col_start)),
                         last_line_col: LineCol::new((line_end, col_end))
                     }

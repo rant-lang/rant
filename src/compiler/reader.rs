@@ -1,6 +1,7 @@
 use logos::*;
 use super::lexer::RantToken;
 use std::ops::Range;
+use crate::RantString;
 
 pub struct RantTokenReader<'source> {
     lexer: Lexer<'source, RantToken>,
@@ -24,8 +25,8 @@ impl<'source> RantTokenReader<'source> {
         }
     }
 
-    pub fn gen_last_token_string(&self) -> String {
-        self.lexer.slice().to_owned()
+    pub fn gen_last_token_string(&self) -> RantString {
+        RantString::from(self.lexer.slice())
     }
 
     /// Get the next non-whitespace token.

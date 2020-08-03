@@ -2,6 +2,8 @@
 //! The `syntax` module contains Rant's AST implementation and supporting data structures.
 
 use std::{ops::{DerefMut, Deref}, fmt::Display, rc::Rc};
+use smartstring::alias::CompactString;
+use crate::RantString;
 
 /// Printflags indicate to the compiler whether a given program element is likely to print something or not.
 #[repr(u8)]
@@ -88,14 +90,14 @@ pub enum RST {
     Block(Block),
     List(Vec<RST>),
     Map(Vec<(RST, RST)>),
-    Box{ flag: PrintFlag, params: Vec<String>, block: Vec<RST> },
+    Box{ flag: PrintFlag, params: Vec<RantString>, block: Vec<RST> },
     AnonFunctionCall{ flag: PrintFlag, funcgen: Box<RST>, args: Vec<RST> },
     FunctionCall{ flag: PrintFlag, id: Identifier, args: Vec<RST> },
     VarDef(Identifier, Option<Box<RST>>),
     VarGet(Identifier),
     VarSet(Identifier, Box<RST>),
-    Fragment(String),
-    Whitespace(String),
+    Fragment(RantString),
+    Whitespace(RantString),
     Integer(i64),
     Float(f64),
     Boolean(bool),

@@ -1,15 +1,17 @@
-use crate::{RantValue};
+use crate::{RantValue, RantString};
+
+const INITIAL_CHAIN_CAPACITY: usize = 64;
 
 /// Writes a stream of buffers that can be passed to a parent buffer or rendered to a string.
 pub struct OutputWriter {
     buffers: Vec<OutputBuffer>,
-    frag_buffer: Option<String>
+    frag_buffer: Option<RantString>
 }
 
 impl OutputWriter {
     pub fn new() -> Self {
         Self {
-            buffers: Default::default(),
+            buffers: Vec::with_capacity(INITIAL_CHAIN_CAPACITY),
             frag_buffer: None
         }
     }
@@ -22,7 +24,7 @@ impl OutputWriter {
         if let Some(frag_buffer) = self.frag_buffer.as_mut() {
             frag_buffer.push_str(value);
         } else {
-            self.frag_buffer = Some(value.to_owned())
+            self.frag_buffer = Some(RantString::from(value))
         }
     }
 
@@ -39,9 +41,9 @@ impl OutputWriter {
 }
 
 impl OutputWriter {
-    pub fn render(mut self) -> String {
+    pub fn render(mut self) -> RantString {
         self.flush_frag_buffer();
-        let mut output = String::new();
+        let mut output = RantString::new();
         for buf in self.buffers {
             output.push_str(buf.render().as_str());
         }
@@ -57,16 +59,16 @@ impl Default for OutputWriter {
 
 /// A unit of output.
 pub enum OutputBuffer {
-    String(String),
+    String(RantString),
     Value(RantValue)
 }
 
 impl<'a> OutputBuffer {
     /// Consumes the buffer and returns its contents rendered as a single `String`.
-    pub(crate) fn render(self) -> String {
+    pub(crate) fn render(self) -> RantString {
         match self {
             OutputBuffer::String(s) => s,
-            OutputBuffer::Value(v) => v.to_string()
+            OutputBuffer::Value(v) => RantString::from(v.to_string())
         }
     }
 }

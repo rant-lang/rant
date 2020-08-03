@@ -1,4 +1,4 @@
-use crate::{Rant, RantProgram, RantMap, syntax::{Sequence, RST, PrintFlag}, RantResult, RantError, RuntimeErrorType};
+use crate::{Rant, RantProgram, RantMap, syntax::{Sequence, RST, PrintFlag}, RantResult, RantError, RuntimeErrorType, RantString};
 use output::OutputWriter;
 use std::{rc::{Rc}, cell::{RefCell}, ops::{Deref}};
 use resolver::Resolver;
@@ -58,6 +58,7 @@ macro_rules! runtime_error {
 
 impl<'a> VM<'a> {
     /// Runs the program.
+    #[inline]
     pub fn run(&self) -> RantResult<String> {
         // Push the root RST onto the stack
         self.push_frame(self.program.root.clone(), true)?;
@@ -67,6 +68,7 @@ impl<'a> VM<'a> {
             let frame = self.cur_frame();
             let mut frame = frame.borrow_mut();
 
+            // Write last frame's output (TODO: Write as individual buffers)
             if let Some(last_output) = self.take_last_output() {
                 frame.write_frag(&last_output);
             }
@@ -77,7 +79,7 @@ impl<'a> VM<'a> {
                     RST::Fragment(frag) => frame.write_frag(frag),
                     RST::Whitespace(ws) => frame.write_ws(ws),
                     RST::Block(block) => {
-                        let elem = Rc::clone(&block.elements[self.rng.next_usize(block.len())]);                
+                        let elem = Rc::clone(&block.elements[self.rng.next_usize(block.len())]);
                         self.push_frame(elem, block.flag != PrintFlag::Sink)?;
                         continue 'from_the_top;
                     },
@@ -90,7 +92,7 @@ impl<'a> VM<'a> {
         }
 
         // Once stack is empty, program is done-- return last frame's output
-        Ok(self.take_last_output().unwrap_or_default())
+        Ok(self.take_last_output().unwrap_or_default().to_string())
     }
 
     #[inline(always)]
@@ -98,13 +100,15 @@ impl<'a> VM<'a> {
         self.stack.borrow().is_empty()
     }
 
-    fn take_last_output(&self) -> Option<String> {
+    #[inline]
+    fn take_last_output(&self) -> Option<RantString> {
         self.prev_frame.borrow_mut()
             .take()
             .map(|frame| frame.borrow_mut().render_output())
             .flatten()
     }
 
+    #[inline]
     fn pop_frame(&self) -> RantResult<Rc<RefCell<StackFrame>>> {
         if let Some(frame) = self.stack.borrow_mut().pop() {
             self.prev_frame.replace(Some(frame.clone()));
@@ -114,6 +118,7 @@ impl<'a> VM<'a> {
         }
     }
 
+    #[inline]
     fn push_frame(&self, callee: Rc<Sequence>, has_output: bool) -> RantResult<Rc<RefCell<StackFrame>>> {
         let mut stack = self.stack.borrow_mut();
 

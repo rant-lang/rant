@@ -21,6 +21,7 @@ use runtime::VM;
 /// The Rant version according to the crate metadata.
 pub const RANT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+pub(crate) type RantString = smartstring::alias::CompactString;
 pub type RantResult<T> = Result<T, RantError>;
 
 /// A Rant execution context.

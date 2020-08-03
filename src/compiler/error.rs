@@ -31,9 +31,9 @@ impl SyntaxError {
 /// The information describing a syntax error as seen by the parser.
 #[derive(Debug)]
 pub enum SyntaxErrorType {
-    UnclosedBlock,
-    ExpectedToken(String),
     UnexpectedToken(String),
+    ExpectedToken(String),
+    UnclosedBlock,
     MissingIdentifier,
     InvalidSinkOn(&'static str),
     InvalidHintOn(&'static str),
@@ -41,17 +41,45 @@ pub enum SyntaxErrorType {
     InvalidHint,
 }
 
+impl SyntaxErrorType {
+    pub fn code(&self) -> &'static str {
+        match self {
+            SyntaxErrorType::UnexpectedToken(_) =>                              "RC0000",
+            SyntaxErrorType::ExpectedToken(_) =>                                "RC0001",
+            SyntaxErrorType::UnclosedBlock =>                                   "RC0002",
+            SyntaxErrorType::MissingIdentifier =>                               "RC0003",
+            SyntaxErrorType::InvalidSink | SyntaxErrorType::InvalidSinkOn(_) => "RC0004",
+            SyntaxErrorType::InvalidHint | SyntaxErrorType::InvalidHintOn(_) => "RC0005",
+        }
+    }
+
+    pub fn message(&self) -> String {
+        match self {
+            SyntaxErrorType::UnclosedBlock => "unclosed block; expected '}'".to_owned(),
+            SyntaxErrorType::ExpectedToken(token) => format!("expected token: '{}'", token),
+            SyntaxErrorType::UnexpectedToken(token) => format!("unexpected token: '{}'", token),
+            SyntaxErrorType::MissingIdentifier => "missing identifier".to_owned(),
+            SyntaxErrorType::InvalidSinkOn(elname) => format!("sink is not valid on {}", elname),
+            SyntaxErrorType::InvalidHintOn(elname) => format!("hint is not valid on {}", elname),
+            SyntaxErrorType::InvalidSink => "sink is not valid".to_owned(),
+            SyntaxErrorType::InvalidHint => "hint is not valid".to_owned(),
+        }
+    }
+
+    pub fn inline_message(&self) -> String {
+        match self {
+            SyntaxErrorType::UnclosedBlock => "no matching '}' found".to_owned(),
+            SyntaxErrorType::ExpectedToken(token) => format!("expected '{}'", token),
+            SyntaxErrorType::UnexpectedToken(_) => "this probably shouldn't be here".to_owned(),
+            SyntaxErrorType::MissingIdentifier => "missing identifier".to_owned(),
+            SyntaxErrorType::InvalidSink | SyntaxErrorType::InvalidSinkOn(_) => "sink not valid here".to_owned(),
+            SyntaxErrorType::InvalidHint | SyntaxErrorType::InvalidHintOn(_) => "hint not valid here".to_owned(),
+        }
+    }
+}
+
 impl Display for SyntaxErrorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SyntaxErrorType::UnclosedBlock => write!(f, "Unclosed block; expected '}}'"),
-            SyntaxErrorType::ExpectedToken(token) => write!(f, "Expected token: '{}'", token),
-            SyntaxErrorType::UnexpectedToken(token) => write!(f, "Unexpected token: '{}'", token),
-            SyntaxErrorType::MissingIdentifier => write!(f, "Missing identifier"),
-            SyntaxErrorType::InvalidSinkOn(elname) => write!(f, "Sink is not valid on {}", elname),
-            SyntaxErrorType::InvalidHintOn(elname) => write!(f, "Hint is not valid on {}", elname),
-            SyntaxErrorType::InvalidSink => write!(f, "Sink is not valid here"),
-            SyntaxErrorType::InvalidHint => write!(f, "Hint is not valid here"),
-        }
+        write!(f, "{}", self.message())
     }
 }

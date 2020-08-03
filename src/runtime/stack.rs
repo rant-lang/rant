@@ -1,6 +1,8 @@
-use std::{cell::RefCell, rc::Rc, ops::{DerefMut, Deref}, marker::PhantomData};
-use crate::{syntax::{Sequence, RST}, RantMap};
+use std::{cell::RefCell, rc::Rc, ops::{DerefMut, Deref}};
+use crate::{syntax::{Sequence, RST}, RantMap, RantString};
 use super::output::OutputWriter;
+
+const STACK_INITIAL_CAPACITY: usize = 16;
 
 /// Thin wrapper around call stack vector
 pub struct CallStack(Vec<Rc<RefCell<StackFrame>>>);
@@ -28,7 +30,7 @@ impl Default for CallStack {
 
 impl CallStack {
     pub fn new() -> Self {
-        Self(Default::default())
+        Self(Vec::with_capacity(STACK_INITIAL_CAPACITY))
     }
 }
 
@@ -96,7 +98,7 @@ impl StackFrame {
         }
     }
 
-    pub fn render_output(&mut self) -> Option<String> {
+    pub fn render_output(&mut self) -> Option<RantString> {
         self.output.take().map(|o| o.render())
     }
 }

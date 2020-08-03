@@ -2,7 +2,7 @@
 
 use super::{reader::RantTokenReader, lexer::RantToken, error::*};
 use std::{rc::Rc, ops::Range};
-use crate::syntax::{PrintFlag, RST, Sequence, Block};
+use crate::{RantString, syntax::{PrintFlag, RST, Sequence, Block}};
 
 type ParseResult<T> = Result<T, SyntaxError>;
 
@@ -99,7 +99,7 @@ impl<'source> RantParser<'source> {
             // Shortcut macro for "unexpected token" error
             macro_rules! unexpected_token_error {
                 () => {
-                    self.soft_error(SyntaxErrorType::UnexpectedToken(self.reader.gen_last_token_string()), &span)
+                    self.soft_error(SyntaxErrorType::UnexpectedToken(self.reader.gen_last_token_string().to_string()), &span)
                 };
             }
 
@@ -221,7 +221,9 @@ impl<'source> RantParser<'source> {
                 RantToken::Escape(ch) => no_flags!(on {
                     whitespace!(allow);
                     is_seq_printing = true;
-                    RST::Fragment(ch.to_string())
+                    let mut s = RantString::new();
+                    s.push(ch);
+                    RST::Fragment(s)
                 }),
 
                 // Integers
@@ -312,7 +314,7 @@ impl<'source> RantParser<'source> {
                 _ => unreachable!()
             }
         }
-        if auto_hint {
+        if auto_hint && flag != PrintFlag::Sink {
             Ok(RST::Block(Block::new(PrintFlag::Hint, sequences)))
         } else {
             Ok(RST::Block(Block::new(flag, sequences)))
