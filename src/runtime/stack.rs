@@ -1,56 +1,64 @@
-use std::{cell::RefCell, rc::Rc, ops::{DerefMut, Deref}};
+use std::{cell::RefCell, rc::Rc, ops::{DerefMut, Deref}, marker::PhantomData};
 use crate::{syntax::{Sequence, RST}, RantMap};
 use super::output::OutputWriter;
 
 /// Thin wrapper around call stack vector
-pub struct CallStack<'a>(Vec<Rc<RefCell<StackFrame<'a>>>>);
+pub struct CallStack(Vec<Rc<RefCell<StackFrame>>>);
 
 // Allows direct immutable access to internal stack vector
-impl<'a> Deref for CallStack<'a> {
-    type Target = Vec<Rc<RefCell<StackFrame<'a>>>>;
+impl Deref for CallStack {
+    type Target = Vec<Rc<RefCell<StackFrame>>>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 // Allows direct mutable access to internal stack vector
-impl<'a> DerefMut for CallStack<'a> {
+impl DerefMut for CallStack {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl Default for CallStack<'_> {
+impl Default for CallStack {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl CallStack<'_> {
+impl CallStack {
     pub fn new() -> Self {
         Self(Default::default())
     }
 }
 
-pub struct StackFrame<'a> {
+pub struct StackFrame {
     /// Variables local to stack frame
     locals: RantMap,
-    /// RST node that triggered this frame's creation
-    caller: Option<&'a RST>,
     /// Node sequence being executed by the frame
-    sequence: &'a Sequence,
+    sequence: Rc<Sequence>,
     /// Program Counter (as index in sequence) for the current frame
     pc: usize,
     /// Has frame sequence started running?
     started: bool,
     /// Output for this stack frame
-    output: Option<OutputWriter>
+    output: Option<OutputWriter>,
 }
 
-// Allows stack frame's RST sequence to be iterated and automatically increments the PC
-impl<'a> Iterator for StackFrame<'a> {
-    type Item = &'a RST;
-    fn next(&mut self) -> Option<Self::Item> {
+impl StackFrame {
+    pub fn new(sequence: Rc<Sequence>, locals: RantMap, has_output: bool) -> Self {
+        Self {
+            sequence,
+            locals,
+            output: if has_output { Some(Default::default()) } else { None },
+            started: false,
+            pc: 0,
+        }
+    }
+}
+
+impl StackFrame {
+    pub fn seq_next(&mut self) -> Option<Rc<RST>> {
         if self.is_done() {
             return None
         }
@@ -62,24 +70,15 @@ impl<'a> Iterator for StackFrame<'a> {
             self.started = true;
         }
 
-        self.sequence.get(self.pc)
+        self.sequence.get(self.pc).map(Rc::clone)
+    }
+
+    pub fn pc(&self) -> usize {
+        self.pc
     }
 }
 
-impl<'a> StackFrame<'a> {
-    pub fn new(caller: Option<&'a RST>, sequence: &'a Sequence, locals: RantMap, has_output: bool) -> Self {
-        Self {
-            caller,
-            sequence,
-            locals,
-            output: if has_output { Some(Default::default()) } else { None },
-            started: false,
-            pc: 0
-        }
-    }
-}
-
-impl StackFrame<'_> {
+impl StackFrame {
     #[inline(always)]
     fn is_done(&self) -> bool {
         self.pc >= self.sequence.len()

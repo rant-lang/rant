@@ -1,7 +1,7 @@
 //! # Syntax module
 //! The `syntax` module contains Rant's AST implementation and supporting data structures.
 
-use std::{ops::{DerefMut, Deref}, fmt::Display};
+use std::{ops::{DerefMut, Deref}, fmt::Display, rc::Rc};
 
 /// Printflags indicate to the compiler whether a given program element is likely to print something or not.
 #[repr(u8)]
@@ -32,15 +32,15 @@ pub struct Identifier {
 
 /// A series of Rant program elements.
 #[derive(Debug)]
-pub struct Sequence(Vec<RST>);
+pub struct Sequence(Vec<Rc<RST>>);
 
 impl Sequence {
-    pub fn new(seq: Vec<RST>) -> Self {
+    pub fn new(seq: Vec<Rc<RST>>) -> Self {
         Self(seq)
     }
 
     pub fn one(rst: RST) -> Self {
-        Self(vec![rst])
+        Self(vec![Rc::new(rst)])
     }
 
     pub fn empty() -> Self {
@@ -48,17 +48,8 @@ impl Sequence {
     }
 }
 
-impl From<RST> for Sequence {
-    fn from(rst: RST) -> Self {
-        match rst {
-            RST::Sequence(seq) => seq,
-            _ => Sequence::one(rst)
-        }
-    }
-}
-
 impl Deref for Sequence {
-    type Target = Vec<RST>;
+    type Target = Vec<Rc<RST>>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -73,22 +64,27 @@ impl DerefMut for Sequence {
 #[derive(Debug)]
 pub struct Block {
     pub flag: PrintFlag,
-    pub elements: Vec<RST>
+    pub elements: Vec<Rc<Sequence>>
 }
 
 impl Block {
-    pub fn new(flag: PrintFlag, elements: Vec<RST>) -> Self {
+    pub fn new(flag: PrintFlag, elements: Vec<Rc<Sequence>>) -> Self {
         Block {
             flag,
             elements
         }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.elements.len()
     }
 }
 
 /// Rant Syntax Tree
 #[derive(Debug)]
 pub enum RST {
-    Sequence(Sequence),
+    Sequence(Rc<Sequence>),
     Block(Block),
     List(Vec<RST>),
     Map(Vec<(RST, RST)>),

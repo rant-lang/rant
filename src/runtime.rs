@@ -1,10 +1,10 @@
-use crate::{Rant, RantProgram, RantMap, syntax::{Sequence, RST}, RantResult, RantError, RuntimeErrorType};
+use crate::{Rant, RantProgram, RantMap, syntax::{Sequence, RST, PrintFlag}, RantResult, RantError, RuntimeErrorType};
 use output::OutputWriter;
-use std::{rc::{Weak, Rc}, cell::{Cell, RefCell}, ops::{DerefMut, Deref}};
-pub use stack::*;
-pub use output::*;
+use std::{rc::{Rc}, cell::{RefCell}, ops::{Deref}};
 use resolver::Resolver;
 use random::RantRng;
+pub use stack::*;
+pub use output::*;
 
 mod resolver;
 mod output;
@@ -17,8 +17,8 @@ pub struct VM<'a> {
     rng: Rc<RantRng>,
     engine: &'a mut Rant,
     program: &'a RantProgram,
-    stack: RefCell<CallStack<'a>>,
-    prev_frame: RefCell<Option<Rc<RefCell<StackFrame<'a>>>>>,
+    stack: RefCell<CallStack>,
+    prev_frame: RefCell<Option<Rc<RefCell<StackFrame>>>>,
     resolver: Resolver
 }
 
@@ -35,7 +35,7 @@ impl<'a> VM<'a> {
         }
     }
 
-    pub fn cur_frame(&self) -> Rc<RefCell<StackFrame<'a>>> {
+    pub fn cur_frame(&self) -> Rc<RefCell<StackFrame>> {
         self.stack.borrow().last().unwrap().clone()
     }
 }
@@ -58,26 +58,33 @@ macro_rules! runtime_error {
 
 impl<'a> VM<'a> {
     /// Runs the program.
-    pub fn run(&'a self) -> RantResult<String> {
+    pub fn run(&self) -> RantResult<String> {
         // Push the root RST onto the stack
-        self.push_frame(None, &self.program.root, true)?;
+        self.push_frame(self.program.root.clone(), true)?;
 
         // Run whatever is on the top of the call stack
-        while !self.is_stack_empty() {
+        'from_the_top: while !self.is_stack_empty() {
             let frame = self.cur_frame();
             let mut frame = frame.borrow_mut();
 
+            if let Some(last_output) = self.take_last_output() {
+                frame.write_frag(&last_output);
+            }
+
             // Run frame's sequence elements in order
-            while let Some(rst) = frame.next() {
-                match rst {
+            while let Some(rst) = &frame.seq_next() {
+                match Rc::deref(rst) {
                     RST::Fragment(frag) => frame.write_frag(frag),
                     RST::Whitespace(ws) => frame.write_ws(ws),
                     RST::Block(block) => {
-                        
+                        let elem = Rc::clone(&block.elements[self.rng.next_usize(block.len())]);                
+                        self.push_frame(elem, block.flag != PrintFlag::Sink)?;
+                        continue 'from_the_top;
                     },
                     _ => {}
                 }
             }
+
             // Pop frame once its sequence is finished
             self.pop_frame()?;
         }
@@ -92,12 +99,13 @@ impl<'a> VM<'a> {
     }
 
     fn take_last_output(&self) -> Option<String> {
-        self.prev_frame.borrow_mut().as_mut()
+        self.prev_frame.borrow_mut()
+            .take()
             .map(|frame| frame.borrow_mut().render_output())
             .flatten()
     }
 
-    fn pop_frame(&'a self) -> RantResult<Rc<RefCell<StackFrame>>> {
+    fn pop_frame(&self) -> RantResult<Rc<RefCell<StackFrame>>> {
         if let Some(frame) = self.stack.borrow_mut().pop() {
             self.prev_frame.replace(Some(frame.clone()));
             Ok(frame)
@@ -106,7 +114,7 @@ impl<'a> VM<'a> {
         }
     }
 
-    fn push_frame(&'a self, caller: Option<&'a RST>, callee: &'a Sequence, has_output: bool) -> RantResult<Rc<RefCell<StackFrame>>> {
+    fn push_frame(&self, callee: Rc<Sequence>, has_output: bool) -> RantResult<Rc<RefCell<StackFrame>>> {
         let mut stack = self.stack.borrow_mut();
 
         // Check if this push would overflow the stack
@@ -114,7 +122,7 @@ impl<'a> VM<'a> {
             runtime_error!(StackOverflow);
         }
 
-        let frame = StackFrame::new(caller, callee, Default::default(), has_output);
+        let frame = StackFrame::new(callee, Default::default(), has_output);
         stack.push(Rc::new(RefCell::new(frame)));
         Ok(stack.last().unwrap().clone())
     }

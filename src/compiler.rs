@@ -1,8 +1,8 @@
-use crate::{syntax::Sequence, RantProgram};
+use crate::{syntax::{RST, Sequence}, RantProgram};
 use error::SyntaxErrorType;
 use parser::RantParser;
 use line_col::LineColLookup;
-use std::{fmt::Display, ops::Range};
+use std::{fmt::Display, ops::Range, rc::Rc};
 
 pub(crate) mod lexer;
 pub(crate) mod reader;
@@ -70,7 +70,10 @@ impl RantCompiler {
     pub fn compile_string(source: &str) -> CompileResult {
         let mut parser = RantParser::new(source);
         match parser.parse() {
-            Ok(rst) => Ok(RantProgram::new(Sequence::from(rst))),
+            Ok(rst) => Ok(RantProgram::new(match rst {
+                RST::Sequence(seq) => seq,
+                other => Rc::new(Sequence::new(vec![Rc::new(other)]))
+            })),
             Err(mut errors) => {
                 let lookup = LineColLookup::new(source);
                 Err(errors.drain(..).map(|err| {

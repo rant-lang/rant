@@ -15,7 +15,7 @@ impl OutputWriter {
     }
 
     pub fn write_buffer(&mut self, value: OutputBuffer) {
-        todo!()
+        self.buffers.push(value);
     }
 
     pub fn write_frag(&mut self, value: &str) {
@@ -39,7 +39,8 @@ impl OutputWriter {
 }
 
 impl OutputWriter {
-    pub fn render(self) -> String {
+    pub fn render(mut self) -> String {
+        self.flush_frag_buffer();
         let mut output = String::new();
         for buf in self.buffers {
             output.push_str(buf.render().as_str());
@@ -65,7 +66,7 @@ impl<'a> OutputBuffer {
     pub(crate) fn render(self) -> String {
         match self {
             OutputBuffer::String(s) => s,
-            OutputBuffer::Value(v) => v.as_string()
+            OutputBuffer::Value(v) => v.to_string()
         }
     }
 }

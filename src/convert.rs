@@ -164,7 +164,7 @@ impl ToRant for &'static str {
 
 impl FromRant for String {
     fn from_rant(val: RantValue) -> RantResult<Self> {
-        Ok(val.as_string())
+        Ok(val.to_string())
     }
 }
 

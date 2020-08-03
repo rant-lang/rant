@@ -45,6 +45,12 @@ pub enum RantToken {
     #[token("_")]
     Sink,
 
+    #[token("true")]
+    True,
+
+    #[token("false")]
+    False,
+
     #[regex(r"\s+", filter_bs, priority = 2)]
     Whitespace,
 

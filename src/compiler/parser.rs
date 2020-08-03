@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use super::{reader::RantTokenReader, lexer::RantToken, error::*};
-use std::ops::Range;
+use std::{rc::Rc, ops::Range};
 use crate::syntax::{PrintFlag, RST, Sequence, Block};
 
 type ParseResult<T> = Result<T, SyntaxError>;
@@ -44,7 +44,7 @@ impl<'source> RantParser<'source> {
     pub fn parse(&mut self) -> Result<RST, Vec<SyntaxError>> {
         match self.parse_sequence(SequenceParseMode::TopLevel) {
             Ok(..) if !self.errors.is_empty() => Err(self.errors.drain(..).collect()),
-            Ok((rst, ..)) => Ok(rst),
+            Ok((seq, ..)) => Ok(RST::Sequence(Rc::new(seq))),
             Err(hard_error) => Err(self.errors.drain(..).chain(std::iter::once(hard_error)).collect())
         }
     }
@@ -54,7 +54,7 @@ impl<'source> RantParser<'source> {
     }
 
     /// Parses a sequence of items. Items are individual elements of a Rant program (fragments, blocks, function calls, etc.)
-    fn parse_sequence(&mut self, mode: SequenceParseMode) -> ParseResult<(RST, SequenceEndType, bool)> {
+    fn parse_sequence(&mut self, mode: SequenceParseMode) -> ParseResult<(Sequence, SequenceEndType, bool)> {
         let mut sequence = Sequence::empty();
         let mut next_print_flag = PrintFlag::None;
         let mut last_print_flag_span: Option<Range<usize>> = None;
@@ -75,7 +75,7 @@ impl<'source> RantParser<'source> {
                             }, &flag_span)
                         }
                     }
-                    sequence.push(elem);
+                    sequence.push(Rc::new(elem));
                 }};
                 ($b:block) => {
                     if matches!(next_print_flag, PrintFlag::None) {
@@ -89,6 +89,12 @@ impl<'source> RantParser<'source> {
                     }
                 };
             }
+
+            macro_rules! seq_add {
+                ($elem:expr) => {
+                    sequence.push(Rc::new($elem));
+                }
+            }
             
             // Shortcut macro for "unexpected token" error
             macro_rules! unexpected_token_error {
@@ -101,7 +107,7 @@ impl<'source> RantParser<'source> {
             macro_rules! whitespace {
                 (allow) => {
                     if let Some(ws) = pending_whitespace.take() {
-                        sequence.push(RST::Whitespace(ws));
+                        seq_add!(RST::Whitespace(ws));
                     }
                 };
                 (queue $ws:expr) => {
@@ -166,7 +172,7 @@ impl<'source> RantParser<'source> {
                         }
                     }
                     
-                    sequence.push(block);                    
+                    seq_add!(block);               
                 },
 
                 // Block element delimiter (when in block parsing mode)
@@ -175,11 +181,7 @@ impl<'source> RantParser<'source> {
                     whitespace!(ignore prev);
                     match mode {
                         SequenceParseMode::BlockElement => {
-                            return if !sequence.is_empty() {
-                                Ok((RST::Sequence(sequence), SequenceEndType::BlockDelim, is_seq_printing))
-                            } else {
-                                Ok((RST::Nop, SequenceEndType::BlockDelim, is_seq_printing))
-                            }
+                            return Ok((sequence, SequenceEndType::BlockDelim, is_seq_printing))
                         },
                         _ => unexpected_token_error!()
                     }
@@ -191,11 +193,7 @@ impl<'source> RantParser<'source> {
                     whitespace!(ignore prev);
                     match mode {
                         SequenceParseMode::BlockElement => {
-                            return if !sequence.is_empty() {
-                                Ok((RST::Sequence(sequence), SequenceEndType::BlockEnd, is_seq_printing))
-                            } else {
-                                Ok((RST::Nop, SequenceEndType::BlockEnd, is_seq_printing))
-                            }
+                            return Ok((sequence, SequenceEndType::BlockEnd, is_seq_printing))
                         },
                         _ => unexpected_token_error!()
                     }
@@ -240,6 +238,20 @@ impl<'source> RantParser<'source> {
                     RST::Float(n)
                 }),
 
+                // True
+                RantToken::True => no_flags!(on {
+                    whitespace!(allow);
+                    is_seq_printing = true;
+                    RST::Boolean(true)
+                }),
+
+                // False
+                RantToken::False => no_flags!(on {
+                    whitespace!(allow);
+                    is_seq_printing = true;
+                    RST::Boolean(false)
+                }),
+
                 // Treat unsupported sequence tokens as errors
                 _ => {
                     unexpected_token_error!();
@@ -270,11 +282,7 @@ impl<'source> RantParser<'source> {
         }
 
         // Return the top-level sequence
-        if !sequence.is_empty() {
-            Ok((RST::Sequence(sequence), SequenceEndType::ProgramEnd, is_seq_printing))
-        } else {
-            Ok((RST::Nop, SequenceEndType::ProgramEnd, is_seq_printing))
-        }
+        Ok((sequence, SequenceEndType::ProgramEnd, is_seq_printing))
     }
 
     /// Parses a block.
@@ -291,10 +299,10 @@ impl<'source> RantParser<'source> {
 
             match seq_end {
                 SequenceEndType::BlockDelim => {
-                    sequences.push(seq);
+                    sequences.push(Rc::new(seq));
                 },
                 SequenceEndType::BlockEnd => {
-                    sequences.push(seq);
+                    sequences.push(Rc::new(seq));
                     break;
                 },
                 SequenceEndType::ProgramEnd => {
