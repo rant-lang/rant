@@ -1,14 +1,12 @@
-use crate::{Rant, RantProgram, RantMap, syntax::{Sequence, RST, PrintFlag}, RantResult, RantError, RuntimeErrorType, RantString};
+use crate::{Rant, RantProgram, RantMap, syntax::{Sequence, RST, PrintFlag}, RantResult, RantError, RuntimeErrorType, RantString, random::RantRng};
 use output::OutputWriter;
 use std::{rc::{Rc}, cell::{RefCell}, ops::{Deref}};
 use resolver::Resolver;
-use random::RantRng;
 pub use stack::*;
 pub use output::*;
 
 mod resolver;
 mod output;
-mod random;
 mod stack;
 
 pub const MAX_STACK_SIZE: usize = 20000;

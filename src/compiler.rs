@@ -119,7 +119,7 @@ impl RantCompiler {
                     let (line_end, col_end) = lookup.get(span.end.saturating_sub(1));
                     CompilerError {
                         info: CompilerErrorType::SyntaxError(info),
-                        span: span,
+                        span,
                         first_line_col: LineCol::new((line_start, col_start)),
                         last_line_col: LineCol::new((line_end, col_end))
                     }

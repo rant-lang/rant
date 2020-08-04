@@ -1,6 +1,5 @@
-use super::random::RantRng;
 use std::rc::Rc;
-use crate::RantValue;
+use crate::{random::RantRng, RantValue};
 
 pub struct Resolver {
     rng: Rc<RantRng>

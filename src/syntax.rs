@@ -2,7 +2,6 @@
 //! The `syntax` module contains Rant's AST implementation and supporting data structures.
 
 use std::{ops::{DerefMut, Deref}, fmt::Display, rc::Rc};
-use smartstring::alias::CompactString;
 use crate::RantString;
 
 /// Printflags indicate to the compiler whether a given program element is likely to print something or not.
@@ -19,17 +18,21 @@ pub enum PrintFlag {
 
 /// Component in a variable accessor chain
 #[derive(Debug)]
-pub enum IdentifierComponent {
+pub enum VarAccessComponent {
     /// Name of variable or map item
-    Name(String),
+    Name(RantString),
     /// List index
-    Index(usize)
+    Index(i64)
 }
 
-/// An identifier consisting of a chain of variable names and indices
+/// An accessor consisting of a chain of variable names and indices
 #[derive(Debug)]
-pub struct Identifier {
-    parts: Vec<IdentifierComponent>
+pub struct VarAccessPath(Vec<VarAccessComponent>);
+
+impl VarAccessPath {
+    pub fn new(parts: Vec<VarAccessComponent>) -> Self {
+        Self(parts)
+    }
 }
 
 /// A series of Rant program elements.
@@ -63,6 +66,7 @@ impl DerefMut for Sequence {
     }
 }
 
+/// A block is a set of zero or more distinct Rant code snippets.
 #[derive(Debug)]
 pub struct Block {
     pub flag: PrintFlag,
@@ -83,6 +87,36 @@ impl Block {
     }
 }
 
+#[derive(Debug)]
+pub struct FunctionCall {
+    pub flag: PrintFlag,
+    pub id: VarAccessPath,
+    pub arguments: Vec<RST>
+}
+
+#[derive(Debug)]
+pub struct FunctionDef {
+    pub id: VarAccessPath,
+    pub params: Vec<RantString>,
+    pub is_variadic: bool,
+    pub body: Rc<Sequence>
+}
+
+#[derive(Debug)]
+pub struct FunctionBox {
+    pub flag: PrintFlag,
+    pub params: Vec<RantString>,
+    pub is_variadic: bool,
+    pub body: Rc<Sequence>
+}
+
+#[derive(Debug)]
+pub struct AnonFunctionCall {
+    pub flag: PrintFlag,
+    pub expr: Rc<RST>,
+    pub args: Vec<RST>
+}
+
 /// Rant Syntax Tree
 #[derive(Debug)]
 pub enum RST {
@@ -90,12 +124,13 @@ pub enum RST {
     Block(Block),
     List(Vec<RST>),
     Map(Vec<(RST, RST)>),
-    Box{ flag: PrintFlag, params: Vec<RantString>, block: Vec<RST> },
-    AnonFunctionCall{ flag: PrintFlag, funcgen: Box<RST>, args: Vec<RST> },
-    FunctionCall{ flag: PrintFlag, id: Identifier, args: Vec<RST> },
-    VarDef(Identifier, Option<Box<RST>>),
-    VarGet(Identifier),
-    VarSet(Identifier, Box<RST>),
+    Box(FunctionBox),
+    AnonFunctionCall(AnonFunctionCall),
+    FunctionCall(FunctionCall),
+    FunctionDef(FunctionDef),
+    VarDef(VarAccessPath, Option<Rc<RST>>),
+    VarGet(VarAccessPath),
+    VarSet(VarAccessPath, Rc<RST>),
     Fragment(RantString),
     Whitespace(RantString),
     Integer(i64),
@@ -114,6 +149,7 @@ impl RST {
             RST::Box { .. } =>                      "box",
             RST::AnonFunctionCall { .. } =>         "anonymous function call",
             RST::FunctionCall { .. } =>             "function call",
+            RST::FunctionDef { .. } =>              "function definition",
             RST::Fragment(_) =>                     "fragment",
             RST::Whitespace(_) =>                   "whitespace",
             RST::Integer(_) =>                      "integer",
@@ -129,8 +165,8 @@ impl RST {
     pub fn is_printing(&self) -> bool {
         matches!(self, 
             RST::Block(Block { flag: PrintFlag::Hint, .. }) |
-            RST::AnonFunctionCall { flag: PrintFlag::Hint, .. } |
-            RST::FunctionCall { flag: PrintFlag::Hint, .. } |
+            RST::AnonFunctionCall(AnonFunctionCall { flag: PrintFlag::Hint, .. }) |
+            RST::FunctionCall(FunctionCall { flag: PrintFlag::Hint, .. }) |
             RST::Integer(_) |
             RST::Float(_) |
             RST::Boolean(_) |

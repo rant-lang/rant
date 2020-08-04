@@ -8,15 +8,6 @@ pub struct RantTokenReader<'source> {
     peeked: Option<(RantToken, Range<usize>)>,
 }
 
-impl<'source> Iterator for RantTokenReader<'source> {
-    type Item = (RantToken, Range<usize>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // Consume any peeked token before iterating lexer again
-        self.peeked.take().or_else(|| self.lexer.next().map(|token| (token, self.lexer.span())))
-    }
-}
-
 impl<'source> RantTokenReader<'source> {
     pub fn new(src: &'source str) -> Self {
         Self {
@@ -25,7 +16,25 @@ impl<'source> RantTokenReader<'source> {
         }
     }
 
-    pub fn gen_last_token_string(&self) -> RantString {
+    pub fn next(&mut self) -> Option<(RantToken, Range<usize>)> {
+        // Consume any peeked token before iterating lexer again
+        self.peeked.take().or_else(|| self.lexer.next().map(|token| (token, self.lexer.span())))
+    }
+
+    pub fn skip_one(&mut self) {
+        self.next();
+    }
+
+    pub fn take_where<F: FnOnce(Option<&(RantToken, Range<usize>)>) -> bool>(&mut self, predicate: F) -> bool {
+        if predicate(self.peek()) {
+            self.skip_one();
+            return true
+        }
+        false
+    }
+
+    /// Get the last token string that was read.
+    pub fn last_token_string(&self) -> RantString {
         RantString::from(self.lexer.slice())
     }
 
@@ -40,14 +49,20 @@ impl<'source> RantTokenReader<'source> {
         }
     }
 
-    pub fn skip_whitespace_tokens(&mut self) {
+    pub fn skip_ws(&mut self) {
         while let Some((RantToken::Whitespace, _)) = self.peek() {
             self.next();
         }
     }
 
+    /// Get the starting position of the most recently read token.
     pub fn last_token_pos(&self) -> usize {
         self.lexer.span().start
+    }
+
+    /// Get the span of the most recently read token.
+    pub fn last_token_span(&self) -> Range<usize> {
+        self.lexer.span()
     }
 
     pub fn peek(&mut self) -> Option<&(RantToken, Range<usize>)> {

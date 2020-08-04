@@ -6,6 +6,7 @@ use fnv::FnvHasher;
 use crate::util::*;
 
 /// Rant's random number generator, which is a thin wrapper around a xoshiro256++ PRNG.
+#[derive(Debug)]
 pub struct RantRng {
     seed: u64,
     rng: RefCell<Xoshiro256PlusPlus>,
@@ -40,6 +41,10 @@ impl RantRng {
 }
 
 impl RantRng {
+    pub fn seed(&self) -> u64 {
+        self.seed
+    }
+
     /// Generates a pseudorandom `i64` between two inclusive values. The range may be specified in either order.
     #[inline]
     pub fn next_i64(&self, a: i64, b: i64) -> i64 {

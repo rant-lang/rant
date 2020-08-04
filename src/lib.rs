@@ -4,6 +4,7 @@
 mod runtime;
 mod syntax;
 mod convert;
+mod random;
 mod util;
 mod collections;
 pub mod stdlib;
@@ -17,6 +18,7 @@ use syntax::{Sequence};
 use std::rc::Rc;
 use compiler::{CompileResult, RantCompiler};
 use runtime::VM;
+use random::RantRng;
 
 /// The Rant version according to the crate metadata.
 pub const RANT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -27,20 +29,48 @@ pub type RantResult<T> = Result<T, RantError>;
 /// A Rant execution context.
 #[derive(Debug)]
 pub struct Rant {
+    rng: Rc<RantRng>,
     globals: RantMap
 }
 
 impl Rant {
     pub fn new() -> Self {
         Self {
-            globals: RantMap::new()
+            globals: RantMap::new(),
+            rng: Rc::new(RantRng::new(0))
         }
+    }
+
+    pub fn with_seed(seed: u64) -> Self {
+        Self {
+            globals: RantMap::new(),
+            rng: Rc::new(RantRng::new(seed))
+        }
+    }
+}
+
+impl Default for Rant {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl Rant {
     pub fn compile_str(&self, source: &str) -> CompileResult {
         RantCompiler::compile_string(source)
+    }
+
+    pub fn seed(&self) -> u64 {
+        self.rng.seed()
+    }
+
+    pub fn set_seed(&mut self, seed: u64) {
+        self.rng = Rc::new(RantRng::new(seed));
+    }
+
+    pub fn reset_seed(&mut self) {
+        let seed = self.rng.seed();
+        self.rng = Rc::new(RantRng::new(seed));
     }
 
     pub fn run(&mut self, program: &RantProgram, seed: u64) -> RantResult<String> {

@@ -27,6 +27,9 @@ pub enum RantToken {
     #[token(":")]
     Colon,
 
+    #[token("*")]
+    Star,
+
     #[token(";")]
     Semicolon,
 

@@ -17,16 +17,20 @@ struct CliArgs {
     version: bool,
 
     /// optional seed to run programs with (defaults to random seed)
-    #[argh(option)]
+    #[argh(option, short = 's')]
     seed: Option<u64>,
 
     /// run this code and exit
     #[argh(option, short = 'r')]
     run: Option<String>,
 
+    /// run this file and exit
+    #[argh(option, short = 'o')]
+    open: Option<String>,
+
     /// only print program output and nothing else
-    #[argh(switch, short = 'n')]
-    bare: bool
+    #[argh(switch, short = 'q')]
+    quiet: bool
 }
 
 fn main() {
@@ -37,7 +41,9 @@ fn main() {
         return
     }
 
-    println!("Rant {} ({})", RANT_VERSION, embedded_triple::get());
+    if !args.quiet && args.run.is_none() {
+        println!("Rant {} ({})", RANT_VERSION, embedded_triple::get());
+    }
 
     let mut rant = Rant::new();
 
@@ -63,7 +69,7 @@ fn main() {
 }
 
 fn run_rant(ctx: &mut Rant, source: &str, args: &CliArgs) {
-    let show_stats = !args.bare;
+    let show_stats = !args.quiet;
     let start_time = Instant::now();
     let compile_result = RantCompiler::compile_string(source);
     let parse_time = start_time.elapsed();
@@ -72,7 +78,7 @@ fn run_rant(ctx: &mut Rant, source: &str, args: &CliArgs) {
     match &compile_result {
         Ok(_) => {
             if show_stats {
-                println!("(compiled in {:?})", parse_time) 
+                println!("{} in {:?}", "Compiled".bright_green().bold(), parse_time) 
             }
         },
         Err(errors) => {
@@ -96,7 +102,6 @@ fn run_rant(ctx: &mut Rant, source: &str, args: &CliArgs) {
                 };
 
                 emitter.emit(&[d]);
-                //println!("{}: ({}) {}", "error".red().bold(), error.first_line_col, error.info);
             }
 
             eprintln!("\n{}\n", format!("{} ({} {} found)", "Compile failed".red(), errc, if errc == 1 { "error" } else { "errors" }).bold());
@@ -114,16 +119,16 @@ fn run_rant(ctx: &mut Rant, source: &str, args: &CliArgs) {
     // Display results
     match run_result {
         Ok(output) => {
+            println!("{}", output);
             if show_stats {
-                println!("<< {}", output)
-            } else {
-                println!("{}", output);
+                println!("{} in {:?} (seed = {:x})", "Executed".bright_green().bold(), run_time, seed);
             }
         },
-        Err(err) => eprintln!("{}: {:?}", "runtime error".red(), err)
-    }
-
-    if show_stats {
-        println!("(ran in {:?}, seed = {:x})", run_time, seed);
+        Err(err) => {
+            eprintln!("{}: {:?}", "runtime error".red().bold(), err);
+            if show_stats {
+                eprintln!("{} in {:?} (seed = {:x})", "Crashed".red().bold(), run_time, seed);
+            }
+        }
     }
 }
