@@ -360,15 +360,34 @@ impl<'source> RantParser<'source> {
                                     // Emit a hard error on anything else
                                     Some((_, span)) => {
                                         return Err(SyntaxError::new(SyntaxErrorType::UnexpectedToken(self.reader.last_token_string().to_string()), span))
-                                    }
+                                    },
                                     None => {
                                         return Err(SyntaxError::new(SyntaxErrorType::UnclosedFunctionSignature, start_span))
-                                    }
+                                    },
                                 }
                             },
                             // Variadic parameter
                             Some((RantToken::Star, span)) => {
                                 is_variadic = true;
+                                // At this point the signature should be done (variadic comes last)
+                                // However we can check for more params to report them as an error
+                                match self.reader.next_solid() {
+                                    // ']' means end of signature
+                                    Some((RantToken::RightBracket, ..)) => {
+                                        todo!()
+                                    },
+                                    // ';' means more params after variadic (emit soft error after finished)
+                                    Some((RantToken::Semicolon, ..)) => {
+                                        todo!()
+                                    },
+                                    // Emit a hard error on anything else
+                                    Some((_, span)) => {
+                                        return Err(SyntaxError::new(SyntaxErrorType::UnexpectedToken(self.reader.last_token_string().to_string()), span))
+                                    },  
+                                    None => {
+                                        return Err(SyntaxError::new(SyntaxErrorType::UnclosedFunctionSignature, start_span))
+                                    }
+                                }
                             },
                             // Error on anything else
                             Some((.., span)) => {

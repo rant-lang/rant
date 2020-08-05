@@ -1,12 +1,12 @@
 use argh::FromArgs;
 use colored::*;
 use rant::*;
-use rand;
+use exitcode;
 use rand::Rng;
 use std::io::{self, Write};
-use std::time::{Instant};
-use compiler::RantCompiler;
-use codemap::{Span, CodeMap};
+use std::{path::Path, time::Instant};
+use std::process;
+use codemap::CodeMap;
 use codemap_diagnostic::{ColorConfig, Emitter, SpanLabel, SpanStyle, Diagnostic, Level};
 
 /// Run Rant code from your terminal.
@@ -20,36 +20,58 @@ struct CliArgs {
     #[argh(option, short = 's')]
     seed: Option<u64>,
 
-    /// run this code and exit
-    #[argh(option, short = 'r')]
-    run: Option<String>,
+    /// run this code and exit (overrides -i)
+    #[argh(option, short = 'r', long = "run")]
+    run_code: Option<String>,
 
     /// run this file and exit
-    #[argh(option, short = 'o')]
-    open: Option<String>,
+    #[argh(option, short = 'i')]
+    in_file: Option<String>,
 
     /// only print program output and nothing else
     #[argh(switch, short = 'q')]
     quiet: bool
 }
 
+enum ProgramSource {
+    Inline(String),
+    Stdin(String),
+    FilePath(String)
+}
+
+macro_rules! log_error {
+    ($fmt:expr $(, $arg:expr),*) => {
+        eprintln!("{}: {}", "error".bright_red().bold(), format!($fmt $(, $arg)*))
+    }
+}
+
 fn main() {
     let args: CliArgs = argh::from_env();
 
     if args.version {
-        println!("{}", RANT_VERSION);
+        println!("{}", BUILD_VERSION);
         return
     }
 
-    if !args.quiet && args.run.is_none() {
-        println!("Rant {} ({})", RANT_VERSION, embedded_triple::get());
+    if !args.quiet && args.run_code.is_none() && args.in_file.is_none() {
+        println!("Rant {} ({})", BUILD_VERSION, embedded_triple::get());
     }
 
-    let mut rant = Rant::new();
+    let seed = args.seed.unwrap_or_else(|| rand::thread_rng().gen());
+    let mut rant = Rant::with_seed(seed);
 
     // Run inline code from cmdline args
-    if let Some(code) = &args.run {
-        run_rant(&mut rant, code.as_str(), &args);
+    if let Some(code) = &args.run_code {
+        run_rant(&mut rant, ProgramSource::Inline(code.to_owned()), &args);
+        return
+    // Run input file from cmdline args
+    } else if let Some(path) = &args.in_file {
+        // Make sure it exists
+        if !Path::new(path).exists() {
+            log_error!("file not found: {}", path);
+            process::exit(exitcode::NOINPUT);
+        }
+        run_rant(&mut rant, ProgramSource::FilePath(path.clone()), &args);
         return
     }
     
@@ -57,21 +79,25 @@ fn main() {
         print!(">> ");
         io::stdout().flush().unwrap();
         let mut input = String::new();
-        
 
         match io::stdin().read_line(&mut input) {
             Ok(_) => {
-                run_rant(&mut rant, input.as_str(), &args);
+                run_rant(&mut rant, ProgramSource::Stdin(input.to_owned()), &args);
             },
-            Err(_) => println!("Failed to read input")
+            Err(_) => log_error!("failed to read input")
         }
     }
 }
 
-fn run_rant(ctx: &mut Rant, source: &str, args: &CliArgs) {
+fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) {
     let show_stats = !args.quiet;
     let start_time = Instant::now();
-    let compile_result = RantCompiler::compile_string(source);
+    let compile_result = match &source {
+        ProgramSource::Inline(source) => ctx.compile_str(source),
+        ProgramSource::Stdin(source) => ctx.compile_str(source),
+        ProgramSource::FilePath(path) => ctx.compile_file(path)
+    };
+
     let parse_time = start_time.elapsed();
 
     // Make sure it compiled successfully
@@ -82,29 +108,47 @@ fn run_rant(ctx: &mut Rant, source: &str, args: &CliArgs) {
             }
         },
         Err(errors) => {
+            let code = match &source {
+                ProgramSource::Inline(s) => s.to_owned(),
+                ProgramSource::Stdin(s) => s.to_owned(),
+                ProgramSource::FilePath(path) => std::fs::read_to_string(path).expect("can't open file for error reporting")
+            };
             let errc = errors.len();            
             let mut codemap = CodeMap::new();
-            let file_span = codemap.add_file("(stdin)".to_owned(), source.to_owned()).span;
+            let file_span = codemap.add_file(match &source {
+                ProgramSource::Inline(_) => "(cmdline)",
+                ProgramSource::Stdin(_) => "(stdin)",
+                ProgramSource::FilePath(path) => path
+            }.to_owned(), code).span;
             let mut emitter = Emitter::stderr(ColorConfig::Always, Some(&codemap));
 
             for error in errors.iter() {
-                let label = SpanLabel {
-                    span: file_span.subspan(error.span.start as u64, error.span.end as u64),
-                    label: Some(error.inline_message()),
-                    style: SpanStyle::Primary
+                let d = 
+                if let Some(pos) = &error.pos {
+                    let label = SpanLabel {
+                        span: file_span.subspan(pos.span.start as u64, pos.span.end as u64),
+                        label: Some(error.inline_message()),
+                        style: SpanStyle::Primary
+                    };
+    
+                    Diagnostic {
+                        level: Level::Error,
+                        message: error.message(),
+                        code: Some(error.code().to_owned()),
+                        spans: vec![label]
+                    }
+                } else {
+                    Diagnostic {
+                        level: Level::Error,
+                        message: error.message(),
+                        code: None,
+                        spans: vec![]
+                    }
                 };
-
-                let d = Diagnostic {
-                    level: Level::Error,
-                    message: error.message(),
-                    code: Some(error.code().to_owned()),
-                    spans: vec![label]
-                };
-
                 emitter.emit(&[d]);
             }
 
-            eprintln!("\n{}\n", format!("{} ({} {} found)", "Compile failed".red(), errc, if errc == 1 { "error" } else { "errors" }).bold());
+            eprintln!("\n{}\n", format!("{} ({} {} found)", "Compile failed".bright_red(), errc, if errc == 1 { "error" } else { "errors" }).bold());
             return
         }
     }
@@ -112,8 +156,9 @@ fn run_rant(ctx: &mut Rant, source: &str, args: &CliArgs) {
     // Run it
     let program = compile_result.unwrap();
     let seed = args.seed.unwrap_or_else(|| rand::thread_rng().gen());
+    ctx.set_seed(seed);
     let start_time = Instant::now();
-    let run_result = ctx.run(&program, seed);
+    let run_result = ctx.run(&program);
     let run_time = start_time.elapsed();
 
     // Display results
@@ -121,13 +166,13 @@ fn run_rant(ctx: &mut Rant, source: &str, args: &CliArgs) {
         Ok(output) => {
             println!("{}", output);
             if show_stats {
-                println!("{} in {:?} (seed = {:x})", "Executed".bright_green().bold(), run_time, seed);
+                println!("{} in {:?} (seed = {:016x})", "Executed".bright_green().bold(), run_time, seed);
             }
         },
         Err(err) => {
-            eprintln!("{}: {:?}", "runtime error".red().bold(), err);
+            eprintln!("{}: {:?}", "runtime error".bright_red().bold(), err);
             if show_stats {
-                eprintln!("{} in {:?} (seed = {:x})", "Crashed".red().bold(), run_time, seed);
+                eprintln!("{} in {:?} (seed = {:016x})", "Crashed".bright_red().bold(), run_time, seed);
             }
         }
     }

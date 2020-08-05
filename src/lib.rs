@@ -15,13 +15,16 @@ pub use collections::*;
 pub use value::*;
 pub use convert::*;
 use syntax::{Sequence};
-use std::rc::Rc;
+use std::{path::Path, rc::Rc};
 use compiler::{CompileResult, RantCompiler};
 use runtime::VM;
 use random::RantRng;
 
-/// The Rant version according to the crate metadata.
-pub const RANT_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// The build version according to the crate metadata at the time of compiling.
+pub const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The Rant language version implemented by this library.
+pub const RANT_VERSION: &str = "4.0";
 
 pub(crate) type RantString = smartstring::alias::CompactString;
 pub type RantResult<T> = Result<T, RantError>;
@@ -60,6 +63,10 @@ impl Rant {
         RantCompiler::compile_string(source)
     }
 
+    pub fn compile_file<P: AsRef<Path>>(&self, path: P) -> CompileResult {
+        RantCompiler::compile_file(path)
+    }
+
     pub fn seed(&self) -> u64 {
         self.rng.seed()
     }
@@ -73,8 +80,8 @@ impl Rant {
         self.rng = Rc::new(RantRng::new(seed));
     }
 
-    pub fn run(&mut self, program: &RantProgram, seed: u64) -> RantResult<String> {
-        VM::new(seed, self, program).run()
+    pub fn run(&mut self, program: &RantProgram) -> RantResult<String> {
+        VM::new(self.rng.clone(), self, program).run()
     }
 }
 
@@ -122,4 +129,6 @@ pub enum RuntimeErrorType {
     InvalidAccess,
     /// Error in function outside of Rant
     ExternalError,
+    /// Attempted division by zero
+    DivideByZero,
 }

@@ -21,8 +21,7 @@ pub struct VM<'a> {
 }
 
 impl<'a> VM<'a> {
-    pub fn new(seed: u64, engine: &'a mut Rant, program: &'a RantProgram) -> Self {
-        let rng = Rc::new(RantRng::new(seed));
+    pub fn new(rng: Rc<RantRng>, engine: &'a mut Rant, program: &'a RantProgram) -> Self {
         Self {
             resolver: Resolver::new(&rng),
             rng,

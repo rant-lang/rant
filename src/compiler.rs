@@ -2,7 +2,9 @@ use crate::{syntax::{RST, Sequence}, RantProgram};
 use error::SyntaxErrorType;
 use parser::RantParser;
 use line_col::LineColLookup;
-use std::{fmt::Display, ops::Range, rc::Rc};
+use std::{fmt::Display, ops::Range, rc::Rc, path::Path};
+use std::io::Error as IOError;
+use std::fs;
 
 pub(crate) mod lexer;
 pub(crate) mod reader;
@@ -39,12 +41,19 @@ impl Display for LineCol {
     }
 }
 
+/// Represents a compiler error as an error type and optional position.
 #[derive(Debug)]
 pub struct CompilerError {
     pub info: CompilerErrorType,
+    pub pos: Option<CompilerErrorPos>,
+}
+
+/// Source position data for compiler errors
+#[derive(Debug)]
+pub struct CompilerErrorPos {
     pub span: Range<usize>,
     pub first_line_col: LineCol,
-    pub last_line_col: LineCol
+    pub last_line_col: LineCol,
 }
 
 impl CompilerError {
@@ -64,6 +73,7 @@ impl CompilerError {
 #[derive(Debug)]
 pub enum CompilerErrorType {
     SyntaxError(SyntaxErrorType),
+    FileError(IOError),
     Other
 }
 
@@ -94,6 +104,7 @@ impl Display for CompilerErrorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CompilerErrorType::SyntaxError(err) => err.fmt(f),
+            CompilerErrorType::FileError(err) => err.fmt(f),
             CompilerErrorType::Other => write!(f, "(other error)"),
         }
     }
@@ -119,11 +130,29 @@ impl RantCompiler {
                     let (line_end, col_end) = lookup.get(span.end.saturating_sub(1));
                     CompilerError {
                         info: CompilerErrorType::SyntaxError(info),
-                        span,
-                        first_line_col: LineCol::new((line_start, col_start)),
-                        last_line_col: LineCol::new((line_end, col_end))
+                        pos: Some(CompilerErrorPos {
+                            span,
+                            first_line_col: LineCol::new((line_start, col_start)),
+                            last_line_col: LineCol::new((line_end, col_end)),
+                        })
                     }
                 }).collect())
+            }
+        }
+    }
+
+    pub fn compile_file<P: AsRef<Path>>(path: P) -> CompileResult {
+        let file_read_result = fs::read_to_string(path);
+        match file_read_result {
+            Ok(source) => {
+                Self::compile_string(&source)
+            },
+            Err(err) => {
+                let ioerr = CompilerError {
+                    info: CompilerErrorType::FileError(err),
+                    pos: None
+                };
+                Err(vec![ioerr])
             }
         }
     }
