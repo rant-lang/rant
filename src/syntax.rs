@@ -16,17 +16,35 @@ pub enum PrintFlag {
     Sink
 }
 
+/// Identifiers are special strings used to name variables and static (non-procedural) map keys.
+/// This is just a wrapper around a SmartString that enforces identifier formatting requirements.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct Identifier(RantString);
+
+impl Identifier {
+    pub fn new(idstr: RantString) -> Self {
+        Self(idstr)
+    }
+}
+
+impl Deref for Identifier {
+    type Target = RantString;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// Component in a variable accessor chain
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum VarAccessComponent {
     /// Name of variable or map item
-    Name(RantString),
+    Name(Identifier),
     /// List index
     Index(i64)
 }
 
 /// An accessor consisting of a chain of variable names and indices
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VarAccessPath(Vec<VarAccessComponent>);
 
 impl VarAccessPath {
@@ -87,6 +105,29 @@ impl Block {
     }
 }
 
+/// Describes the type of a function parameter.
+#[derive(Debug)]
+pub enum ParameterType {
+    /// Always required
+    Required,
+    /// May be omitted in favor of a default value
+    Optional,
+    /// Optional series of zero or more values; defaults to empty list
+    VariadicStar,
+    /// Required series of one or more values
+    VariadicPlus
+}
+
+/// Describes a function parameter.
+#[derive(Debug)]
+pub struct Parameter {
+    /// The name of the parameter
+    pub name: Identifier,
+    /// The type of the parameter
+    pub kind: ParameterType
+}
+
+/// Describes a function call.
 #[derive(Debug)]
 pub struct FunctionCall {
     pub flag: PrintFlag,
@@ -94,20 +135,22 @@ pub struct FunctionCall {
     pub arguments: Vec<RST>
 }
 
+/// Describes a function definition.
 #[derive(Debug)]
 pub struct FunctionDef {
     pub id: VarAccessPath,
-    pub params: Vec<RantString>,
-    pub is_variadic: bool,
-    pub body: Rc<Sequence>
+    pub params: Vec<Parameter>,
+    pub capture_vars: Rc<Vec<Identifier>>,
+    pub body: Rc<Block>,
 }
 
+/// Describes a boxing (closure) operation to turn a block into a function.
 #[derive(Debug)]
 pub struct FunctionBox {
     pub flag: PrintFlag,
     pub params: Vec<RantString>,
     pub is_variadic: bool,
-    pub body: Rc<Sequence>
+    pub body: Rc<Block>
 }
 
 #[derive(Debug)]

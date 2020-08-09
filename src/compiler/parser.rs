@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use super::{reader::RantTokenReader, lexer::RantToken, error::*};
-use std::{rc::Rc, ops::Range};
-use crate::{RantString, syntax::{PrintFlag, RST, Sequence, Block, VarAccessPath, FunctionCall, FunctionDef, VarAccessComponent}};
+use std::{rc::Rc, ops::Range, collections::HashSet};
+use crate::{RantString, syntax::{PrintFlag, RST, Sequence, Block, VarAccessPath, FunctionCall, FunctionDef, VarAccessComponent, Identifier}};
 
 type ParseResult<T> = Result<T, SyntaxError>;
 
@@ -26,10 +26,21 @@ fn is_valid_ident(name: &str) -> bool {
     if name.is_empty() { return false }
     let mut has_non_digit = false;
     let is_valid_chars = name.chars().all(|c| {
-        has_non_digit |= c.is_ascii_digit();
+        has_non_digit |= !c.is_ascii_digit();
         c.is_alphanumeric() || matches!(c, '_' | '-')
     });
     has_non_digit && is_valid_chars
+}
+
+/// Makes a range that encompasses both input ranges.
+fn super_range(a: &Range<usize>, b: &Range<usize>) -> Range<usize> {
+    if a.start < b.end {
+        a.start..b.end
+    } else if b.start < a.end {
+        b.start..a.end
+    } else {
+        a.clone()
+    }
 }
 
 /// A parser that turns Rant code into an RST (Rant Syntax Tree).
@@ -52,6 +63,8 @@ impl<'source> RantParser<'source> {
     }
 }
 
+// Note about parsing functions: 
+// A return value of Ok(..) does not necessarily mean parsing was successful; program is only created if no soft errors are emitted. 
 impl<'source> RantParser<'source> {
     pub fn parse(&mut self) -> Result<RST, Vec<SyntaxError>> {
         match self.parse_sequence(SequenceParseMode::TopLevel) {
@@ -177,14 +190,14 @@ impl<'source> RantParser<'source> {
                         // If no flag, take a hint
                         PrintFlag::None => {
                             // Inherit hints from inner blocks
-                            if let RST::Block(Block { flag: PrintFlag::Hint, ..}) = block {
+                            if let Block { flag: PrintFlag::Hint, ..} = block {
                                 whitespace!(allow);
                                 is_seq_printing = true;
                             }
                         }
                     }
                     
-                    seq_add!(block);               
+                    seq_add!(RST::Block(block));               
                 },
 
                 // Block element delimiter (when in block parsing mode)
@@ -227,7 +240,8 @@ impl<'source> RantParser<'source> {
                         RST::FunctionDef(_) => {
                             whitespace!(ignore both);
                         },
-                        _ => unreachable!()
+                        // Do nothing if it's an unsupported node type, e.g. NOP
+                        _ => {}
                     }
 
                     seq_add!(func_access);
@@ -288,6 +302,16 @@ impl<'source> RantParser<'source> {
                     RST::Boolean(false)
                 }),
 
+                // Verbatim string literals
+                RantToken::StringLiteral(s) => no_flags!(on {
+                    whitespace!(allow);
+                    is_seq_printing = true;
+                    RST::Fragment(s)
+                }),
+
+                // Handle unclosed string literals as hard errors
+                RantToken::UnterminatedStringLiteral => return Err(SyntaxError::new(SyntaxErrorType::UnclosedStringLiteral, span)),
+
                 // Treat unsupported sequence tokens as errors
                 _ => {
                     unexpected_token_error!();
@@ -328,25 +352,46 @@ impl<'source> RantParser<'source> {
         // Check if we're defining a function: [$func-name] { ... }
         if self.reader.take_where(|t| matches!(t, Some((RantToken::Dollar, ..)))) {
             // Function definition
-            let funcname = self.parse_var_access_path()?;
+
+            // Name of variable function will be stored in
+            let func_name = self.parse_var_access_path()?;
+            // List of parameter names for function
             let mut params = vec![];
+            // Separate set of all parameter names to check for duplicates
+            let mut params_set = HashSet::new();
+            // Has variadic param '*' been encountered?
             let mut is_variadic = false;
+            // Stores range info for malformed variadic signature error
+            let mut nonterm_variadic_err_span = None;
+
             // At this point there should either be ':' or ']'
             match self.reader.next_solid() {
                 // ':' means there are params to be read
-                Some((RantToken::Colon, span)) => {
+                Some((RantToken::Colon, _)) => {
                     // Read the params
                     'read_params: loop {
                         match self.reader.next_solid() {
                             // Regular parameter
                             Some((RantToken::Fragment, span)) => {
-                                let pname = self.reader.last_token_string();
-                                // Make sure it's a valid identifier
-                                if !is_valid_ident(pname.as_str()) {
-                                    self.soft_error(SyntaxErrorType::InvalidIdentifier(pname.to_string()), &span);
+                                // Make sure the parameter is in a valid position
+                                if let Some((a, _)) = nonterm_variadic_err_span {
+                                    nonterm_variadic_err_span = Some((a, span));
+                                } else {
+                                    // We only care about verifying/recording the param if it's in a valid position
+                                    let param_name = Identifier::new(self.reader.last_token_string());
+                                    // Make sure it's a valid identifier
+                                    if !is_valid_ident(param_name.as_str()) {
+                                        self.soft_error(SyntaxErrorType::InvalidIdentifier(param_name.to_string()), &span)
+                                    }
+                                    // Check for duplicates
+                                    // I'd much prefer to store references in params_set, but that's way more annoying to deal with
+                                    if !params_set.insert(param_name.clone()) {
+                                        self.soft_error(SyntaxErrorType::DuplicateParameter(param_name.to_string()), &span);
+                                    }
+                                    // Put it in the list
+                                    params.push(param_name);
                                 }
-                                // Put it in the list
-                                params.push(pname);
+                                
                                 // Check if there are more params or if the signature is done
                                 match self.reader.next_solid() {
                                     // ';' means there are more params
@@ -367,18 +412,21 @@ impl<'source> RantParser<'source> {
                                 }
                             },
                             // Variadic parameter
-                            Some((RantToken::Star, span)) => {
+                            Some((RantToken::Star, _)) => {
                                 is_variadic = true;
                                 // At this point the signature should be done (variadic comes last)
                                 // However we can check for more params to report them as an error
                                 match self.reader.next_solid() {
                                     // ']' means end of signature
                                     Some((RantToken::RightBracket, ..)) => {
-                                        todo!()
+                                        break 'read_params
                                     },
                                     // ';' means more params after variadic (emit soft error after finished)
                                     Some((RantToken::Semicolon, ..)) => {
-                                        todo!()
+                                        nonterm_variadic_err_span = match nonterm_variadic_err_span {
+                                            Some((a, _)) => Some((a, self.reader.last_token_span())),
+                                            None => Some((self.reader.last_token_span(), self.reader.last_token_span()))
+                                        };
                                     },
                                     // Emit a hard error on anything else
                                     Some((_, span)) => {
@@ -389,6 +437,11 @@ impl<'source> RantParser<'source> {
                                     }
                                 }
                             },
+                            // Error on early close
+                            Some((RantToken::RightBracket, span)) => {
+                                self.soft_error(SyntaxErrorType::MissingIdentifier, &span);
+                                break 'read_params
+                            },
                             // Error on anything else
                             Some((.., span)) => {
                                 self.soft_error(SyntaxErrorType::InvalidIdentifier(self.reader.last_token_string().to_string()), &span)
@@ -397,6 +450,11 @@ impl<'source> RantParser<'source> {
                                 return Err(SyntaxError::new(SyntaxErrorType::UnclosedFunctionSignature, start_span));
                             }
                         }
+                    }
+
+                    // If it's a malformed variadic, emit a soft error
+                    if let Some((a, b)) = nonterm_variadic_err_span.as_ref() {
+                        self.soft_error(SyntaxErrorType::ParamsAfterVariadic, &super_range(a, b));
                     }
                 },
                 // ']' means there are no params-- fall through to the next step
@@ -408,12 +466,29 @@ impl<'source> RantParser<'source> {
                 None => return Err(SyntaxError::new(SyntaxErrorType::UnclosedFunctionSignature, start_span))
             }
 
+            // Read function body
+            match self.reader.next_solid() {
+                Some((RantToken::LeftBrace, span)) => {
+                    // TODO: Handle captured variables in function bodies
+                    let body = Rc::new(self.parse_block(PrintFlag::None)?);
 
-            todo!()
+
+                    todo!()
+                },
+                // If something that isn't a block is there, emit a soft error and return a NOP
+                Some((other, span)) => {
+                    self.soft_error(SyntaxErrorType::ExpectedToken("{".to_owned()), &span);
+                    Ok(RST::Nop)
+                },
+                // Hard error on EOF
+                None => {
+                    Err(SyntaxError::new(SyntaxErrorType::ExpectedToken("{".to_owned()), self.reader.last_token_span()))
+                }
+            }
         } else {
             // Function call
             let sinked = flag == PrintFlag::Sink;
-            let funcname = self.parse_var_access_path()?;
+            let func_name = self.parse_var_access_path()?;
             todo!()
         }
     }
@@ -428,7 +503,7 @@ impl<'source> RantParser<'source> {
         match first_part {
             // The first part of the path may only be a variable name
             Some((RantToken::Fragment, span)) => {
-                let varname = self.reader.last_token_string();
+                let varname = Identifier::new(self.reader.last_token_string());
                 if is_valid_ident(varname.as_str()) {
                     idparts.push(VarAccessComponent::Name(varname));
                 } else {
@@ -456,7 +531,7 @@ impl<'source> RantParser<'source> {
                 match component {
                     // Key
                     Some((RantToken::Fragment, span)) => {
-                        let varname = self.reader.last_token_string();
+                        let varname = Identifier::new(self.reader.last_token_string());
                         if is_valid_ident(varname.as_str()) {
                             idparts.push(VarAccessComponent::Name(varname));
                         } else {
@@ -480,11 +555,12 @@ impl<'source> RantParser<'source> {
     }
 
     /// Parses a block.
-    fn parse_block(&mut self, flag: PrintFlag) -> ParseResult<RST> {
+    fn parse_block(&mut self, flag: PrintFlag) -> ParseResult<Block> {
         // Get position of starting brace for error reporting
         let start_index = self.reader.last_token_pos();
-
+        // Keeps track of inherited hinting
         let mut auto_hint = false;
+        // Block content
         let mut sequences = vec![];
 
         loop {
@@ -506,10 +582,12 @@ impl<'source> RantParser<'source> {
                 _ => unreachable!()
             }
         }
+
+        // Figure out the printflag before returning the block
         if auto_hint && flag != PrintFlag::Sink {
-            Ok(RST::Block(Block::new(PrintFlag::Hint, sequences)))
+            Ok(Block::new(PrintFlag::Hint, sequences))
         } else {
-            Ok(RST::Block(Block::new(flag, sequences)))
+            Ok(Block::new(flag, sequences))
         }
     }
 }

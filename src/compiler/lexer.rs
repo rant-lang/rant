@@ -1,4 +1,5 @@
 use logos::*;
+use crate::RantString;
 
 #[derive(Logos, Debug, PartialEq)]
 pub enum RantToken {
@@ -29,6 +30,12 @@ pub enum RantToken {
 
     #[token("*")]
     Star,
+
+    #[token("+")]
+    Plus,
+
+    #[token("?")]
+    Question,
 
     #[token(";")]
     Semicolon,
@@ -73,6 +80,35 @@ pub enum RantToken {
     #[regex(r"\\\S", parse_escape, priority = 10)]
     #[regex(r"\\x[0-9a-fA-F][0-9a-fA-F]", parse_code_point_escape, priority = 7)]
     Escape(char),
+
+    #[regex(r#""(""|[^"])*""#, parse_string_literal)]
+    StringLiteral(RantString),
+    
+    #[regex(r#""(""|[^"])*"#)]
+    UnterminatedStringLiteral,
+}
+
+fn parse_string_literal<'a>(lex: &mut Lexer<'a, RantToken>) -> Option<RantString> {
+    let literal: String = lex.slice().to_owned();
+    let literal_content = &literal[1..literal.len() - 1];
+    let mut string_content = RantString::new();
+    let mut prev_quote = false;
+    for c in literal_content.chars() {
+        match c {
+            '"' => {
+                if prev_quote {
+                    prev_quote = false;
+                    string_content.push('"');
+                } else {
+                    prev_quote = true;
+                }
+            },
+            c => {
+                string_content.push(c)
+            }
+        }
+    }
+    Some(string_content)
 }
 
 /// Filter function for whitespace lexer rule to exclude whitespace at start of source

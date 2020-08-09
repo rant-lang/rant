@@ -36,12 +36,14 @@ pub enum SyntaxErrorType {
     UnclosedBlock,
     UnclosedFunctionCall,
     UnclosedFunctionSignature,
+    UnclosedStringLiteral,
     MissingFunctionBody,
     UnclosedFunctionBody,
     ParamsAfterVariadic,
     InvalidParameter(String),
     MissingIdentifier,
     InvalidIdentifier(String),
+    DuplicateParameter(String),
     LocalPathStartsWithIndex,
     InvalidSinkOn(&'static str),
     InvalidHintOn(&'static str),
@@ -62,6 +64,8 @@ impl SyntaxErrorType {
             SyntaxErrorType::MissingFunctionBody =>                             "RE-0006",
             SyntaxErrorType::UnclosedFunctionBody =>                            "RE-0007",
             SyntaxErrorType::InvalidParameter(_) =>                             "RE-0008",
+            SyntaxErrorType::DuplicateParameter(_) =>                           "RE-0009",
+            SyntaxErrorType::UnclosedStringLiteral =>                           "RE-0010",
 
             // Access path errors (0020 - 0029)
             SyntaxErrorType::MissingIdentifier =>                               "RE-0020",
@@ -79,6 +83,7 @@ impl SyntaxErrorType {
         match self {
             SyntaxErrorType::UnclosedBlock => "unclosed block; expected '}'".to_owned(),
             SyntaxErrorType::UnclosedFunctionCall => "unclosed function call; expected ']'".to_owned(),
+            SyntaxErrorType::UnclosedStringLiteral => "unclosed string literal".to_owned(),
             SyntaxErrorType::ExpectedToken(token) => format!("expected token: '{}'", token),
             SyntaxErrorType::UnexpectedToken(token) => format!("unexpected token: '{}'", token),
             SyntaxErrorType::MissingIdentifier => "missing identifier".to_owned(),
@@ -89,10 +94,11 @@ impl SyntaxErrorType {
             SyntaxErrorType::InvalidHint => "hint is not valid".to_owned(),
             SyntaxErrorType::InvalidIdentifier(idname) => format!("'{}' is not a valid identifier; identifiers may only contain alphanumeric characters, underscores, and hyphens and must contain at least one non-digit", idname),
             SyntaxErrorType::UnclosedFunctionSignature => "unclosed function signature; expected ']' followed by body block".to_owned(),
-            SyntaxErrorType::ParamsAfterVariadic => "parameters following variadic parameter '*' in function signature; variadic parameter must come last".to_owned(),
+            SyntaxErrorType::ParamsAfterVariadic => "variadic parameter must appear last in function signature".to_owned(),
             SyntaxErrorType::MissingFunctionBody => "missing body in function definition".to_owned(),
             SyntaxErrorType::UnclosedFunctionBody => "unclosed function body; expected '}'".to_owned(),
             SyntaxErrorType::InvalidParameter(pname) => format!("invalid parameter '{}'; must be a valid identifier or '*'", pname),
+            SyntaxErrorType::DuplicateParameter(pname) => format!("duplicate parameter '{}' in function signature", pname)
         }
     }
 
@@ -100,6 +106,7 @@ impl SyntaxErrorType {
     pub fn inline_message(&self) -> String {
         match self {
             SyntaxErrorType::UnclosedBlock => "no matching '}' found".to_owned(),
+            SyntaxErrorType::UnclosedStringLiteral => "string literal needs closing delimiter".to_owned(),
             SyntaxErrorType::ExpectedToken(token) => format!("expected '{}'", token),
             SyntaxErrorType::UnexpectedToken(_) => "this probably shouldn't be here".to_owned(),
             SyntaxErrorType::MissingIdentifier => "missing identifier".to_owned(),
@@ -109,10 +116,11 @@ impl SyntaxErrorType {
             SyntaxErrorType::InvalidIdentifier(_) => "invalid identifier".to_owned(),
             SyntaxErrorType::UnclosedFunctionCall => "no matching ']' found".to_owned(),
             SyntaxErrorType::UnclosedFunctionSignature => "no matching ']' found".to_owned(),
-            SyntaxErrorType::ParamsAfterVariadic => "remove these or move them before the '*' parameter".to_owned(),
+            SyntaxErrorType::ParamsAfterVariadic => "move this to the left of the '*' parameter".to_owned(),
             SyntaxErrorType::MissingFunctionBody => "function body should follow".to_owned(),
             SyntaxErrorType::UnclosedFunctionBody => "no matching '}' found".to_owned(),
             SyntaxErrorType::InvalidParameter(_) => "invalid parameter".to_owned(),
+            SyntaxErrorType::DuplicateParameter(_) => "rename parameter to something unique".to_owned()
         }
     }
 }
