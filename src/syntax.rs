@@ -131,6 +131,12 @@ impl Varity {
       (Optional, VariadicStar)
     )
   }
+
+  /// Returns true if the varity is variadic.
+  pub fn is_variadic(&self) -> bool {
+    use Varity::*;
+    matches!(self, VariadicStar | VariadicPlus)
+  }
 }
 
 impl Display for Varity {

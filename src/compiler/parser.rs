@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
-use super::{reader::RantTokenReader, lexer::RantToken, error::*};
+use super::{reader::RantTokenReader, lexer::RantToken, message::*};
 use std::{rc::Rc, ops::Range, collections::HashSet};
 use crate::{RantString, syntax::{PrintFlag, RST, Sequence, Block, VarAccessPath, FunctionCall, FunctionDef, VarAccessComponent, Identifier, Varity, Parameter}};
 
-type ParseResult<T> = Result<T, SyntaxError>;
+type ParseResult<T> = Result<T, Message<SyntaxError>>;
 
 enum SequenceParseMode {
   TopLevel,
@@ -46,7 +46,7 @@ fn super_range(a: &Range<usize>, b: &Range<usize>) -> Range<usize> {
 /// A parser that turns Rant code into an RST (Rant Syntax Tree).
 pub struct RantParser<'source> {
   source: &'source str,
-  errors: Vec<SyntaxError>,
+  errors: Vec<Message<SyntaxError>>,
   // warnings: Vec<CompilerWarning>
   reader: RantTokenReader<'source>
 }
@@ -66,7 +66,7 @@ impl<'source> RantParser<'source> {
 // Note about parsing functions: 
 // A return value of Ok(..) does not necessarily mean parsing was successful; program is only created if no soft errors are emitted. 
 impl<'source> RantParser<'source> {
-  pub fn parse(&mut self) -> Result<RST, Vec<SyntaxError>> {
+  pub fn parse(&mut self) -> Result<RST, Vec<Message<SyntaxError>>> {
     match self.parse_sequence(SequenceParseMode::TopLevel) {
       Ok(..) if !self.errors.is_empty() => Err(self.errors.drain(..).collect()),
       Ok((seq, ..)) => Ok(RST::Sequence(Rc::new(seq))),
@@ -74,8 +74,8 @@ impl<'source> RantParser<'source> {
     }
   }
   
-  fn soft_error(&mut self, error_type: SyntaxErrorType, span: &Range<usize>) {
-    self.errors.push(SyntaxError::new(error_type, span.clone()));
+  fn soft_error(&mut self, error_type: SyntaxError, span: &Range<usize>) {
+    self.errors.push(Message::new(error_type, span.clone()));
   }
   
   /// Parses a sequence of items. Items are individual elements of a Rant program (fragments, blocks, function calls, etc.)
@@ -94,8 +94,8 @@ impl<'source> RantParser<'source> {
           if !matches!(next_print_flag, PrintFlag::None) {
             if let Some(flag_span) = last_print_flag_span.take() {
               self.soft_error(match next_print_flag {
-                PrintFlag::Hint => SyntaxErrorType::InvalidHintOn(elem.display_name()),
-                PrintFlag::Sink => SyntaxErrorType::InvalidSinkOn(elem.display_name()),
+                PrintFlag::Hint => SyntaxError::InvalidHintOn(elem.display_name()),
+                PrintFlag::Sink => SyntaxError::InvalidSinkOn(elem.display_name()),
                 PrintFlag::None => unreachable!()
               }, &flag_span)
             }
@@ -107,8 +107,8 @@ impl<'source> RantParser<'source> {
             $b
           } else if let Some(flag_span) = last_print_flag_span.take() {
             self.soft_error(match next_print_flag {
-              PrintFlag::Hint => SyntaxErrorType::InvalidHint,
-              PrintFlag::Sink => SyntaxErrorType::InvalidSink,
+              PrintFlag::Hint => SyntaxError::InvalidHint,
+              PrintFlag::Sink => SyntaxError::InvalidSink,
               PrintFlag::None => unreachable!()
             }, &flag_span)
           }
@@ -124,7 +124,7 @@ impl<'source> RantParser<'source> {
       // Shortcut macro for "unexpected token" error
       macro_rules! unexpected_token_error {
         () => {
-          self.soft_error(SyntaxErrorType::UnexpectedToken(self.reader.last_token_string().to_string()), &span)
+          self.soft_error(SyntaxError::UnexpectedToken(self.reader.last_token_string().to_string()), &span)
         };
       }
       
@@ -310,7 +310,7 @@ impl<'source> RantParser<'source> {
         }),
         
         // Handle unclosed string literals as hard errors
-        RantToken::UnterminatedStringLiteral => return Err(SyntaxError::new(SyntaxErrorType::UnclosedStringLiteral, span)),
+        RantToken::UnterminatedStringLiteral => return Err(Message::new(SyntaxError::UnclosedStringLiteral, span)),
         
         // Treat unsupported sequence tokens as errors
         _ => {
@@ -331,12 +331,12 @@ impl<'source> RantParser<'source> {
       PrintFlag::None => {},
       PrintFlag::Hint => {
         if let Some(flag_span) = last_print_flag_span.take() {
-          self.soft_error(SyntaxErrorType::InvalidHint, &flag_span);
+          self.soft_error(SyntaxError::InvalidHint, &flag_span);
         }
       },
       PrintFlag::Sink => {
         if let Some(flag_span) = last_print_flag_span.take() {
-          self.soft_error(SyntaxErrorType::InvalidSink, &flag_span);
+          self.soft_error(SyntaxError::InvalidSink, &flag_span);
         }
       }
     }
@@ -361,6 +361,8 @@ impl<'source> RantParser<'source> {
       let mut params_set = HashSet::new();
       // Most recently used parameter varity in this signature
       let mut last_varity = Varity::Required;
+      // Keep track of whether we've encountered any variadic params
+      let mut is_sig_variadic = false;
       
       // At this point there should either be ':' or ']'
       match self.reader.next_solid() {
@@ -376,12 +378,12 @@ impl<'source> RantParser<'source> {
                 let param_name = Identifier::new(self.reader.last_token_string());
                 // Make sure it's a valid identifier
                 if !is_valid_ident(param_name.as_str()) {
-                  self.soft_error(SyntaxErrorType::InvalidIdentifier(param_name.to_string()), &span)
+                  self.soft_error(SyntaxError::InvalidIdentifier(param_name.to_string()), &span)
                 }
                 // Check for duplicates
                 // I'd much prefer to store references in params_set, but that's way more annoying to deal with
                 if !params_set.insert(param_name.clone()) {
-                  self.soft_error(SyntaxErrorType::DuplicateParameter(param_name.to_string()), &span);
+                  self.soft_error(SyntaxError::DuplicateParameter(param_name.to_string()), &span);
                 }                
 
                 // Get varity of parameter
@@ -404,9 +406,15 @@ impl<'source> RantParser<'source> {
                   (Varity::Required, span)
                 };
 
-                // Soft error on bad varity order
-                if !Varity::is_valid_order(last_varity, varity) {
-                  self.soft_error(SyntaxErrorType::InvalidParamOrder(last_varity.to_string(), varity.to_string()), &full_param_span);
+                let is_param_variadic = varity.is_variadic();
+
+                // Check for varity issues
+                if is_sig_variadic && is_param_variadic {
+                  // Soft error on multiple variadics
+                  self.soft_error(SyntaxError::MultipleVariadicParams, &full_param_span);
+                } else if !Varity::is_valid_order(last_varity, varity) {
+                  // Soft error on bad varity order
+                  self.soft_error(SyntaxError::InvalidParamOrder(last_varity.to_string(), varity.to_string()), &full_param_span);
                 }
 
                 // Add parameter to list
@@ -416,6 +424,7 @@ impl<'source> RantParser<'source> {
                 });
 
                 last_varity = varity;
+                is_sig_variadic |= is_param_variadic;
                 
                 // Check if there are more params or if the signature is done
                 match self.reader.next_solid() {
@@ -429,24 +438,24 @@ impl<'source> RantParser<'source> {
                   },
                   // Emit a hard error on anything else
                   Some((_, span)) => {
-                    return Err(SyntaxError::new(SyntaxErrorType::UnexpectedToken(self.reader.last_token_string().to_string()), span))
+                    return Err(Message::new(SyntaxError::UnexpectedToken(self.reader.last_token_string().to_string()), span))
                   },
                   None => {
-                    return Err(SyntaxError::new(SyntaxErrorType::UnclosedFunctionSignature, start_span))
+                    return Err(Message::new(SyntaxError::UnclosedFunctionSignature, start_span))
                   },
                 }
               },
               // Error on early close
               Some((RantToken::RightBracket, span)) => {
-                self.soft_error(SyntaxErrorType::MissingIdentifier, &span);
+                self.soft_error(SyntaxError::MissingIdentifier, &span);
                 break 'read_params
               },
               // Error on anything else
               Some((.., span)) => {
-                self.soft_error(SyntaxErrorType::InvalidIdentifier(self.reader.last_token_string().to_string()), &span)
+                self.soft_error(SyntaxError::InvalidIdentifier(self.reader.last_token_string().to_string()), &span)
               },
               None => {
-                return Err(SyntaxError::new(SyntaxErrorType::UnclosedFunctionSignature, start_span));
+                return Err(Message::new(SyntaxError::UnclosedFunctionSignature, start_span));
               }
             }
           }
@@ -455,9 +464,9 @@ impl<'source> RantParser<'source> {
         Some((RantToken::RightBracket, span)) => {},
         // Something weird is here, emit a hard error
         Some((.., span)) => {
-          return Err(SyntaxError::new(SyntaxErrorType::UnexpectedToken(self.reader.last_token_string().to_string()), span))
+          return Err(Message::new(SyntaxError::UnexpectedToken(self.reader.last_token_string().to_string()), span))
         },
-        None => return Err(SyntaxError::new(SyntaxErrorType::UnclosedFunctionSignature, start_span))
+        None => return Err(Message::new(SyntaxError::UnclosedFunctionSignature, start_span))
       }
       
       // Read function body
@@ -475,12 +484,12 @@ impl<'source> RantParser<'source> {
         },
         // If something that isn't a block is there, emit a soft error and return a NOP
         Some((other, span)) => {
-          self.soft_error(SyntaxErrorType::ExpectedToken("{".to_owned()), &span);
+          self.soft_error(SyntaxError::ExpectedToken("{".to_owned()), &span);
           Ok(RST::Nop)
         },
         // Hard error on EOF
         None => {
-          Err(SyntaxError::new(SyntaxErrorType::ExpectedToken("{".to_owned()), self.reader.last_token_span()))
+          Err(Message::new(SyntaxError::ExpectedToken("{".to_owned()), self.reader.last_token_span()))
         }
       }
     } else {
@@ -505,16 +514,16 @@ impl<'source> RantParser<'source> {
         if is_valid_ident(varname.as_str()) {
           idparts.push(VarAccessComponent::Name(varname));
         } else {
-          self.soft_error(SyntaxErrorType::InvalidIdentifier(varname.to_string()), &span);
+          self.soft_error(SyntaxError::InvalidIdentifier(varname.to_string()), &span);
         }
       },
       Some((RantToken::Integer(_), span)) => {
-        self.soft_error(SyntaxErrorType::LocalPathStartsWithIndex, &span);
+        self.soft_error(SyntaxError::LocalPathStartsWithIndex, &span);
       },
       Some((.., span)) => {
-        self.soft_error(SyntaxErrorType::MissingIdentifier, &span);
+        self.soft_error(SyntaxError::MissingIdentifier, &span);
       },
-      None => return Err(SyntaxError::new(SyntaxErrorType::MissingIdentifier, preceding_span))
+      None => return Err(Message::new(SyntaxError::MissingIdentifier, preceding_span))
     }
     
     // Parse the rest of the path
@@ -533,7 +542,7 @@ impl<'source> RantParser<'source> {
             if is_valid_ident(varname.as_str()) {
               idparts.push(VarAccessComponent::Name(varname));
             } else {
-              self.soft_error(SyntaxErrorType::InvalidIdentifier(varname.to_string()), &span);
+              self.soft_error(SyntaxError::InvalidIdentifier(varname.to_string()), &span);
             }
           },
           // Index
@@ -542,9 +551,9 @@ impl<'source> RantParser<'source> {
           },
           Some((.., span)) => {
             // error
-            self.soft_error(SyntaxErrorType::InvalidIdentifier(self.reader.last_token_string().to_string()), &span);
+            self.soft_error(SyntaxError::InvalidIdentifier(self.reader.last_token_string().to_string()), &span);
           },
-          None => return Err(SyntaxError::new(SyntaxErrorType::MissingIdentifier, self.reader.last_token_span()))
+          None => return Err(Message::new(SyntaxError::MissingIdentifier, self.reader.last_token_span()))
         }
       } else {
         return Ok(VarAccessPath::new(idparts))
@@ -575,7 +584,7 @@ impl<'source> RantParser<'source> {
         },
         SequenceEndType::ProgramEnd => {
           // Hard error if block isn't closed
-          return Err(SyntaxError::new(SyntaxErrorType::UnclosedBlock, start_index .. self.source.len()))
+          return Err(Message::new(SyntaxError::UnclosedBlock, start_index .. self.source.len()))
         },
         _ => unreachable!()
       }

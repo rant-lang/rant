@@ -1,5 +1,5 @@
 use crate::{syntax::{RST, Sequence}, RantProgram};
-use error::SyntaxErrorType;
+use message::SyntaxError;
 use parser::RantParser;
 use line_col::LineColLookup;
 use std::{fmt::Display, ops::Range, rc::Rc, path::Path};
@@ -9,7 +9,7 @@ use std::fs;
 pub(crate) mod lexer;
 pub(crate) mod reader;
 pub(crate) mod parser;
-pub(crate) mod error;
+pub(crate) mod message;
 
 pub type CompileResult = Result<RantProgram, Vec<CompilerError>>;
 
@@ -72,7 +72,7 @@ impl CompilerError {
 
 #[derive(Debug)]
 pub enum CompilerErrorType {
-  SyntaxError(SyntaxErrorType),
+  SyntaxError(SyntaxError),
   FileError(IOError),
   Other
 }
