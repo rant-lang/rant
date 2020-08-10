@@ -105,17 +105,44 @@ impl Block {
   }
 }
 
-/// Describes the type of a function parameter.
-#[derive(Debug)]
-pub enum ParameterType {
-  /// Always required
+/// Describes the arity requirements of a function parameter.
+#[derive(Debug, Copy, Clone)]
+pub enum Varity {
+  /// Single-value, always required
   Required,
-  /// May be omitted in favor of a default value
+  /// Single-value, may be omitted in favor of a default value
   Optional,
   /// Optional series of zero or more values; defaults to empty list
   VariadicStar,
   /// Required series of one or more values
-  VariadicPlus
+  VariadicPlus,
+}
+
+impl Varity {
+  /// Returns true if the supplied varity pair is in a valid order.
+  pub fn is_valid_order(first: Varity, second: Varity) -> bool {
+    use Varity::*;
+    matches!((first, second), 
+      (Required, Required) |
+      (Required, Optional) |
+      (Required, VariadicStar) |
+      (Required, VariadicPlus) |
+      (Optional, Optional) |
+      (Optional, VariadicStar)
+    )
+  }
+}
+
+impl Display for Varity {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    use Varity::*;
+    match self {
+      Required => write!(f, "required parameter"),
+      Optional => write!(f, "optional parameter"),
+      VariadicStar => write!(f, "optional variadic parameter"),
+      VariadicPlus => write!(f, "required variadic parameter"),
+    }
+  }
 }
 
 /// Describes a function parameter.
@@ -123,8 +150,8 @@ pub enum ParameterType {
 pub struct Parameter {
   /// The name of the parameter
   pub name: Identifier,
-  /// The type of the parameter
-  pub kind: ParameterType
+  /// The varity of the parameter
+  pub varity: Varity,
 }
 
 /// Describes a function call.
@@ -132,7 +159,7 @@ pub struct Parameter {
 pub struct FunctionCall {
   pub flag: PrintFlag,
   pub id: VarAccessPath,
-  pub arguments: Vec<RST>
+  pub arguments: Vec<RST>,
 }
 
 /// Describes a function definition.
@@ -150,14 +177,15 @@ pub struct FunctionBox {
   pub flag: PrintFlag,
   pub params: Vec<RantString>,
   pub is_variadic: bool,
-  pub body: Rc<Block>
+  pub body: Rc<Block>,
 }
 
+/// Describes an anonymous (nameless) function call.
 #[derive(Debug)]
 pub struct AnonFunctionCall {
   pub flag: PrintFlag,
   pub expr: Rc<RST>,
-  pub args: Vec<RST>
+  pub args: Vec<RST>,
 }
 
 /// Rant Syntax Tree
@@ -189,10 +217,10 @@ impl RST {
       RST::Block(..) =>                       "block",
       RST::List(_) =>                         "list",
       RST::Map(_) =>                          "map",
-      RST::Box { .. } =>                      "box",
-      RST::AnonFunctionCall { .. } =>         "anonymous function call",
-      RST::FunctionCall { .. } =>             "function call",
-      RST::FunctionDef { .. } =>              "function definition",
+      RST::Box(_) =>                          "box",
+      RST::AnonFunctionCall(_) =>             "anonymous function call",
+      RST::FunctionCall(_) =>                 "function call",
+      RST::FunctionDef(_) =>                  "function definition",
       RST::Fragment(_) =>                     "fragment",
       RST::Whitespace(_) =>                   "whitespace",
       RST::Integer(_) =>                      "integer",

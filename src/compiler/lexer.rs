@@ -38,7 +38,7 @@ pub enum RantToken {
   Question,
   
   #[token(";")]
-  Semicolon,
+  Semi,
   
   #[token("@")]
   At,

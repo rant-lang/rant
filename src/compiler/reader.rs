@@ -25,12 +25,22 @@ impl<'source> RantTokenReader<'source> {
     self.next();
   }
   
-  pub fn take_where<F: FnOnce(Option<&(RantToken, Range<usize>)>) -> bool>(&mut self, predicate: F) -> bool {
+  // Consumes the next token if it satisfies the predicate and returns a bool indicating if any token was eaten.
+  pub fn eat_where<F: FnOnce(Option<&(RantToken, Range<usize>)>) -> bool>(&mut self, predicate: F) -> bool {
     if predicate(self.peek()) {
       self.skip_one();
       return true
     }
     false
+  }
+
+  // Consumes the next token if it satisfies the predicate and returns it if the predicate was satisfied; otherwise, returns `None`.
+  pub fn take_where<F: FnOnce(Option<&(RantToken, Range<usize>)>) -> bool>(&mut self, predicate: F) -> Option<(RantToken, Range<usize>)> {
+    if predicate(self.peek()) {
+      self.next()
+    } else {
+      None
+    }
   }
   
   /// Gets the last token string that was read.
