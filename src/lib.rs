@@ -14,10 +14,10 @@ pub mod compiler;
 pub use collections::*;
 pub use value::*;
 pub use convert::*;
-use syntax::{Sequence};
+use crate::syntax::{Sequence};
+use crate::compiler::{CompileResult, RantCompiler, Reporter};
+use crate::runtime::VM;
 use std::{path::Path, rc::Rc};
-use compiler::{CompileResult, RantCompiler};
-use runtime::VM;
 use random::RantRng;
 
 /// The build version according to the crate metadata at the time of compiling.
@@ -59,12 +59,20 @@ impl Default for Rant {
 }
 
 impl Rant {
-  pub fn compile_str(&self, source: &str) -> CompileResult {
-    RantCompiler::compile_string(source)
+  pub fn compile<R: Reporter>(&self, name: Option<&str>, source: &str, reporter: &mut R) -> CompileResult {
+    RantCompiler::compile_string(name, source, reporter)
+  }
+
+  pub fn compile_quiet(&self, name: Option<&str>, source: &str) -> CompileResult {
+    RantCompiler::compile_string(name, source, &mut ())
   }
   
-  pub fn compile_file<P: AsRef<Path>>(&self, path: P) -> CompileResult {
-    RantCompiler::compile_file(path)
+  pub fn compile_file<P: AsRef<Path>, R: Reporter>(&self, path: P, reporter: &mut R) -> CompileResult {
+    RantCompiler::compile_file(path, reporter)
+  }
+
+  pub fn compile_file_quiet<P: AsRef<Path>>(&self, path: P) -> CompileResult {
+    RantCompiler::compile_file(path, &mut ())
   }
   
   pub fn seed(&self) -> u64 {

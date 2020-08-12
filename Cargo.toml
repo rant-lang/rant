@@ -17,11 +17,12 @@ description = "The Rant procedural text generation language"
 name = "rant"
 path = "src/tools/cli/main.rs"
 
+
 [dependencies]
 # Library
 cast = "0.2.3"
 fnv = "1.0.7"
-line-col = "0.2.0"
+line-col = "0.2.1"
 logos = "0.11.4"
 rand = "0.7.3"
 rand_xoshiro = "0.4.0"
