@@ -2,7 +2,7 @@
 #![allow(unused_macros)]
 
 mod runtime;
-mod syntax;
+mod lang;
 mod convert;
 mod random;
 mod util;
@@ -14,7 +14,7 @@ pub mod compiler;
 pub use collections::*;
 pub use value::*;
 pub use convert::*;
-use crate::syntax::{Sequence};
+use crate::lang::{Sequence};
 use crate::compiler::{CompileResult, RantCompiler, Reporter};
 use crate::runtime::VM;
 use std::{path::Path, rc::Rc};

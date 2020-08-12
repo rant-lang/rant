@@ -1,4 +1,4 @@
-use crate::{syntax::{RST, Sequence}, RantProgram};
+use crate::{lang::{RST, Sequence}, RantProgram};
 use parser::RantParser;
 use std::{fmt::Display, rc::Rc, path::Path};
 use std::io::ErrorKind as IOErrorKind;

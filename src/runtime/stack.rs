@@ -1,5 +1,5 @@
 use std::{cell::RefCell, rc::Rc, ops::{DerefMut, Deref}};
-use crate::{syntax::{Sequence, RST}, RantMap, RantString};
+use crate::{lang::{Sequence, RST}, RantMap, RantString};
 use super::output::OutputWriter;
 
 const STACK_INITIAL_CAPACITY: usize = 16;

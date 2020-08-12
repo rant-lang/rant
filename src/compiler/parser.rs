@@ -2,7 +2,7 @@
 
 use super::{reader::RantTokenReader, lexer::RantToken, message::*, Problem, Reporter};
 use std::{rc::Rc, ops::Range, collections::HashSet};
-use crate::{RantString, syntax::{PrintFlag, RST, Sequence, Block, VarAccessPath, FunctionCall, FunctionDef, VarAccessComponent, Identifier, Varity, Parameter}};
+use crate::{RantString, lang::{PrintFlag, RST, Sequence, Block, VarAccessPath, FunctionCall, FunctionDef, VarAccessComponent, Identifier, Varity, Parameter}};
 use line_col::LineColLookup;
 
 type ParseResult<T> = Result<T, ()>;

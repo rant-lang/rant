@@ -1,5 +1,4 @@
-//! # Syntax module
-//! The `syntax` module contains Rant's AST implementation and supporting data structures.
+//! The `lang` module contains Rant's syntax tree implementation and supporting data structures.
 
 use std::{ops::{DerefMut, Deref}, fmt::Display, rc::Rc};
 use crate::RantString;

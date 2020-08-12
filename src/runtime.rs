@@ -1,4 +1,4 @@
-use crate::{Rant, RantProgram, RantMap, syntax::{Sequence, RST, PrintFlag}, RantResult, RantError, RuntimeErrorType, RantString, random::RantRng};
+use crate::{Rant, RantProgram, RantMap, lang::{Sequence, RST, PrintFlag}, RantResult, RantError, RuntimeErrorType, RantString, random::RantRng};
 use output::OutputWriter;
 use std::{rc::{Rc}, cell::{RefCell}, ops::{Deref}};
 use resolver::Resolver;
