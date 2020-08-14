@@ -164,7 +164,7 @@ pub struct Parameter {
 pub struct FunctionCall {
   pub flag: PrintFlag,
   pub id: VarAccessPath,
-  pub arguments: Vec<RST>,
+  pub arguments: Vec<Rc<Sequence>>,
 }
 
 /// Describes a function definition.
@@ -189,8 +189,8 @@ pub struct FunctionBox {
 #[derive(Debug)]
 pub struct AnonFunctionCall {
   pub flag: PrintFlag,
-  pub expr: Rc<RST>,
-  pub args: Vec<RST>,
+  pub expr: Rc<Sequence>,
+  pub args: Vec<Rc<Sequence>>,
 }
 
 /// Rant Syntax Tree

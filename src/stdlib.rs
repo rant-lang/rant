@@ -19,7 +19,7 @@ macro_rules! print_func {
   }
 }
 
-pub fn print_stdlib() 
+pub fn print_stdlib()
 {
   print_func!(rep);
   print_func!(rs);

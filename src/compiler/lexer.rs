@@ -21,6 +21,12 @@ pub enum RantToken {
   
   #[token("]")]
   RightBracket,
+
+  #[token("<")]
+  LeftAngle,
+
+  #[token(">")]
+  RightAngle,
   
   #[token("[]")]
   Box,
@@ -33,6 +39,9 @@ pub enum RantToken {
   
   #[token("+")]
   Plus,
+
+  #[token("!")]
+  Bang,
   
   #[token("?")]
   Question,

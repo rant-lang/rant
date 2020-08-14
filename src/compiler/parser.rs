@@ -2,24 +2,46 @@
 
 use super::{reader::RantTokenReader, lexer::RantToken, message::*, Problem, Reporter};
 use std::{rc::Rc, ops::Range, collections::HashSet};
-use crate::{RantString, lang::{PrintFlag, RST, Sequence, Block, VarAccessPath, FunctionCall, FunctionDef, VarAccessComponent, Identifier, Varity, Parameter}};
+use crate::{RantString, lang::*};
 use line_col::LineColLookup;
 
 type ParseResult<T> = Result<T, ()>;
 
 enum SequenceParseMode {
+  /// Parse a sequence like a top-level program.
+  ///
+  /// Breaks on EOF.
   TopLevel,
+  /// Parse a sequence like a block element.
+  ///
+  /// Breaks on `Pipe` and `RightBrace`.
   BlockElement,
-  TagElement,
-  FunctionBody
+  /// Parse a sequence like a tag (function access) element.
+  ///
+  /// Breaks on `Semi` and `RightBracket`.
+  FunctionArg,
+  /// Parse a sequence like an anonymous function expression.
+  ///
+  /// Breaks on `Colon` and `RightBracket`.
+  AnonFunctionExpr
 }
 
-/// Tells what kind of token ended a sequence
+/// Indicates what kind of token terminated a sequence read.
 enum SequenceEndType {
+  /// Top-level program sequence was terminated by end-of-file.
   ProgramEnd,
+  /// Block element sequence was terminated by `Pipe`.
   BlockDelim,
+  /// Block element sequence was terminated by `RightBrace`.
   BlockEnd,
-  TagEnd
+  /// Function argument sequence was terminated by `Semi`.
+  FunctionArgEndNext,
+  /// Function argument sequence was terminated by `RightBracket`.
+  FunctionArgEndBreak,
+  /// Anonymous function expression was terminated by `Colon`.
+  AnonFunctionExprToArgs,
+  /// Anonymous function expression was terminated by `RightBracket` and does not expect arguments.
+  AnonFuncctionExprNoArgs,
 }
 
 /// Checks if an identifier (variable name, arg name, static map key) is valid
@@ -83,12 +105,17 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
   }
   
-  /// Adds a non-fatal error to the parser's internal error list,
-  /// which allows parsing to continue but causes the final compilation to fail. 
-  fn report_error(&mut self, error_type: Problem, span: &Range<usize>) {
+  /// Reports a syntax error, allowing parsing to continue but causing the final compilation to fail. 
+  fn syntax_error(&mut self, error_type: Problem, span: &Range<usize>) {
     let (line, col) = self.lookup.get(span.start);
     self.has_errors = true;
     self.reporter.report(CompilerMessage::new(error_type, Severity::Error, Some(Position::new(line, col, span.clone()))));
+  }
+
+  /// Emits an "unexpected token" error for the most recently read token.
+  #[inline]
+  fn unexpected_last_token_error(&mut self) {
+    self.syntax_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &self.reader.last_token_span())
   }
   
   /// Parses a sequence of items. Items are individual elements of a Rant program (fragments, blocks, function calls, etc.)
@@ -106,7 +133,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let elem = $b;
           if !matches!(next_print_flag, PrintFlag::None) {
             if let Some(flag_span) = last_print_flag_span.take() {
-              self.report_error(match next_print_flag {
+              self.syntax_error(match next_print_flag {
                 PrintFlag::Hint => Problem::InvalidHintOn(elem.display_name()),
                 PrintFlag::Sink => Problem::InvalidSinkOn(elem.display_name()),
                 PrintFlag::None => unreachable!()
@@ -119,7 +146,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           if matches!(next_print_flag, PrintFlag::None) {
             $b
           } else if let Some(flag_span) = last_print_flag_span.take() {
-            self.report_error(match next_print_flag {
+            self.syntax_error(match next_print_flag {
               PrintFlag::Hint => Problem::InvalidHint,
               PrintFlag::Sink => Problem::InvalidSink,
               PrintFlag::None => unreachable!()
@@ -137,7 +164,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       // Shortcut macro for "unexpected token" error
       macro_rules! unexpected_token_error {
         () => {
-          self.report_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &span)
+          self.syntax_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &span)
         };
       }
       
@@ -259,6 +286,19 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           
           seq_add!(func_access);
         },
+
+        // Can be terminator for function args and anonymous function expressions
+        RantToken::RightBracket => no_flags!({
+          match mode {
+            SequenceParseMode::AnonFunctionExpr => return Ok((sequence, SequenceEndType::AnonFuncctionExprNoArgs, true)),
+            SequenceParseMode::FunctionArg => return Ok((sequence, SequenceEndType::FunctionArgEndBreak, true)),
+            _ => unexpected_token_error!()
+          }
+        }),
+
+        RantToken::LeftAngle => no_flags!({
+          
+        }),
         
         // Fragment
         RantToken::Fragment => no_flags!(on {
@@ -321,10 +361,28 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           is_seq_printing = true;
           RST::Fragment(s)
         }),
+
+        // Colon can be either fragment or argument separator.
+        RantToken::Colon => no_flags!({
+          match mode {
+            SequenceParseMode::AnonFunctionExpr => return Ok((sequence, SequenceEndType::AnonFunctionExprToArgs, true)),
+            _ => seq_add!(RST::Fragment(RantString::from(":")))
+          }
+        }),
+
+        // Semicolon can be either fragment or param separator.
+        RantToken::Semi => no_flags!({
+          match mode {
+            // If we're inside a function argument, terminate the sequence
+            SequenceParseMode::FunctionArg => return Ok((sequence, SequenceEndType::FunctionArgEndNext, true)),
+            // If we're anywhere else, just print the semicolon like normal text
+            _ => seq_add!(RST::Fragment(RantString::from(";")))
+          }
+        }),
         
         // Handle unclosed string literals as hard errors
         RantToken::UnterminatedStringLiteral => {
-          self.report_error(Problem::UnclosedStringLiteral, &span); 
+          self.syntax_error(Problem::UnclosedStringLiteral, &span); 
           return Err(())
         },
         
@@ -347,12 +405,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       PrintFlag::None => {},
       PrintFlag::Hint => {
         if let Some(flag_span) = last_print_flag_span.take() {
-          self.report_error(Problem::InvalidHint, &flag_span);
+          self.syntax_error(Problem::InvalidHint, &flag_span);
         }
       },
       PrintFlag::Sink => {
         if let Some(flag_span) = last_print_flag_span.take() {
-          self.report_error(Problem::InvalidSink, &flag_span);
+          self.syntax_error(Problem::InvalidSink, &flag_span);
         }
       }
     }
@@ -394,12 +452,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 let param_name = Identifier::new(self.reader.last_token_string());
                 // Make sure it's a valid identifier
                 if !is_valid_ident(param_name.as_str()) {
-                  self.report_error(Problem::InvalidIdentifier(param_name.to_string()), &span)
+                  self.syntax_error(Problem::InvalidIdentifier(param_name.to_string()), &span)
                 }
                 // Check for duplicates
                 // I'd much prefer to store references in params_set, but that's way more annoying to deal with
                 if !params_set.insert(param_name.clone()) {
-                  self.report_error(Problem::DuplicateParameter(param_name.to_string()), &span);
+                  self.syntax_error(Problem::DuplicateParameter(param_name.to_string()), &span);
                 }                
 
                 // Get varity of parameter
@@ -427,10 +485,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 // Check for varity issues
                 if is_sig_variadic && is_param_variadic {
                   // Soft error on multiple variadics
-                  self.report_error(Problem::MultipleVariadicParams, &full_param_span);
+                  self.syntax_error(Problem::MultipleVariadicParams, &full_param_span);
                 } else if !Varity::is_valid_order(last_varity, varity) {
                   // Soft error on bad varity order
-                  self.report_error(Problem::InvalidParamOrder(last_varity.to_string(), varity.to_string()), &full_param_span);
+                  self.syntax_error(Problem::InvalidParamOrder(last_varity.to_string(), varity.to_string()), &full_param_span);
                 }
 
                 // Add parameter to list
@@ -454,26 +512,26 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   },
                   // Emit a hard error on anything else
                   Some((_, span)) => {
-                    self.report_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &span);
+                    self.syntax_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &span);
                     return Err(())
                   },
                   None => {
-                    self.report_error(Problem::UnclosedFunctionSignature, &start_span);
+                    self.syntax_error(Problem::UnclosedFunctionSignature, &start_span);
                     return Err(())
                   },
                 }
               },
               // Error on early close
               Some((RantToken::RightBracket, span)) => {
-                self.report_error(Problem::MissingIdentifier, &span);
+                self.syntax_error(Problem::MissingIdentifier, &span);
                 break 'read_params
               },
               // Error on anything else
               Some((.., span)) => {
-                self.report_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span)
+                self.syntax_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span)
               },
               None => {
-                self.report_error(Problem::UnclosedFunctionSignature, &start_span);
+                self.syntax_error(Problem::UnclosedFunctionSignature, &start_span);
                 return Err(())
               }
             }
@@ -483,12 +541,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         Some((RantToken::RightBracket, _)) => {},
         // Something weird is here, emit a hard error
         Some((.., span)) => {
-          self.report_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &span);
+          self.syntax_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &span);
           return Err(())
         },
         // Nothing is here, emit a hard error
         None => {
-          self.report_error(Problem::UnclosedFunctionSignature, &start_span);
+          self.syntax_error(Problem::UnclosedFunctionSignature, &start_span);
           return Err(())
         }
       }
@@ -508,20 +566,93 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         },
         // If something that isn't a block is there, emit a soft error and return a NOP
         Some((_, span)) => {
-          self.report_error(Problem::ExpectedToken("{".to_owned()), &span);
+          self.syntax_error(Problem::ExpectedToken("{".to_owned()), &span);
           Ok(RST::Nop)
         },
         // Hard error on EOF
         None => {
-          self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
+          self.syntax_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
           Err(())
         }
       }
     } else {
       // Function call
-      let sinked = flag == PrintFlag::Sink;
-      let func_name = self.parse_var_access_path()?;
-      todo!()
+      self.reader.skip_ws();
+      let mut func_args = vec![];
+      let is_anonymous = self.reader.eat_where(|t| matches!(t, Some((RantToken::Bang, ..))));
+      self.reader.skip_ws();
+
+      // What kind of function call is this?
+      if is_anonymous {
+        // Anonymous function call
+        let (func_expr, func_expr_end, _) = self.parse_sequence(SequenceParseMode::AnonFunctionExpr)?;
+        // Parse arguments if available
+        match func_expr_end {
+          SequenceEndType::AnonFuncctionExprNoArgs => {
+            // No args, fall through
+          },
+          SequenceEndType::AnonFunctionExprToArgs => {
+            loop {
+              let (arg_seq, arg_end, _) = self.parse_sequence(SequenceParseMode::FunctionArg)?;
+              func_args.push(Rc::new(arg_seq));
+              match arg_end {
+                SequenceEndType::FunctionArgEndNext => continue,
+                SequenceEndType::FunctionArgEndBreak => break,
+                _ => unreachable!()
+              }
+            }
+          },
+          _ => unreachable!()
+        }
+
+        // Create final node for anon function call
+        let afcall = AnonFunctionCall {
+          expr: Rc::new(func_expr),
+          args: func_args,
+          flag
+        };
+
+        Ok(RST::AnonFunctionCall(afcall))
+      } else {
+        // Named function call
+        let func_name = self.parse_var_access_path()?;
+        if let Some((token, _)) = self.reader.next_solid() {
+          match token {
+            RantToken::RightBracket => {
+              // No args, fall through
+            },
+            RantToken::Colon => {
+              // Parse arguments
+              loop {
+                let (arg_seq, arg_end, _) = self.parse_sequence(SequenceParseMode::FunctionArg)?;
+                func_args.push(Rc::new(arg_seq));
+                match arg_end {
+                  SequenceEndType::FunctionArgEndNext => continue,
+                  SequenceEndType::FunctionArgEndBreak => break,
+                  _ => unreachable!()
+                }  
+              }
+            },
+            _ => {
+              self.unexpected_last_token_error();
+              return Err(())
+            }
+          }
+
+          // Create final node for function call
+          let fcall = FunctionCall {
+            id: func_name,
+            arguments: func_args,
+            flag
+          };
+
+          Ok(RST::FunctionCall(fcall))
+        } else {
+          // Found EOF instead of end of function call, emit hard error
+          self.syntax_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
+          Err(())
+        }
+      }
     }
   }
   
@@ -539,17 +670,17 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         if is_valid_ident(varname.as_str()) {
           idparts.push(VarAccessComponent::Name(varname));
         } else {
-          self.report_error(Problem::InvalidIdentifier(varname.to_string()), &span);
+          self.syntax_error(Problem::InvalidIdentifier(varname.to_string()), &span);
         }
       },
       Some((RantToken::Integer(_), span)) => {
-        self.report_error(Problem::LocalPathStartsWithIndex, &span);
+        self.syntax_error(Problem::LocalPathStartsWithIndex, &span);
       },
       Some((.., span)) => {
-        self.report_error(Problem::MissingIdentifier, &span);
+        self.syntax_error(Problem::MissingIdentifier, &span);
       },
       None => {
-        self.report_error(Problem::MissingIdentifier, &preceding_span);
+        self.syntax_error(Problem::MissingIdentifier, &preceding_span);
         return Err(())
       }
     }
@@ -570,7 +701,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             if is_valid_ident(varname.as_str()) {
               idparts.push(VarAccessComponent::Name(varname));
             } else {
-              self.report_error(Problem::InvalidIdentifier(varname.to_string()), &span);
+              self.syntax_error(Problem::InvalidIdentifier(varname.to_string()), &span);
             }
           },
           // Index
@@ -579,10 +710,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           },
           Some((.., span)) => {
             // error
-            self.report_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span);
+            self.syntax_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span);
           },
           None => {
-            self.report_error(Problem::MissingIdentifier, &self.reader.last_token_span());
+            self.syntax_error(Problem::MissingIdentifier, &self.reader.last_token_span());
             return Err(())
           }
         }
@@ -616,7 +747,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         SequenceEndType::ProgramEnd => {
           // Hard error if block isn't closed
           let err_span = start_index .. self.source.len();
-          self.report_error(Problem::UnclosedBlock, &err_span);
+          self.syntax_error(Problem::UnclosedBlock, &err_span);
           return Err(())
         },
         _ => unreachable!()

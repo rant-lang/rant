@@ -139,4 +139,6 @@ pub enum RuntimeErrorType {
   ExternalError,
   /// Attempted division by zero
   DivideByZero,
+  /// Too few arguments were passed to a function
+  TooFewArguments,
 }

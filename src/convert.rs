@@ -21,6 +21,8 @@ pub trait ToRant {
 pub trait FromRant: Sized {
   /// Convert from a `RantValue`.
   fn from_rant(val: RantValue) -> RantResult<Self>;
+  /// Returns true if the type can be used to represent an optional Rant parameter.
+  fn is_rant_optional() -> bool;
 }
 
 trait ToCastResult<T> {
@@ -102,6 +104,8 @@ macro_rules! rant_int_conversions {
           message: None
         })
       }
+
+      fn is_rant_optional() -> bool { false }
     }
   };
   ($int_type: ident, $($int_type2: ident), *) => {
@@ -116,6 +120,10 @@ impl FromRant for RantValue {
   #[inline(always)]
   fn from_rant(val: RantValue) -> RantResult<Self> {
     Ok(val)
+  }
+
+  fn is_rant_optional() -> bool {
+    false
   }
 }
 
@@ -134,6 +142,10 @@ impl FromRant for f32 {
       })
     }
   }
+
+  fn is_rant_optional() -> bool {
+    false
+  }
 }
 
 impl FromRant for f64 {
@@ -147,6 +159,10 @@ impl FromRant for f64 {
         message: Some(format!("Rant value type '{}' cannot be converted to f64", val.type_name()))
       })
     }
+  }
+
+  fn is_rant_optional() -> bool {
+    false
   }
 }
 
@@ -166,6 +182,10 @@ impl FromRant for String {
   fn from_rant(val: RantValue) -> RantResult<Self> {
     Ok(val.to_string())
   }
+
+  fn is_rant_optional() -> bool {
+    false
+  }
 }
 
 impl<T: FromRant> FromRant for Option<T> {
@@ -174,6 +194,9 @@ impl<T: FromRant> FromRant for Option<T> {
       RantValue::None => Ok(None),
       other => Ok(Some(T::from_rant(other)?))
     }
+  }
+  fn is_rant_optional() -> bool {
+    true
   }
 }
 
@@ -196,6 +219,10 @@ impl<T: FromRant> FromRant for Vec<T> {
         message: Some("only lists can be turned into vectors".to_owned())
       })
     }
+  }
+
+  fn is_rant_optional() -> bool {
+    false
   }
 }
 
@@ -222,14 +249,14 @@ macro_rules! impl_from_rant_args {
     }
     
     // Variadic implementation
-    impl<$($generic_types: FromRant,)* Variadic: FromRant> FromRantArgs for ($($generic_types,)* VarArgs<Variadic>) {
+    impl<$($generic_types: FromRant,)* VarArgItem: FromRant> FromRantArgs for ($($generic_types,)* VarArgs<VarArgItem>) {
       fn from_rant_args(mut args: Vec<RantValue>) -> RantResult<Self> {
         let mut args = args.drain(..);
         Ok(
           ($($generic_types::from_rant(args.next().unwrap_or(RantValue::None))?,)*
           VarArgs::new(args
-            .map(Variadic::from_rant)
-            .collect::<RantResult<Vec<Variadic>>>()?
+            .map(VarArgItem::from_rant)
+            .collect::<RantResult<Vec<VarArgItem>>>()?
           )
         ))
       }
@@ -249,7 +276,7 @@ impl_from_rant_args!(A, B, C, D, E, F, G, H);
 impl_from_rant_args!(A, B, C, D, E, F, G, H, I);
 impl_from_rant_args!(A, B, C, D, E, F, G, H, I, J);
 impl_from_rant_args!(A, B, C, D, E, F, G, H, I, J, K);
-impl_from_rant_args!(A, B, C, D, E, F, G, H, I, J, K, L);
+//impl_from_rant_args!(A, B, C, D, E, F, G, H, I, J, K, L);
 
 pub trait AsRantForeignFunc<Params: FromRantArgs> {
   fn as_rant_func(&'static self) -> RantFunction;
