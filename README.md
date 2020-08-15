@@ -1,8 +1,8 @@
 # Rant
 
-||
-|-|
 |**IMPORTANT:**<br>This project is in early alpha, and there are a lot of broken/missing features.<br>Please do not use in production environments until a stable version is released.|
+|-|
+<br>
 
 Rant is a language for procedural text generation.
 It is designed to help you write more dynamic and expressive templates, dialogue, stories, names, test data, and much more.

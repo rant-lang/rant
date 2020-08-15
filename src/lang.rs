@@ -178,7 +178,7 @@ pub struct FunctionDef {
 
 /// Describes a boxing (closure) operation to turn a block into a function.
 #[derive(Debug)]
-pub struct FunctionBox {
+pub struct ClosureExpr {
   pub expr: Rc<Block>,
   pub params: Vec<Parameter>,
   pub capture_vars: Rc<Vec<Identifier>>,
@@ -199,10 +199,10 @@ pub enum RST {
   Block(Block),
   List(Vec<RST>),
   Map(Vec<(RST, RST)>),
-  Box(FunctionBox),
-  AnonFunctionCall(AnonFunctionCall),
-  FunctionCall(FunctionCall),
-  FunctionDef(FunctionDef),
+  Closure(ClosureExpr),
+  AnonFuncCall(AnonFunctionCall),
+  FuncCall(FunctionCall),
+  FuncDef(FunctionDef),
   VarDef(Identifier, Option<Rc<Sequence>>),
   VarGet(VarAccessPath),
   VarSet(VarAccessPath, Rc<Sequence>),
@@ -221,10 +221,10 @@ impl RST {
       RST::Block(..) =>                       "block",
       RST::List(_) =>                         "list",
       RST::Map(_) =>                          "map",
-      RST::Box(_) =>                          "box",
-      RST::AnonFunctionCall(_) =>             "anonymous function call",
-      RST::FunctionCall(_) =>                 "function call",
-      RST::FunctionDef(_) =>                  "function definition",
+      RST::Closure(_) =>                      "closure",
+      RST::AnonFuncCall(_) =>                 "anonymous function call",
+      RST::FuncCall(_) =>                     "function call",
+      RST::FuncDef(_) =>                      "function definition",
       RST::Fragment(_) =>                     "fragment",
       RST::Whitespace(_) =>                   "whitespace",
       RST::Integer(_) =>                      "integer",
@@ -240,8 +240,8 @@ impl RST {
   pub fn is_printing(&self) -> bool {
     matches!(self, 
       RST::Block(Block { flag: PrintFlag::Hint, .. }) |
-      RST::AnonFunctionCall(AnonFunctionCall { flag: PrintFlag::Hint, .. }) |
-      RST::FunctionCall(FunctionCall { flag: PrintFlag::Hint, .. }) |
+      RST::AnonFuncCall(AnonFunctionCall { flag: PrintFlag::Hint, .. }) |
+      RST::FuncCall(FunctionCall { flag: PrintFlag::Hint, .. }) |
       RST::Integer(_) |
       RST::Float(_) |
       RST::Boolean(_) |

@@ -28,9 +28,6 @@ pub enum RantToken {
   #[token(">")]
   RightAngle,
   
-  #[token("[]")]
-  Box,
-  
   #[token(":")]
   Colon,
   
