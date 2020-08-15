@@ -211,6 +211,7 @@ pub enum RST {
   Integer(i64),
   Float(f64),
   Boolean(bool),
+  NoneValue,
   Nop
 }
 
@@ -230,6 +231,7 @@ impl RST {
       RST::Integer(_) =>                      "integer",
       RST::Float(_) =>                        "float",
       RST::Boolean(_) =>                      "boolean",
+      RST::NoneValue =>                       "none",
       RST::Nop =>                             "nothing",
       RST::VarDef(..) =>                      "variable definition",
       RST::VarGet(_) =>                       "variable",

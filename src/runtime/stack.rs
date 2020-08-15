@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc, ops::{DerefMut, Deref}};
 use crate::{lang::{Sequence, RST}, RantMap, RantString, RantValue};
-use super::output::OutputWriter;
+use super::{OutputBuffer, output::OutputWriter};
 
 const STACK_INITIAL_CAPACITY: usize = 16;
 
@@ -86,23 +86,34 @@ impl StackFrame {
     self.pc >= self.sequence.len()
   }
   
+  #[inline]
   pub fn write_frag(&mut self, frag: &str) {
     if let Some(output) = self.output.as_mut() {
       output.write_frag(frag);
     }
   }
   
+  #[inline]
   pub fn write_ws(&mut self, ws: &str) {
     if let Some(output) = self.output.as_mut() {
       output.write_ws(ws);
     }
   }
 
+  #[inline]
   pub fn write_value(&mut self, val: RantValue) {
-    todo!()
+    if let Some(output) = self.output.as_mut() {
+      output.write_buffer(OutputBuffer::Value(val));
+    }
+  }
+
+  #[inline]
+  pub fn render_output_value(&mut self) -> Option<RantValue> {
+    self.output.take().map(|o| o.render_value())
   }
   
-  pub fn render_output(&mut self) -> Option<RantString> {
-    self.output.take().map(|o| o.render())
+  #[inline]
+  pub fn render_output_string(&mut self) -> Option<RantString> {
+    self.output.take().map(|o| o.render_string())
   }
 }

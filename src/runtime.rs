@@ -1,4 +1,4 @@
-use crate::{Rant, RantProgram, RantMap, lang::{Sequence, RST, PrintFlag}, RantResult, RantError, RuntimeErrorType, RantString, random::RantRng};
+use crate::{Rant, RantProgram, RantMap, lang::{Sequence, RST, PrintFlag}, RantResult, RantError, RuntimeErrorType, RantString, random::RantRng, ToRant, RantValue};
 use output::OutputWriter;
 use std::{rc::{Rc}, cell::{RefCell}, ops::{Deref}};
 use resolver::Resolver;
@@ -15,7 +15,7 @@ pub struct VM<'a> {
   rng: Rc<RantRng>,
   engine: &'a mut Rant,
   program: &'a RantProgram,
-  stack: RefCell<CallStack>,
+  call_stack: RefCell<CallStack>,
   prev_frame: RefCell<Option<Rc<RefCell<StackFrame>>>>,
   resolver: Resolver
 }
@@ -27,13 +27,13 @@ impl<'a> VM<'a> {
       rng,
       engine,
       program,
-      stack: Default::default(),
+      call_stack: Default::default(),
       prev_frame: Default::default(),
     }
   }
   
   pub fn cur_frame(&self) -> Rc<RefCell<StackFrame>> {
-    self.stack.borrow().last().unwrap().clone()
+    self.call_stack.borrow().last().unwrap().clone()
   }
 }
 
@@ -67,9 +67,9 @@ impl<'a> VM<'a> {
       let frame = self.cur_frame();
       let mut frame = frame.borrow_mut();
       
-      // Write last frame's output (TODO: Write as individual buffers)
-      if let Some(last_output) = self.take_last_output() {
-        frame.write_frag(&last_output);
+      // Write last frame's output value to current output
+      if let Some(last_output) = self.pop_output() {
+        frame.write_value(last_output);
       }
       
       // Run frame's sequence elements in order
@@ -77,6 +77,10 @@ impl<'a> VM<'a> {
         match Rc::deref(rst) {
           RST::Fragment(frag) => frame.write_frag(frag),
           RST::Whitespace(ws) => frame.write_ws(ws),
+          RST::Integer(n) => frame.write_value(RantValue::Integer(*n)),
+          RST::Float(n) => frame.write_value(RantValue::Float(*n)),
+          RST::NoneValue => frame.write_value(RantValue::None),
+          RST::Boolean(b) => frame.write_value(RantValue::Boolean(*b)),
           RST::Block(block) => {
             let elem = Rc::clone(&block.elements[self.rng.next_usize(block.len())]);
             self.push_frame(elem, block.flag != PrintFlag::Sink)?;
@@ -90,26 +94,34 @@ impl<'a> VM<'a> {
       self.pop_frame()?;
     }
     
-    // Once stack is empty, program is done-- return last frame's output
-    Ok(self.take_last_output().unwrap_or_default().to_string())
+    // Once stack is empty, program is done-- return last frame's output as a string
+    Ok(self.pop_output_string().unwrap_or_default().to_string())
   }
   
   #[inline(always)]
   fn is_stack_empty(&self) -> bool {
-    self.stack.borrow().is_empty()
+    self.call_stack.borrow().is_empty()
   }
   
   #[inline]
-  fn take_last_output(&self) -> Option<RantString> {
+  fn pop_output_string(&self) -> Option<RantString> {
     self.prev_frame.borrow_mut()
     .take()
-    .map(|frame| frame.borrow_mut().render_output())
+    .map(|frame| frame.borrow_mut().render_output_string())
+    .flatten()
+  }
+
+  #[inline]
+  fn pop_output(&self) -> Option<RantValue> {
+    self.prev_frame.borrow_mut()
+    .take()
+    .map(|frame| frame.borrow_mut().render_output_value())
     .flatten()
   }
   
   #[inline]
   fn pop_frame(&self) -> RantResult<Rc<RefCell<StackFrame>>> {
-    if let Some(frame) = self.stack.borrow_mut().pop() {
+    if let Some(frame) = self.call_stack.borrow_mut().pop() {
       self.prev_frame.replace(Some(frame.clone()));
       Ok(frame)
     } else {
@@ -118,15 +130,15 @@ impl<'a> VM<'a> {
   }
   
   #[inline]
-  fn push_frame(&self, callee: Rc<Sequence>, has_output: bool) -> RantResult<Rc<RefCell<StackFrame>>> {
-    let mut stack = self.stack.borrow_mut();
+  fn push_frame(&self, callee: Rc<Sequence>, use_output: bool) -> RantResult<Rc<RefCell<StackFrame>>> {
+    let mut stack = self.call_stack.borrow_mut();
     
     // Check if this push would overflow the stack
     if stack.len() >= MAX_STACK_SIZE {
       runtime_error!(StackOverflow);
     }
     
-    let frame = StackFrame::new(callee, Default::default(), has_output);
+    let frame = StackFrame::new(callee, Default::default(), use_output);
     stack.push(Rc::new(RefCell::new(frame)));
     Ok(stack.last().unwrap().clone())
   }

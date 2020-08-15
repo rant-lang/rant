@@ -381,6 +381,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           is_seq_printing = true;
           RST::Boolean(false)
         }),
+
+        // None
+        RantToken::NoneValue => no_flags!(on {
+          RST::NoneValue
+        }),
         
         // Verbatim string literals
         RantToken::StringLiteral(s) => no_flags!(on {

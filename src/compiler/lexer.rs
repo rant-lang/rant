@@ -22,6 +22,9 @@ pub enum RantToken {
   #[token("]")]
   RightBracket,
 
+  #[token("<>")]
+  NoneValue,
+
   #[token("<")]
   LeftAngle,
 
