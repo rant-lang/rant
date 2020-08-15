@@ -41,6 +41,7 @@ impl RantRng {
 }
 
 impl RantRng {
+  /// Gets the current seed of the RNG.
   pub fn seed(&self) -> u64 {
     self.seed
   }
@@ -61,6 +62,7 @@ impl RantRng {
     self.rng.borrow_mut().gen_range(min, max)
   }
   
+  /// Generates a pseudorandom `usize` between 0 and `max` (exclusive).
   #[inline]
   pub fn next_usize(&self, max: usize) -> usize {
     self.rng.borrow_mut().gen_range(0usize, max)

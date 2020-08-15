@@ -59,35 +59,43 @@ impl Default for Rant {
 }
 
 impl Rant {
-  pub fn compile<R: Reporter>(&self, name: Option<&str>, source: &str, reporter: &mut R) -> CompileResult {
-    RantCompiler::compile_string(name, source, reporter)
+  #[must_use = "compiling a program without running it does nothing"]
+  pub fn compile<R: Reporter>(&self, source: &str, reporter: &mut R) -> CompileResult {
+    RantCompiler::compile_string(source, reporter)
   }
 
-  pub fn compile_quiet(&self, name: Option<&str>, source: &str) -> CompileResult {
-    RantCompiler::compile_string(name, source, &mut ())
+  #[must_use = "compiling a program without running it does nothing"]
+  pub fn compile_quiet(&self, source: &str) -> CompileResult {
+    RantCompiler::compile_string(source, &mut ())
   }
   
+  #[must_use = "compiling a program without running it does nothing"]
   pub fn compile_file<P: AsRef<Path>, R: Reporter>(&self, path: P, reporter: &mut R) -> CompileResult {
     RantCompiler::compile_file(path, reporter)
   }
 
+  #[must_use = "compiling a program without running it does nothing"]
   pub fn compile_file_quiet<P: AsRef<Path>>(&self, path: P) -> CompileResult {
     RantCompiler::compile_file(path, &mut ())
   }
   
+  /// Gets the current RNG seed.
   pub fn seed(&self) -> u64 {
     self.rng.seed()
   }
   
+  /// Re-seeds the RNG with the specified seed.
   pub fn set_seed(&mut self, seed: u64) {
     self.rng = Rc::new(RantRng::new(seed));
   }
   
+  /// Resets the RNG back to its initial state with the current seed.
   pub fn reset_seed(&mut self) {
     let seed = self.rng.seed();
     self.rng = Rc::new(RantRng::new(seed));
   }
   
+  /// Runs the specified program.
   pub fn run(&mut self, program: &RantProgram) -> RantResult<String> {
     VM::new(self.rng.clone(), self, program).run()
   }
@@ -96,13 +104,22 @@ impl Rant {
 /// A compiled Rant program.
 #[derive(Debug)]
 pub struct RantProgram {
+  name: Option<String>,
   root: Rc<Sequence>
 }
 
 impl RantProgram {
   pub(crate) fn new(root: Rc<Sequence>) -> Self {
-    RantProgram {
-      root
+    Self {
+      name: None,
+      root,
+    }
+  }
+
+  pub fn with_name<S: ToString>(self, name: S) -> Self {
+    Self {
+      root: self.root,
+      name: Some(name.to_string())
     }
   }
 }

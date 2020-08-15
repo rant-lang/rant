@@ -57,7 +57,7 @@ impl<'a> VM<'a> {
   /// Runs the program.
   #[inline]
   pub fn run(&self) -> RantResult<String> {
-    //println!("RST: {:#?}", self.program.root);
+    println!("RST: {:#?}", self.program.root);
 
     // Push the root RST onto the stack
     self.push_frame(self.program.root.clone(), true)?;

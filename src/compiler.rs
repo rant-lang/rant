@@ -13,8 +13,9 @@ pub use message::*;
 
 pub type CompileResult = Result<RantProgram, ()>;
 
-/// Provides an interface through which the compiler reports errors and warnings.
+/// Provides an interface through which the compiler can report errors and warnings.
 pub trait Reporter {
+  /// Passes a compiler message to the implementor for processing.
   fn report(&mut self, msg: CompilerMessage);
 }
 
@@ -33,7 +34,7 @@ pub struct RantCompiler {
 }
 
 impl RantCompiler {
-  pub fn compile_string<R: Reporter>(name: Option<&str>, source: &str, reporter: &mut R) -> CompileResult {
+  pub fn compile_string<R: Reporter>(source: &str, reporter: &mut R) -> CompileResult {
     let mut parser = RantParser::new(source, reporter);
     let result = parser.parse();
 
@@ -52,7 +53,7 @@ impl RantCompiler {
     let file_read_result = fs::read_to_string(path);
     match file_read_result {
       Ok(source) => {
-        Self::compile_string(Some(&source_name), &source, reporter)
+        Self::compile_string(&source, reporter).map(|pgm| pgm.with_name(&source_name))
       },
       // Something went wrong with reading the file
       Err(err) => {
@@ -77,6 +78,7 @@ pub enum Problem {
   UnclosedFunctionCall,
   UnclosedFunctionSignature,
   UnclosedStringLiteral,
+  UnclosedVariableAccess,
   MultipleVariadicParams,
   MissingFunctionBody,
   UnclosedFunctionBody,
@@ -113,6 +115,7 @@ impl Problem {
       Problem::DuplicateParameter(_) =>                           "R-0009",
       Problem::UnclosedStringLiteral =>                           "R-0010",
       Problem::MultipleVariadicParams =>                          "R-0011",
+      Problem::UnclosedVariableAccess =>                          "R-0012",
       
       // Access path errors (0020 - 0029)
       Problem::MissingIdentifier =>                               "R-0020",
@@ -160,6 +163,7 @@ impl Problem {
       Problem::EmptyFunctionBody(fname) => format!("function '{}' is empty", fname),
       Problem::FileNotFound(file) => format!("file not found: '{}'", file),
       Problem::FileIOError(err) => format!("filesystem error: {}", err),
+      Problem::UnclosedVariableAccess => "unclosed variable accessor; expected '>'".to_owned(),
     }
   }
   
@@ -182,6 +186,7 @@ impl Problem {
       Problem::InvalidParameter(_) => "invalid parameter".to_owned(),
       Problem::DuplicateParameter(_) => "rename parameter to something unique".to_owned(),
       Problem::MultipleVariadicParams => "remove extra variadic parameter".to_owned(),
+      Problem::UnclosedVariableAccess => "no matching '>' found".to_owned(),
       _ => return None
     })
   }

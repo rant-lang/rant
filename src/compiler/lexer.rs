@@ -40,6 +40,9 @@ pub enum RantToken {
   #[token("+")]
   Plus,
 
+  #[token("=")]
+  Equals,
+
   #[token("!")]
   Bang,
   

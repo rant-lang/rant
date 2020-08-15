@@ -23,7 +23,11 @@ enum SequenceParseMode {
   /// Parse a sequence like an anonymous function expression.
   ///
   /// Breaks on `Colon` and `RightBracket`.
-  AnonFunctionExpr
+  AnonFunctionExpr,
+  /// Parse a sequence like a variable assignment value.
+  ///
+  /// Breaks on `RightAngle`.
+  VariableAssignment
 }
 
 /// Indicates what kind of token terminated a sequence read.
@@ -42,6 +46,8 @@ enum SequenceEndType {
   AnonFunctionExprToArgs,
   /// Anonymous function expression was terminated by `RightBracket` and does not expect arguments.
   AnonFuncctionExprNoArgs,
+  /// Variable accessor was terminated by `RightAngle`.
+  VariableAccessEnd,
 }
 
 /// Checks if an identifier (variable name, arg name, static map key) is valid
@@ -296,8 +302,27 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }
         }),
 
+        // Variable access start
         RantToken::LeftAngle => no_flags!({
-          
+          let var_accessor = self.parse_var_accessor()?;
+          match var_accessor {
+            RST::VarGet(..) => {
+              whitespace!(allow);
+            },
+            RST::VarSet(..) | RST::VarDef(..) => {
+              whitespace!(ignore both);
+            },
+            _ => unreachable!()
+          }
+          seq_add!(var_accessor);
+        }),
+
+        // Variable access end
+        RantToken::RightAngle => no_flags!({
+          match mode {
+            SequenceParseMode::VariableAssignment => return Ok((sequence, SequenceEndType::VariableAccessEnd, true)),
+            _ => unexpected_token_error!()
+          }
         }),
         
         // Fragment
@@ -423,6 +448,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   fn parse_func_access(&mut self, flag: PrintFlag) -> ParseResult<RST> {
     let start_span = self.reader.last_token_span();
     self.reader.skip_ws();
+    // TODO: Box operation
     // Check if we're defining a function: [$func-name] { ... }
     if self.reader.eat_where(|t| matches!(t, Some((RantToken::Dollar, ..)))) {
       // Function definition
@@ -759,6 +785,89 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       Ok(Block::new(PrintFlag::Hint, sequences))
     } else {
       Ok(Block::new(flag, sequences))
+    }
+  }
+
+  fn parse_ident(&mut self) -> ParseResult<Identifier> {
+    if let Some((token, span)) = self.reader.next_solid() {
+      match token {
+        RantToken::Fragment => {
+          let idstr = self.reader.last_token_string();
+          if !is_valid_ident(idstr.as_str()) {
+            self.syntax_error(Problem::InvalidIdentifier(idstr.to_string()), &span);
+          }
+          Ok(Identifier::new(idstr))
+        },
+        _ => {
+          self.unexpected_last_token_error();
+          Err(())
+        }
+      }
+    } else {
+      self.syntax_error(Problem::MissingIdentifier, &self.reader.last_token_span());
+      Err(())
+    }
+  }
+
+  fn parse_var_accessor(&mut self) -> ParseResult<RST> {
+    self.reader.skip_ws();
+
+    let is_def = self.reader.eat_where(|t| matches!(t, Some((RantToken::Dollar, ..))));
+    self.reader.skip_ws();
+    
+    // Check if it's a definition. If not, it's a getter or setter
+    if is_def {
+      // Read name of variable we're defining
+      let var_name = self.parse_ident()?;
+
+      if let Some((token, _)) = self.reader.next_solid() {
+        match token {
+          // Empty definition
+          RantToken::RightAngle => {
+            Ok(RST::VarDef(var_name, None))
+          },
+          // Definition and assignment
+          RantToken::Equals => {
+            self.reader.skip_ws();
+            let (var_assign_expr, ..) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
+            Ok(RST::VarDef(var_name, Some(Rc::new(var_assign_expr))))
+          },
+          // Ran into something we don't support
+          _ => {
+            self.unexpected_last_token_error();
+            Err(())
+          }
+        }
+      } else {
+        self.syntax_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+        Err(())
+      }
+    } else {
+      // Read the path to what we're accessing
+      let var_path = self.parse_var_access_path()?;
+
+      if let Some((token, _)) = self.reader.next_solid() {
+        match token {
+          // If we hit a '>' here, it's a getter
+          RantToken::RightAngle => {
+            Ok(RST::VarGet(var_path))
+          },
+          // If we hit a '=' here, it's a setter
+          RantToken::Equals => {
+            self.reader.skip_ws();
+            let (var_assign_rhs, ..) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
+            Ok(RST::VarSet(var_path, Rc::new(var_assign_rhs)))
+          },
+          // Anything else is an error
+          _ => {
+            self.unexpected_last_token_error();
+            Err(())
+          }
+        }
+      } else {
+        self.syntax_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+        Err(())
+      }
     }
   }
 }

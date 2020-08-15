@@ -4,7 +4,7 @@ use rant::Rant;
 macro_rules! run_rant {
   ($src:expr) => {{
     let mut r = Rant::new();
-    let pgm = r.compile_quiet(None, $src).expect("compile failed");
+    let pgm = r.compile_quiet($src).expect("compile failed");
     r.run(&pgm).expect("runtime error")
   }}
 }

@@ -97,8 +97,8 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) {
   let mut problems: Vec<CompilerMessage> = vec![];
 
   let compile_result = match &source {
-    ProgramSource::Inline(source) => ctx.compile(Some("cmdline"), source, &mut problems),
-    ProgramSource::Stdin(source) => ctx.compile(Some("stdin"), source, &mut problems),
+    ProgramSource::Inline(source) => ctx.compile(source, &mut problems).map(|p| p.with_name("cmdline")),
+    ProgramSource::Stdin(source) => ctx.compile(source, &mut problems).map(|p| p.with_name("stdin")),
     ProgramSource::FilePath(path) => ctx.compile_file(path, &mut problems)
   };
   

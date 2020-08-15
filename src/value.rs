@@ -1,6 +1,5 @@
 use crate::{runtime::VM, lang::RST, RantResult};
 use crate::{RantMap, util::*};
-use std::collections::HashMap;
 use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg}, cmp};
 use cast::*;
 

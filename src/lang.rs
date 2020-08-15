@@ -179,10 +179,9 @@ pub struct FunctionDef {
 /// Describes a boxing (closure) operation to turn a block into a function.
 #[derive(Debug)]
 pub struct FunctionBox {
-  pub flag: PrintFlag,
-  pub params: Vec<RantString>,
-  pub is_variadic: bool,
-  pub body: Rc<Block>,
+  pub expr: Rc<Block>,
+  pub params: Vec<Parameter>,
+  pub capture_vars: Rc<Vec<Identifier>>,
 }
 
 /// Describes an anonymous (nameless) function call.
@@ -204,9 +203,9 @@ pub enum RST {
   AnonFunctionCall(AnonFunctionCall),
   FunctionCall(FunctionCall),
   FunctionDef(FunctionDef),
-  VarDef(VarAccessPath, Option<Rc<RST>>),
+  VarDef(Identifier, Option<Rc<Sequence>>),
   VarGet(VarAccessPath),
-  VarSet(VarAccessPath, Rc<RST>),
+  VarSet(VarAccessPath, Rc<Sequence>),
   Fragment(RantString),
   Whitespace(RantString),
   Integer(i64),
