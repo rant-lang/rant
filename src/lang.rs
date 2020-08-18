@@ -33,6 +33,12 @@ impl Deref for Identifier {
   }
 }
 
+impl Display for Identifier {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.0)
+  }
+}
+
 /// Component in a variable accessor chain
 #[derive(Debug, Clone)]
 pub enum VarAccessComponent {
@@ -195,10 +201,11 @@ pub struct AnonFunctionCall {
 /// Rant Syntax Tree
 #[derive(Debug)]
 pub enum RST {
+  Nop,
   Sequence(Rc<Sequence>),
   Block(Block),
-  List(Vec<RST>),
-  Map(Vec<(RST, RST)>),
+  List(Vec<Rc<Sequence>>),
+  Map(Vec<(RST, Rc<Sequence>)>),
   Closure(ClosureExpr),
   AnonFuncCall(AnonFunctionCall),
   FuncCall(FunctionCall),
@@ -211,8 +218,8 @@ pub enum RST {
   Integer(i64),
   Float(f64),
   Boolean(bool),
-  NoneValue,
-  Nop
+  EmptyVal,
+  DebugInfoUpdate(DebugInfo),
 }
 
 impl RST {
@@ -231,11 +238,12 @@ impl RST {
       RST::Integer(_) =>                      "integer",
       RST::Float(_) =>                        "float",
       RST::Boolean(_) =>                      "boolean",
-      RST::NoneValue =>                       "none",
+      RST::EmptyVal =>                        "empty",
       RST::Nop =>                             "nothing",
       RST::VarDef(..) =>                      "variable definition",
       RST::VarGet(_) =>                       "variable",
-      RST::VarSet(..) =>                      "variable assignment"
+      RST::VarSet(..) =>                      "variable assignment",
+      _ =>                                    "???"
     }
   }
   
@@ -258,4 +266,11 @@ impl Display for RST {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}", self.display_name())
   }
+}
+
+#[derive(Debug)]
+pub enum DebugInfo {
+  Location { line: usize, col: usize },
+  SourceName(RantString),
+  ScopeName(RantString),
 }

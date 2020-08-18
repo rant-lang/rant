@@ -191,7 +191,7 @@ impl FromRant for String {
 impl<T: FromRant> FromRant for Option<T> {
   fn from_rant(val: RantValue) -> RantResult<Self> {
     match val {
-      RantValue::None => Ok(None),
+      RantValue::Empty => Ok(None),
       other => Ok(Some(T::from_rant(other)?))
     }
   }
@@ -203,7 +203,7 @@ impl<T: FromRant> FromRant for Option<T> {
 impl<T: ToRant> ToRant for Option<T> {
   fn to_rant(self) -> RantResult<RantValue> {
     match self {
-      None => Ok(RantValue::None),
+      None => Ok(RantValue::Empty),
       Some(val) => Ok(val.to_rant()?)
     }
   }
@@ -212,7 +212,7 @@ impl<T: ToRant> ToRant for Option<T> {
 impl<T: FromRant> FromRant for Vec<T> {
   fn from_rant(val: RantValue) -> RantResult<Self> {
     match val {
-      RantValue::List(vec) => Ok(vec.iter().cloned().map(T::from_rant).collect::<RantResult<Vec<T>>>()?),
+      RantValue::List(vec) => Ok(vec.borrow().iter().cloned().map(T::from_rant).collect::<RantResult<Vec<T>>>()?),
       other => Err(RantError::ValueConversionError {
         from: other.type_name(),
         to: stringify!(Vec<T>),
@@ -234,7 +234,7 @@ pub trait FromRantArgs: Sized {
 impl<T: FromRant> FromRantArgs for T {
   fn from_rant_args(args: Vec<RantValue>) -> RantResult<Self> {
     let mut args = args.into_iter();
-    Ok(T::from_rant(args.next().unwrap_or(RantValue::None))?)
+    Ok(T::from_rant(args.next().unwrap_or(RantValue::Empty))?)
   }
 }
 
@@ -244,7 +244,7 @@ macro_rules! impl_from_rant_args {
     impl<$($generic_types: FromRant,)*> FromRantArgs for ($($generic_types,)*) {
       fn from_rant_args(args: Vec<RantValue>) -> RantResult<Self> {
         let mut args = args.into_iter();
-        Ok(($($generic_types::from_rant(args.next().unwrap_or(RantValue::None))?,)*))
+        Ok(($($generic_types::from_rant(args.next().unwrap_or(RantValue::Empty))?,)*))
       }
     }
     
@@ -253,7 +253,7 @@ macro_rules! impl_from_rant_args {
       fn from_rant_args(mut args: Vec<RantValue>) -> RantResult<Self> {
         let mut args = args.drain(..);
         Ok(
-          ($($generic_types::from_rant(args.next().unwrap_or(RantValue::None))?,)*
+          ($($generic_types::from_rant(args.next().unwrap_or(RantValue::Empty))?,)*
           VarArgs::new(args
             .map(VarArgItem::from_rant)
             .collect::<RantResult<Vec<VarArgItem>>>()?

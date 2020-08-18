@@ -57,7 +57,7 @@ impl OutputWriter {
     
     match self.buffers.len() {
       // An empty output always returns an empty value
-      0 => RantValue::None,
+      0 => RantValue::Empty,
       // Single buffer is always returned unchanged
       1 => {
         let buffer = self.buffers.pop().unwrap();
@@ -71,7 +71,7 @@ impl OutputWriter {
         let mut has_any_nonempty = false;
         let mut output = RantString::new();
         for buf in self.buffers {
-          if !matches!(buf, OutputBuffer::Value(RantValue::None)) {
+          if !matches!(buf, OutputBuffer::Value(RantValue::Empty)) {
             has_any_nonempty = true;
             output.push_str(buf.render().as_str())
           }
@@ -80,7 +80,7 @@ impl OutputWriter {
         if has_any_nonempty {
           RantValue::String(output.to_string())
         } else {
-          RantValue::None
+          RantValue::Empty
         }
       }
     }

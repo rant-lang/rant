@@ -1,5 +1,5 @@
 use std::{cell::RefCell, rc::Rc, ops::{DerefMut, Deref}};
-use crate::{lang::{Sequence, RST}, RantMap, RantString, RantValue};
+use crate::{lang::{Sequence, RST, Identifier}, RantMap, RantString, RantValue, RantResult, RantError, RuntimeErrorType};
 use super::{OutputBuffer, output::OutputWriter};
 
 const STACK_INITIAL_CAPACITY: usize = 16;
@@ -31,6 +31,29 @@ impl Default for CallStack {
 impl CallStack {
   pub fn new() -> Self {
     Self(Vec::with_capacity(STACK_INITIAL_CAPACITY))
+  }
+
+  pub fn set_local(&mut self, id: Identifier, val: RantValue) -> RantResult<()> {
+    let key = id.as_str();
+    for frame in self.iter_mut().rev() {
+      let mut frame = frame.borrow_mut();
+      if frame.locals.raw_has_key(key) {
+        frame.locals.raw_set(key, val);
+        return Ok(())
+      }
+    }
+    Err(RantError::RuntimeError {
+      error_type: RuntimeErrorType::InvalidAccess,
+      description: Some(format!("variable '{}' not found", id)),
+    })
+  }
+
+  pub fn get_local<'a>(&mut self, id: Identifier) -> &'a RantValue {
+    todo!()
+  }
+
+  pub fn def_local(&mut self, id: Identifier, val: RantValue) {
+    todo!()
   }
 }
 

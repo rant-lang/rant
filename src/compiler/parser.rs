@@ -384,7 +384,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
         // None
         RantToken::NoneValue => no_flags!(on {
-          RST::NoneValue
+          RST::EmptyVal
         }),
         
         // Verbatim string literals

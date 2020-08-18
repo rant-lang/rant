@@ -59,22 +59,26 @@ impl Default for Rant {
 }
 
 impl Rant {
-  #[must_use = "compiling a program without running it does nothing"]
+  /// Compiles a source string using the specified reporter.
+  #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile<R: Reporter>(&self, source: &str, reporter: &mut R) -> CompileResult {
     RantCompiler::compile_string(source, reporter)
   }
 
-  #[must_use = "compiling a program without running it does nothing"]
+  /// Compiles a source string without reporting problems.
+  #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_quiet(&self, source: &str) -> CompileResult {
     RantCompiler::compile_string(source, &mut ())
   }
   
-  #[must_use = "compiling a program without running it does nothing"]
+  /// Compiles a source file using the specified reporter.
+  #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_file<P: AsRef<Path>, R: Reporter>(&self, path: P, reporter: &mut R) -> CompileResult {
     RantCompiler::compile_file(path, reporter)
   }
 
-  #[must_use = "compiling a program without running it does nothing"]
+  /// Compiles a source file without reporting problems.
+  #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_file_quiet<P: AsRef<Path>>(&self, path: P) -> CompileResult {
     RantCompiler::compile_file(path, &mut ())
   }
