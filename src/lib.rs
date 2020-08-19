@@ -17,7 +17,7 @@ pub use convert::*;
 use crate::lang::{Sequence};
 use crate::compiler::{CompileResult, RantCompiler, Reporter};
 use crate::runtime::VM;
-use std::{path::Path, rc::Rc};
+use std::{path::Path, rc::Rc, cell::RefCell};
 use random::RantRng;
 
 /// The build version according to the crate metadata at the time of compiling.
@@ -33,20 +33,20 @@ pub type RantResult<T> = Result<T, RantError>;
 #[derive(Debug)]
 pub struct Rant {
   rng: Rc<RantRng>,
-  globals: RantMap
+  globals: RefCell<RantMap>
 }
 
 impl Rant {
   pub fn new() -> Self {
     Self {
-      globals: RantMap::new(),
+      globals: RefCell::new(RantMap::new()),
       rng: Rc::new(RantRng::new(0))
     }
   }
   
   pub fn with_seed(seed: u64) -> Self {
     Self {
-      globals: RantMap::new(),
+      globals: RefCell::new(RantMap::new()),
       rng: Rc::new(RantRng::new(seed))
     }
   }

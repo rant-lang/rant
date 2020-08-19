@@ -496,6 +496,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     Ok((sequence, SequenceEndType::ProgramEnd, is_seq_printing))
   }
 
+  /// Parses a list/map initializer.
   fn parse_collection_initializer(&mut self, kind: CollectionInitKind, start_span: &Range<usize>) -> ParseResult<RST> {
     match kind {
       CollectionInitKind::List => {

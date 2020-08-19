@@ -45,7 +45,9 @@ pub enum VarAccessComponent {
   /// Name of variable or map item
   Name(Identifier),
   /// List index
-  Index(i64)
+  Index(i64),
+  /// Dynamic key
+  Expression(Rc<Sequence>),
 }
 
 /// An accessor consisting of a chain of variable names and indices
@@ -55,6 +57,19 @@ pub struct VarAccessPath(Vec<VarAccessComponent>);
 impl VarAccessPath {
   pub fn new(parts: Vec<VarAccessComponent>) -> Self {
     Self(parts)
+  }
+}
+
+impl Deref for VarAccessPath {
+  type Target = Vec<VarAccessComponent>;
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl DerefMut for VarAccessPath {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.0   
   }
 }
 

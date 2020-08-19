@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc, ops::{DerefMut, Deref}};
-use crate::{lang::{Sequence, RST, Identifier}, RantMap, RantString, RantValue, RantResult, RantError, RuntimeErrorType};
-use super::{OutputBuffer, output::OutputWriter};
+use crate::{lang::{Sequence, RST, Identifier}, RantMap, RantString, RantValue, RantResult, RantError, RuntimeErrorType, Rant};
+use super::{OutputBuffer, output::OutputWriter, Intent};
 
 const STACK_INITIAL_CAPACITY: usize = 16;
 
@@ -33,27 +33,62 @@ impl CallStack {
     Self(Vec::with_capacity(STACK_INITIAL_CAPACITY))
   }
 
-  pub fn set_local(&mut self, id: Identifier, val: RantValue) -> RantResult<()> {
-    let key = id.as_str();
+  pub fn set_local(&mut self, context: &Rant, id: &str, val: RantValue) -> RantResult<()> {
+
+    // Check locals
     for frame in self.iter_mut().rev() {
       let mut frame = frame.borrow_mut();
-      if frame.locals.raw_has_key(key) {
-        frame.locals.raw_set(key, val);
+      if frame.locals.raw_has_key(id) {
+        frame.locals.raw_set(id, val);
         return Ok(())
       }
     }
+
+    // Check globals
+    let mut globals = context.globals.borrow_mut();
+    if globals.raw_has_key(id) {
+      globals.raw_set(id, val);
+      return Ok(())
+    }
+
     Err(RantError::RuntimeError {
       error_type: RuntimeErrorType::InvalidAccess,
       description: Some(format!("variable '{}' not found", id)),
     })
   }
 
-  pub fn get_local<'a>(&mut self, id: Identifier) -> &'a RantValue {
-    todo!()
+  pub fn get_local(&self, context: &Rant, id: &str) -> RantResult<RantValue> {
+    // Check locals
+    for frame in self.iter().rev() {
+      let frame = frame.borrow();
+      if let Some(val) = frame.locals.raw_get(id) {
+        return Ok(val.clone())
+      }
+    }
+
+    // Check globals
+    if let Some(val) = context.globals.borrow().raw_get(id) {
+      return Ok(val.clone())
+    }
+
+    Err(RantError::RuntimeError {
+      error_type: RuntimeErrorType::InvalidAccess,
+      description: Some(format!("variable '{}' not found", id))
+    })
   }
 
-  pub fn def_local(&mut self, id: Identifier, val: RantValue) {
-    todo!()
+  pub fn def_local(&mut self, context: &Rant, id: &str, val: RantValue) -> RantResult<()> {
+    if self.len() > 1 {
+      if let Some(frame) = self.last_mut() {
+        let mut frame = frame.borrow_mut();
+        frame.locals.raw_set(id, val);
+        return Ok(())
+      }
+    }
+
+    // If there's only one frame on the stack, it means we're in the global scope of the program.
+    context.globals.borrow_mut().raw_set(id, val);
+    Ok(())
   }
 }
 
@@ -68,6 +103,8 @@ pub struct StackFrame {
   started: bool,
   /// Output for this stack frame
   output: Option<OutputWriter>,
+  /// Current intent of the frame
+  intent: Intent,
 }
 
 impl StackFrame {
@@ -78,6 +115,7 @@ impl StackFrame {
       output: if has_output { Some(Default::default()) } else { None },
       started: false,
       pc: 0,
+      intent: Intent::Default,
     }
   }
 }
@@ -100,6 +138,18 @@ impl StackFrame {
   
   pub fn pc(&self) -> usize {
     self.pc
+  }
+
+  pub fn intent(&self) -> &Intent {
+    &self.intent
+  }
+
+  pub fn set_intent(&mut self, intent: Intent) {
+    self.intent = intent;
+  }
+
+  pub fn reset_intent(&mut self) {
+    self.intent = Intent::Default;
   }
 }
 
