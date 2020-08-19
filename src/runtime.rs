@@ -1,4 +1,4 @@
-use crate::{Rant, RantProgram, lang::*, RantResult, RantError, RuntimeErrorType, random::RantRng, RantValue, RantClosure, RantList};
+use crate::{Rant, RantProgram, lang::*, RantResult, RantError, RuntimeErrorType, random::RantRng, RantValue, RantClosure, RantList, RantMap, RantString};
 use std::{rc::{Rc}, cell::{RefCell}, ops::{Deref}};
 use resolver::Resolver;
 pub use stack::*;
@@ -67,7 +67,8 @@ pub enum Intent {
   /// Pop `expr_count` values off the stack and use them for expression fields in a getter.
   GetValue { path: Rc<VarAccessPath>, expr_count: usize },
   /// Pop `size` values off the stack, put them in a list, then push the list to the stack.
-  NewList { size: usize },
+  CreateList { size: usize },
+  BuildMap { init: Rc<Vec<(MapKeyExpr, Rc<Sequence>)>>, pair_index: usize, map: RantMap }
 }
 
 impl Intent {
@@ -119,74 +120,46 @@ impl<'rant> VM<'rant> {
           continue 'from_the_top;
         },
         Intent::GetValue { path, expr_count } => {
-          // Gather dynamic accessor values from stack
-          let mut expr_values = vec![];
-          for _ in 0..expr_count {
-            expr_values.push(self.pop_val()?);
-          }
-
-          let mut path_iter = path.iter();
-          let mut expr_values = expr_values.drain(..);
-
-          // Get the root variable
-          let mut getter_value = match path_iter.next() {
-              Some(VarAccessComponent::Name(vname)) => {
-                self.get_local(vname.as_str())?
-              },
-              Some(VarAccessComponent::Expression(_)) => {
-                let key = expr_values.next().unwrap().to_string();
-                self.get_local(key.as_str())?
-              },
-              _ => unreachable!()
-          };
-
-          // Evaluate the rest of the path
-          for accessor in path_iter {
-            match accessor {
-              // Key
-              VarAccessComponent::Name(key) => {
-                getter_value = match getter_value.get_by_key(key.as_str()) {
-                  Ok(val) => val,
-                  Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
-                };
-              },
-              // Index
-              VarAccessComponent::Index(index) => {
-                getter_value = match getter_value.get_by_index(*index) {
-                  Ok(val) => val,
-                  Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
-                }
-              },
-              // Key by expression
-              VarAccessComponent::Expression(_) => {
-                let key = expr_values.next().unwrap();
-                match key {
-                  RantValue::Integer(index) => {
-                    getter_value = match getter_value.get_by_index(index) {
-                      Ok(val) => val,
-                      Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
-                    }
-                  },
-                  _ => {
-                    getter_value = match getter_value.get_by_key(key.to_string().as_str()) {
-                      Ok(val) => val,
-                      Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
-                    };
-                  }
-                }
-              }
-            }
-          }
-
-          self.cur_frame_mut().write_value(getter_value);
+          self.intent_get_value(path, expr_count)?;
         },
-        Intent::NewList { size } => {
+        Intent::CreateList { size } => {
           let mut list = RantList::with_capacity(size);
           for _ in 0..size {
             list.push(self.pop_val()?);
           }
           self.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list))));
         },
+        Intent::BuildMap { init, pair_index, mut map } => {
+          // Add latest evaluated pair to map
+          if pair_index > 0 {
+            let prev_pair = &init[pair_index - 1];
+            // If the key is dynamic, there are two values to pop
+            let key = match prev_pair {
+                (MapKeyExpr::Dynamic(_), _) => {
+                  RantString::from(self.pop_val()?.to_string())
+                }
+                (MapKeyExpr::Static(key), _) => key.clone()
+            };
+            let val = self.pop_val()?;
+            map.raw_set(key.as_str(), val);
+          }
+
+          // Check if the map is completed
+          if pair_index >= init.len() {
+            self.cur_frame_mut().write_value(RantValue::Map(Rc::new(RefCell::new(map))));
+          } else {
+            // Continue map creation
+            self.cur_frame_mut().set_intent(Intent::BuildMap { init: Rc::clone(&init), pair_index: pair_index + 1, map });
+            let (key_expr, val_expr) = &init[pair_index];
+            if let MapKeyExpr::Dynamic(key_expr_block) = key_expr {
+              // Push dynamic key expression onto call stack
+              self.push_block(key_expr_block, true)?;
+            }
+            // Push value expression onto call stack
+            self.push_frame(Rc::clone(val_expr), true)?;
+            continue 'from_the_top;
+          }
+        }
         _ => todo!()
       }
       
@@ -201,10 +174,14 @@ impl<'rant> VM<'rant> {
           RST::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
           RST::ListInit(elements) => {
             // TODO: Probably don't push all list element expressions onto the stack at once
-            self.cur_frame_mut().set_intent(Intent::NewList { size: elements.len() });
+            self.cur_frame_mut().set_intent(Intent::CreateList { size: elements.len() });
             for expr in elements.iter() {
               self.push_frame(Rc::clone(expr), true)?;
             }
+            continue 'from_the_top;
+          },
+          RST::MapInit(elements) => {
+            self.cur_frame_mut().set_intent(Intent::BuildMap { init: Rc::clone(elements), pair_index: 0, map: RantMap::new() });
             continue 'from_the_top;
           },
           RST::Block(block) => {
@@ -264,6 +241,70 @@ impl<'rant> VM<'rant> {
     
     // Once stack is empty, program is done-- return last frame's output as a string
     Ok(self.pop_val().unwrap_or_default().to_string())
+  }
+
+  fn intent_get_value(&mut self, path: Rc<VarAccessPath>, expr_count: usize) -> RantResult<()> {
+    // Gather dynamic accessor values from stack
+    let mut expr_values = vec![];
+    for _ in 0..expr_count {
+      expr_values.push(self.pop_val()?);
+    }
+
+    let mut path_iter = path.iter();
+    let mut expr_values = expr_values.drain(..);
+
+    // Get the root variable
+    let mut getter_value = match path_iter.next() {
+        Some(VarAccessComponent::Name(vname)) => {
+          self.get_local(vname.as_str())?
+        },
+        Some(VarAccessComponent::Expression(_)) => {
+          let key = expr_values.next().unwrap().to_string();
+          self.get_local(key.as_str())?
+        },
+        _ => unreachable!()
+    };
+
+    // Evaluate the rest of the path
+    for accessor in path_iter {
+      match accessor {
+        // Static key
+        VarAccessComponent::Name(key) => {
+          getter_value = match getter_value.get_by_key(key.as_str()) {
+            Ok(val) => val,
+            Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
+          };
+        },
+        // Index
+        VarAccessComponent::Index(index) => {
+          getter_value = match getter_value.get_by_index(*index) {
+            Ok(val) => val,
+            Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
+          }
+        },
+        // Dynamic key
+        VarAccessComponent::Expression(_) => {
+          let key = expr_values.next().unwrap();
+          match key {
+            RantValue::Integer(index) => {
+              getter_value = match getter_value.get_by_index(index) {
+                Ok(val) => val,
+                Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
+              }
+            },
+            _ => {
+              getter_value = match getter_value.get_by_key(key.to_string().as_str()) {
+                Ok(val) => val,
+                Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
+              };
+            }
+          }
+        }
+      }
+    }
+
+    self.cur_frame_mut().write_value(getter_value);
+    Ok(())
   }
 
   fn push_block(&mut self, block: &Block, override_print: bool) -> RantResult<()> {

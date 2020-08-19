@@ -590,7 +590,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }
         }
 
-        Ok(RST::MapInit(pairs))
+        Ok(RST::MapInit(Rc::new(pairs)))
       },
     }
     
@@ -875,7 +875,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }
       },
       // An expression can also be used to provide the variable
-      Some((RantToken::LeftBrace, span)) => {
+      Some((RantToken::LeftBrace, _)) => {
         let expr_block = self.parse_block(PrintFlag::Hint)?;
         idparts.push(VarAccessComponent::Expression(Rc::new(expr_block)));
       },
@@ -973,6 +973,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
   }
 
+  /// Parses an identifier.
   fn parse_ident(&mut self) -> ParseResult<Identifier> {
     if let Some((token, span)) = self.reader.next_solid() {
       match token {
