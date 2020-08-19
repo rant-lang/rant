@@ -6,7 +6,7 @@ use crate::{RantResult, runtime::VM};
 use crate::{RantValue, AsRantForeignFunc};
 
 pub fn add(vm: &mut VM, lhs: RantValue, rhs: RantValue) -> RantResult<()> {
-  vm.cur_frame().borrow_mut().write_value(lhs + rhs);
+  vm.cur_frame_mut().write_value(lhs + rhs);
   Ok(())
 }
 

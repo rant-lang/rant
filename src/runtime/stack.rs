@@ -5,11 +5,11 @@ use super::{OutputBuffer, output::OutputWriter, Intent};
 const STACK_INITIAL_CAPACITY: usize = 16;
 
 /// Thin wrapper around call stack vector
-pub struct CallStack(Vec<Rc<RefCell<StackFrame>>>);
+pub struct CallStack(Vec<StackFrame>);
 
 // Allows direct immutable access to internal stack vector
 impl Deref for CallStack {
-  type Target = Vec<Rc<RefCell<StackFrame>>>;
+  type Target = Vec<StackFrame>;
   fn deref(&self) -> &Self::Target {
     &self.0
   }
@@ -37,7 +37,6 @@ impl CallStack {
 
     // Check locals
     for frame in self.iter_mut().rev() {
-      let mut frame = frame.borrow_mut();
       if frame.locals.raw_has_key(id) {
         frame.locals.raw_set(id, val);
         return Ok(())
@@ -60,7 +59,6 @@ impl CallStack {
   pub fn get_local(&self, context: &Rant, id: &str) -> RantResult<RantValue> {
     // Check locals
     for frame in self.iter().rev() {
-      let frame = frame.borrow();
       if let Some(val) = frame.locals.raw_get(id) {
         return Ok(val.clone())
       }
@@ -80,7 +78,6 @@ impl CallStack {
   pub fn def_local(&mut self, context: &Rant, id: &str, val: RantValue) -> RantResult<()> {
     if self.len() > 1 {
       if let Some(frame) = self.last_mut() {
-        let mut frame = frame.borrow_mut();
         frame.locals.raw_set(id, val);
         return Ok(())
       }
@@ -142,6 +139,12 @@ impl StackFrame {
 
   pub fn intent(&self) -> &Intent {
     &self.intent
+  }
+
+  pub fn take_intent(&mut self) -> Intent {
+    let mut intent = Intent::Default;
+    std::mem::swap(&mut self.intent, &mut intent);
+    intent
   }
 
   pub fn set_intent(&mut self, intent: Intent) {
