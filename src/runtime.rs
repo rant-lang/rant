@@ -1,4 +1,4 @@
-use crate::{Rant, RantProgram, lang::*, RantResult, RantError, RuntimeErrorType, RantString, random::RantRng, RantValue, RantClosure};
+use crate::{Rant, RantProgram, lang::*, RantResult, RantError, RuntimeErrorType, random::RantRng, RantValue, RantClosure, RantList};
 use std::{rc::{Rc}, cell::{RefCell}, ops::{Deref}};
 use resolver::Resolver;
 pub use stack::*;
@@ -34,15 +34,15 @@ impl<'rant> VM<'rant> {
 
 /// Returns a `RantResult::Err(RantError::RuntimeError { .. })` from the current execution context with the specified error type and optional description.
 macro_rules! runtime_error {
-  ($err_type:ident) => {
+  ($err_type:expr) => {
     return Err(RantError::RuntimeError {
-      error_type: RuntimeErrorType::$err_type,
+      error_type: $err_type,
       description: None
     })
   };
-  ($err_type:ident, $desc:expr) => {
+  ($err_type:expr, $desc:expr) => {
     return Err(RantError::RuntimeError {
-      error_type: RuntimeErrorType::$err_type,
+      error_type: $err_type,
       description: Some($desc.to_string())
     })
   };
@@ -52,16 +52,22 @@ macro_rules! runtime_error {
 /// to override the its usual behavior next time it's active.
 #[derive(Debug)]
 pub enum Intent {
-  // Run frame sequence as normal.
+  /// Run frame sequence as normal.
   Default,
-  // Take the pending output from last frame and print it.
+  /// Take the pending output from last frame and print it.
   PrintLastOutput,
-  // Invoke the following function using values from the stack.
+  /// Invoke the following function using values from the stack.
   Invoke { func: Rc<RantClosure>, argc: usize, varg_start: Option<usize> },
-  // Pop a value off the stack and assign it to a variable.
+  /// Pop a value off the stack and assign it to a variable.
   SetVar { vname: Identifier },
-  // Pop a value off the stack and assign it to a new variable.
+  /// Pop a value off the stack and assign it to a new variable.
   DefVar { vname: Identifier },
+  /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions yet, switch intent to `GetValue` 
+  BuildDynamicGetter { path: Rc<VarAccessPath>, expr_count: usize, pending_exprs: Vec<Rc<Block>> },
+  /// Pop `expr_count` values off the stack and use them for expression fields in a getter.
+  GetValue { path: Rc<VarAccessPath>, expr_count: usize },
+  /// Pop `size` values off the stack, put them in a list, then push the list to the stack.
+  NewList { size: usize },
 }
 
 impl Intent {
@@ -83,6 +89,7 @@ impl<'rant> VM<'rant> {
     // Run whatever is on the top of the call stack
     'from_the_top: while !self.is_stack_empty() {
       
+      // Handle intent
       match self.cur_frame_mut().take_intent() {
         Intent::Default => {},
         Intent::PrintLastOutput => {
@@ -96,7 +103,90 @@ impl<'rant> VM<'rant> {
         Intent::DefVar { vname } => {
           let val = self.pop_val()?;
           self.def_local(vname.as_str(), val)?;
-        }
+        },
+        Intent::BuildDynamicGetter { path, expr_count, mut pending_exprs } => {
+          if let Some(block) = pending_exprs.pop() {
+            // Set next intent based on remaining expressions in getter
+            if pending_exprs.is_empty() {
+              self.cur_frame_mut().set_intent(Intent::GetValue { path, expr_count });
+            } else {
+              self.cur_frame_mut().set_intent(Intent::BuildDynamicGetter { path, expr_count, pending_exprs });
+            }
+            self.push_block(block.as_ref(), true)?;
+          } else {
+            self.cur_frame_mut().set_intent(Intent::GetValue { path, expr_count });
+          }
+          continue 'from_the_top;
+        },
+        Intent::GetValue { path, expr_count } => {
+          // Gather dynamic accessor values from stack
+          let mut expr_values = vec![];
+          for _ in 0..expr_count {
+            expr_values.push(self.pop_val()?);
+          }
+
+          let mut path_iter = path.iter();
+          let mut expr_values = expr_values.drain(..);
+
+          // Get the root variable
+          let mut getter_value = match path_iter.next() {
+              Some(VarAccessComponent::Name(vname)) => {
+                self.get_local(vname.as_str())?
+              },
+              Some(VarAccessComponent::Expression(_)) => {
+                let key = expr_values.next().unwrap().to_string();
+                self.get_local(key.as_str())?
+              },
+              _ => unreachable!()
+          };
+
+          // Evaluate the rest of the path
+          for accessor in path_iter {
+            match accessor {
+              // Key
+              VarAccessComponent::Name(key) => {
+                getter_value = match getter_value.get_by_key(key.as_str()) {
+                  Ok(val) => val,
+                  Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
+                };
+              },
+              // Index
+              VarAccessComponent::Index(index) => {
+                getter_value = match getter_value.get_by_index(*index) {
+                  Ok(val) => val,
+                  Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
+                }
+              },
+              // Key by expression
+              VarAccessComponent::Expression(_) => {
+                let key = expr_values.next().unwrap();
+                match key {
+                  RantValue::Integer(index) => {
+                    getter_value = match getter_value.get_by_index(index) {
+                      Ok(val) => val,
+                      Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
+                    }
+                  },
+                  _ => {
+                    getter_value = match getter_value.get_by_key(key.to_string().as_str()) {
+                      Ok(val) => val,
+                      Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
+                    };
+                  }
+                }
+              }
+            }
+          }
+
+          self.cur_frame_mut().write_value(getter_value);
+        },
+        Intent::NewList { size } => {
+          let mut list = RantList::with_capacity(size);
+          for _ in 0..size {
+            list.push(self.pop_val()?);
+          }
+          self.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list))));
+        },
         _ => todo!()
       }
       
@@ -109,13 +199,16 @@ impl<'rant> VM<'rant> {
           RST::Float(n) => self.cur_frame_mut().write_value(RantValue::Float(*n)),
           RST::EmptyVal => self.cur_frame_mut().write_value(RantValue::Empty),
           RST::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
-          RST::Block(block) => {
-            let elem = Rc::clone(&block.elements[self.rng.next_usize(block.len())]);
-            let is_printing = block.flag != PrintFlag::Sink;
-            if is_printing {
-              self.cur_frame_mut().set_intent(Intent::PrintLastOutput);
+          RST::ListInit(elements) => {
+            // TODO: Probably don't push all list element expressions onto the stack at once
+            self.cur_frame_mut().set_intent(Intent::NewList { size: elements.len() });
+            for expr in elements.iter() {
+              self.push_frame(Rc::clone(expr), true)?;
             }
-            self.push_frame(elem, is_printing)?;
+            continue 'from_the_top;
+          },
+          RST::Block(block) => {
+            self.push_block(block, false)?;
             continue 'from_the_top;
           },
           RST::VarDef(vname, val_expr) => {
@@ -124,16 +217,33 @@ impl<'rant> VM<'rant> {
               self.push_frame(Rc::clone(val_expr), true)?;
               continue 'from_the_top;
             } else {
+              // If there's no assignment, just set it to <>
               self.def_local(vname.as_str(), RantValue::Empty)?;
             }
           },
           RST::VarGet(path) => {
-            if let Some(VarAccessComponent::Name(vname)) = path.get(0) {
-              let val = self.get_local(vname)?;
-              self.cur_frame_mut().write_value(val);
+            // Get a list of dynamic accessors
+            let exprs = path.iter().filter_map(|c| {
+              match c {
+                VarAccessComponent::Expression(expr) => Some(Rc::clone(expr)),
+                _ => None
+              }
+            }).collect::<Vec<Rc<Block>>>();
+
+            if exprs.is_empty() {
+              // Getter is static, so run it directly
+              self.cur_frame_mut().set_intent(Intent::GetValue { path: Rc::clone(path), expr_count: 0 });
             } else {
-              todo!()
+              // Build dynamic keys before running getter
+              // Push dynamic accessors onto call stack
+              self.cur_frame_mut().set_intent(Intent::BuildDynamicGetter {
+                expr_count: exprs.len(),
+                path: Rc::clone(path),
+                pending_exprs: exprs
+              });
             }
+            
+            continue 'from_the_top;
           },
           RST::VarSet(path, val) => {
             todo!()
@@ -154,6 +264,16 @@ impl<'rant> VM<'rant> {
     
     // Once stack is empty, program is done-- return last frame's output as a string
     Ok(self.pop_val().unwrap_or_default().to_string())
+  }
+
+  fn push_block(&mut self, block: &Block, override_print: bool) -> RantResult<()> {
+    let elem = Rc::clone(&block.elements[self.rng.next_usize(block.len())]);
+    let is_printing = block.flag != PrintFlag::Sink;
+    if is_printing && !override_print {
+      self.cur_frame_mut().set_intent(Intent::PrintLastOutput);
+    }
+    self.push_frame(elem, is_printing)?;
+    Ok(())
   }
 
   #[inline(always)]
@@ -182,7 +302,7 @@ impl<'rant> VM<'rant> {
       self.val_stack.push(val);
       Ok(self.val_stack.len())
     } else {
-      runtime_error!(StackOverflow, "value stack has overflowed");
+      runtime_error!(RuntimeErrorType::StackOverflow, "value stack has overflowed");
     }
   }
 
@@ -191,7 +311,7 @@ impl<'rant> VM<'rant> {
     if self.val_stack.len() > 0 {
       Ok(self.val_stack.pop().unwrap())
     } else {
-      runtime_error!(StackUnderflow, "value stack has underflowed");
+      runtime_error!(RuntimeErrorType::StackUnderflow, "value stack has underflowed");
     }
   }
 
@@ -200,7 +320,7 @@ impl<'rant> VM<'rant> {
     if let Some(frame) = self.call_stack.pop() {
       Ok(frame)
     } else {
-      runtime_error!(StackUnderflow, "call stack has underflowed");
+      runtime_error!(RuntimeErrorType::StackUnderflow, "call stack has underflowed");
     }
   }
   
@@ -209,7 +329,7 @@ impl<'rant> VM<'rant> {
     
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
-      runtime_error!(StackOverflow, "call stack has overflowed");
+      runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
     }
     
     let frame = StackFrame::new(callee, Default::default(), use_output);
@@ -217,10 +337,12 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
+  #[inline(always)]
   pub fn cur_frame_mut(&mut self) -> &mut StackFrame {
     self.call_stack.last_mut().unwrap()
   }
 
+  #[inline(always)]
   pub fn cur_frame(&self) -> &StackFrame {
     self.call_stack.last().unwrap()
   }

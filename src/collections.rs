@@ -14,6 +14,10 @@ impl RantList {
     Self(Vec::with_capacity(DEFAULT_LIST_CAPACITY))
   }
 
+  pub fn with_capacity(capacity: usize) -> Self {
+    Self(Vec::with_capacity(capacity))
+  }
+
   pub fn from_iter<Iter: Iterator<Item = RantValue>>(iterator: Iter) -> Self {
     let list = iterator.collect();
     Self(list)

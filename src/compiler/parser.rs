@@ -874,6 +874,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           self.syntax_error(Problem::InvalidIdentifier(varname.to_string()), &span);
         }
       },
+      // An expression can also be used to provide the variable
+      Some((RantToken::LeftBrace, span)) => {
+        let expr_block = self.parse_block(PrintFlag::Hint)?;
+        idparts.push(VarAccessComponent::Expression(Rc::new(expr_block)));
+      },
       Some((RantToken::Integer(_), span)) => {
         self.syntax_error(Problem::LocalPathStartsWithIndex, &span);
       },
@@ -908,6 +913,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Index
           Some((RantToken::Integer(index), _)) => {
             idparts.push(VarAccessComponent::Index(index));
+          },
+          // Dynamic key
+          Some((RantToken::LeftBrace, _)) => {
+            let expr_block = self.parse_block(PrintFlag::Hint)?;
+            idparts.push(VarAccessComponent::Expression(Rc::new(expr_block)));
           },
           Some((.., span)) => {
             // error
@@ -1024,13 +1034,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         match token {
           // If we hit a '>' here, it's a getter
           RantToken::RightAngle => {
-            Ok(RST::VarGet(var_path))
+            Ok(RST::VarGet(Rc::new(var_path)))
           },
           // If we hit a '=' here, it's a setter
           RantToken::Equals => {
             self.reader.skip_ws();
             let (var_assign_rhs, ..) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
-            Ok(RST::VarSet(var_path, Rc::new(var_assign_rhs)))
+            Ok(RST::VarSet(Rc::new(var_path), Rc::new(var_assign_rhs)))
           },
           // Anything else is an error
           _ => {

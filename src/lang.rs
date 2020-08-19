@@ -40,18 +40,18 @@ impl Display for Identifier {
 }
 
 /// Component in a variable accessor chain
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum VarAccessComponent {
   /// Name of variable or map item
   Name(Identifier),
   /// List index
   Index(i64),
   /// Dynamic key
-  Expression(Rc<Sequence>),
+  Expression(Rc<Block>),
 }
 
 /// An accessor consisting of a chain of variable names and indices
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct VarAccessPath(Vec<VarAccessComponent>);
 
 impl VarAccessPath {
@@ -235,8 +235,8 @@ pub enum RST {
   FuncCall(FunctionCall),
   FuncDef(FunctionDef),
   VarDef(Identifier, Option<Rc<Sequence>>),
-  VarGet(VarAccessPath),
-  VarSet(VarAccessPath, Rc<Sequence>),
+  VarGet(Rc<VarAccessPath>),
+  VarSet(Rc<VarAccessPath>, Rc<Sequence>),
   Fragment(RantString),
   Whitespace(RantString),
   Integer(i64),

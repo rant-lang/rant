@@ -1,7 +1,10 @@
 use crate::{runtime::VM, lang::RST, RantResult};
-use crate::{collections::*, util::*};
+use crate::{collections::*, util::*, ToRant};
 use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg}, cmp, cell::RefCell};
 use cast::*;
+
+pub type ValueIndexResult = Result<RantValue, ValueIndexError>;
+pub type ValueKeyResult = Result<RantValue, ValueKeyError>;
 
 /// Rant variable value.
 #[derive(Clone)]
@@ -14,6 +17,18 @@ pub enum RantValue {
   List(Rc<RefCell<RantList>>),
   Map(Rc<RefCell<RantMap>>),
   Empty,
+}
+
+#[derive(Debug)]
+pub enum ValueIndexError {
+  OutOfRange,
+  CannotIndexType(&'static str)
+}
+
+#[derive(Debug)]
+pub enum ValueKeyError {
+  KeyNotFound,
+  CannotKeyType(&'static str),
 }
 
 impl RantValue {
@@ -75,8 +90,8 @@ impl Debug for RantValue {
       RantValue::Integer(n) => write!(f, "{}", n),
       RantValue::Boolean(b) => write!(f, "{}", bstr(*b)),
       RantValue::Function(func) => write!(f, "[function: {:?}]", func),
-      RantValue::List(_) => write!(f, "[list]"),
-      RantValue::Map(_) => write!(f, "[map]"),
+      RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
+      RantValue::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
       RantValue::Empty => write!(f, "<>"),
     }
   }
@@ -88,7 +103,7 @@ impl Display for RantValue {
       RantValue::String(s) => write!(f, "{}", s),
       RantValue::Integer(n) => write!(f, "{}", n),
       RantValue::Float(n) => write!(f, "{}", n),
-      RantValue::Boolean(b) => write!(f, "{}", if *b { "true" } else { "false" }),
+      RantValue::Boolean(b) => write!(f, "{}", bstr(*b)),
       RantValue::Function(func) => write!(f, "[function: {:?}]", func),
       RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
       RantValue::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
@@ -223,6 +238,47 @@ impl RantValue {
       RantValue::List(_) =>       "list",
       RantValue::Map(_) =>        "map",
       RantValue::Empty =>         "empty"
+    }
+  }
+
+  pub fn get_by_index(&self, index: i64) -> ValueIndexResult {
+    if index < 0 {
+      return Err(ValueIndexError::OutOfRange)
+    }
+    let index = index as usize;
+
+    match self {
+        RantValue::String(s) => {
+          if index < s.len() {
+            Ok(RantValue::String(s[index..index + 1].to_owned()))
+          } else {
+            Err(ValueIndexError::OutOfRange)
+          }
+        },
+        RantValue::List(list) => {
+          let list = list.borrow();
+          if index < list.len() {
+            Ok(list[index].clone())
+          } else {
+            Err(ValueIndexError::OutOfRange)
+          }
+        },
+        _ => Err(ValueIndexError::CannotIndexType(self.type_name()))
+    }
+  }
+
+  pub fn get_by_key(&self, key: &str) -> ValueKeyResult {
+    match self {
+      RantValue::Map(map) => {
+        let map = map.borrow();
+        // TODO: Use prototype getter here
+        if let Some(val) = map.raw_get(key) {
+          Ok(val.clone())
+        } else {
+          Err(ValueKeyError::KeyNotFound)
+        }
+      },
+      _ => Err(ValueKeyError::CannotKeyType(self.type_name()))
     }
   }
 }

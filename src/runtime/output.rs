@@ -43,15 +43,6 @@ impl OutputWriter {
 }
 
 impl OutputWriter {
-  pub fn render_string(mut self) -> RantString {
-    self.flush_frag_buffer();
-    let mut output = RantString::new();
-    for buf in self.buffers {
-      output.push_str(buf.render().as_str());
-    }
-    output
-  }
-
   pub fn render_value(mut self) -> RantValue {
     self.flush_frag_buffer();
     
@@ -94,6 +85,7 @@ impl Default for OutputWriter {
 }
 
 /// A unit of output.
+#[derive(Debug)]
 pub enum OutputBuffer {
   String(RantString),
   Value(RantValue)

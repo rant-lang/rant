@@ -162,4 +162,8 @@ pub enum RuntimeErrorType {
   DivideByZero,
   /// Too few arguments were passed to a function
   TooFewArguments,
+  /// Error occurred while indexing value
+  IndexError(ValueIndexError),
+  /// Error occurred while keying value
+  KeyError(ValueKeyError),
 }

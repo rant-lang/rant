@@ -1,4 +1,5 @@
 use std::{cell::RefCell, rc::Rc, ops::{DerefMut, Deref}};
+use std::mem;
 use crate::{lang::{Sequence, RST, Identifier}, RantMap, RantString, RantValue, RantResult, RantError, RuntimeErrorType, Rant};
 use super::{OutputBuffer, output::OutputWriter, Intent};
 
@@ -34,7 +35,6 @@ impl CallStack {
   }
 
   pub fn set_local(&mut self, context: &Rant, id: &str, val: RantValue) -> RantResult<()> {
-
     // Check locals
     for frame in self.iter_mut().rev() {
       if frame.locals.raw_has_key(id) {
@@ -142,9 +142,7 @@ impl StackFrame {
   }
 
   pub fn take_intent(&mut self) -> Intent {
-    let mut intent = Intent::Default;
-    std::mem::swap(&mut self.intent, &mut intent);
-    intent
+    mem::replace(&mut self.intent, Intent::Default)
   }
 
   pub fn set_intent(&mut self, intent: Intent) {
@@ -186,10 +184,5 @@ impl StackFrame {
   #[inline]
   pub fn render_output_value(&mut self) -> Option<RantValue> {
     self.output.take().map(|o| o.render_value())
-  }
-  
-  #[inline]
-  pub fn render_output_string(&mut self) -> Option<RantString> {
-    self.output.take().map(|o| o.render_string())
   }
 }
