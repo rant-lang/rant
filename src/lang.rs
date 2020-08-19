@@ -179,13 +179,13 @@ pub struct FunctionDef {
   pub id: VarAccessPath,
   pub params: Vec<Parameter>,
   pub capture_vars: Rc<Vec<Identifier>>,
-  pub body: Rc<Block>,
+  pub body: Block,
 }
 
 /// Describes a boxing (closure) operation to turn a block into a function.
 #[derive(Debug)]
 pub struct ClosureExpr {
-  pub expr: Rc<Block>,
+  pub expr: Block,
   pub params: Vec<Parameter>,
   pub capture_vars: Rc<Vec<Identifier>>,
 }
@@ -198,14 +198,23 @@ pub struct AnonFunctionCall {
   pub args: Vec<Rc<Sequence>>,
 }
 
+/// Key creation methods for map initializer entries.
+#[derive(Debug)]
+pub enum MapKeyExpr {
+  /// Map key is evaluated from an expression at runtime.
+  Dynamic(Block),
+  /// Map key is evaluated at compile time from an identifier.
+  Static(RantString),
+}
+
 /// Rant Syntax Tree
 #[derive(Debug)]
 pub enum RST {
   Nop,
   Sequence(Rc<Sequence>),
   Block(Block),
-  List(Vec<Rc<Sequence>>),
-  Map(Vec<(RST, Rc<Sequence>)>),
+  ListInit(Vec<Rc<Sequence>>),
+  MapInit(Vec<(MapKeyExpr, Rc<Sequence>)>),
   Closure(ClosureExpr),
   AnonFuncCall(AnonFunctionCall),
   FuncCall(FunctionCall),
@@ -227,8 +236,8 @@ impl RST {
     match self {
       RST::Sequence(_) =>                     "sequence",
       RST::Block(..) =>                       "block",
-      RST::List(_) =>                         "list",
-      RST::Map(_) =>                          "map",
+      RST::ListInit(_) =>                     "list",
+      RST::MapInit(_) =>                      "map",
       RST::Closure(_) =>                      "closure",
       RST::AnonFuncCall(_) =>                 "anonymous function call",
       RST::FuncCall(_) =>                     "function call",

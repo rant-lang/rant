@@ -79,6 +79,8 @@ pub enum Problem {
   UnclosedFunctionSignature,
   UnclosedStringLiteral,
   UnclosedVariableAccess,
+  UnclosedList,
+  UnclosedMap,
   MultipleVariadicParams,
   MissingFunctionBody,
   UnclosedFunctionBody,
@@ -116,6 +118,8 @@ impl Problem {
       Problem::UnclosedStringLiteral =>                           "R-0010",
       Problem::MultipleVariadicParams =>                          "R-0011",
       Problem::UnclosedVariableAccess =>                          "R-0012",
+      Problem::UnclosedList =>                                    "R-0013",
+      Problem::UnclosedMap =>                                     "R-0014",
       
       // Access path errors (0020 - 0029)
       Problem::MissingIdentifier =>                               "R-0020",
@@ -164,6 +168,8 @@ impl Problem {
       Problem::FileNotFound(file) => format!("file not found: '{}'", file),
       Problem::FileIOError(err) => format!("filesystem error: {}", err),
       Problem::UnclosedVariableAccess => "unclosed variable accessor; expected '>'".to_owned(),
+      Problem::UnclosedList => "unclosed list initializer; expected ')'".to_owned(),
+      Problem::UnclosedMap => "unclosed map initializer; expected ')'".to_owned(),
     }
   }
   
@@ -187,6 +193,8 @@ impl Problem {
       Problem::DuplicateParameter(_) => "rename parameter to something unique".to_owned(),
       Problem::MultipleVariadicParams => "remove extra variadic parameter".to_owned(),
       Problem::UnclosedVariableAccess => "no matching '>' found".to_owned(),
+      Problem::UnclosedList => "no matching ')' found".to_owned(),
+      Problem::UnclosedMap => "no matching ')' found".to_owned(),
       _ => return None
     })
   }

@@ -27,7 +27,19 @@ enum SequenceParseMode {
   /// Parse a sequence like a variable assignment value.
   ///
   /// Breaks on `RightAngle`.
-  VariableAssignment
+  VariableAssignment,
+  /// Parse a sequence like a collection initializer element.
+  ///
+  /// Breaks on `Semi` and `RightParen`.
+  CollectionInit,
+}
+
+/// What type of collection initializer to parse?
+enum CollectionInitKind {
+  /// Parse a list
+  List,
+  /// Parse a map
+  Map
 }
 
 /// Indicates what kind of token terminated a sequence read.
@@ -48,6 +60,10 @@ enum SequenceEndType {
   AnonFuncctionExprNoArgs,
   /// Variable accessor was terminated by `RightAngle`.
   VariableAccessEnd,
+  /// Collection initializer was terminated by `RightParen`.
+  CollectionInitEnd,
+  /// Collection initializer was termianted by `Semi`.
+  CollectionInitDelim,
 }
 
 /// Checks if an identifier (variable name, arg name, static map key) is valid
@@ -262,6 +278,34 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             _ => unexpected_token_error!()
           }
         }),
+
+        // Map initializer
+        RantToken::At => no_flags!(on {
+          match self.reader.next_solid() {
+            Some((RantToken::LeftParen, _)) => {
+              self.parse_collection_initializer(CollectionInitKind::Map, &span)?
+            },
+            _ => {
+              self.syntax_error(Problem::ExpectedToken("(".to_owned()), &self.reader.last_token_span());
+              RST::EmptyVal
+            },
+          }
+        }),
+
+        // List initializer
+        RantToken::LeftParen => no_flags!(on {
+          self.parse_collection_initializer(CollectionInitKind::List, &span)?
+        }),
+
+        // Collection init termination
+        RantToken::RightParen => no_flags!({
+          match mode {
+            SequenceParseMode::CollectionInit => {
+              return Ok((sequence, SequenceEndType::CollectionInitEnd, true))
+            },
+            _ => unexpected_token_error!()
+          }
+        }),
         
         // Function creation or call
         RantToken::LeftBracket => {
@@ -402,11 +446,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }
         }),
 
-        // Semicolon can be either fragment or param separator.
+        // Semicolon can be a fragment, collection element separator, or argument separator.
         RantToken::Semi => no_flags!({
           match mode {
             // If we're inside a function argument, terminate the sequence
             SequenceParseMode::FunctionArg => return Ok((sequence, SequenceEndType::FunctionArgEndNext, true)),
+            SequenceParseMode::CollectionInit => return Ok((sequence, SequenceEndType::CollectionInitDelim, true)),
             // If we're anywhere else, just print the semicolon like normal text
             _ => seq_add!(RST::Fragment(RantString::from(";")))
           }
@@ -449,6 +494,105 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     
     // Return the top-level sequence
     Ok((sequence, SequenceEndType::ProgramEnd, is_seq_printing))
+  }
+
+  fn parse_collection_initializer(&mut self, kind: CollectionInitKind, start_span: &Range<usize>) -> ParseResult<RST> {
+    match kind {
+      CollectionInitKind::List => {
+        self.reader.skip_ws();
+
+        // Exit early on empty list
+        if self.reader.eat_where(|token| matches!(token, Some((RantToken::RightParen, ..)))) {
+          return Ok(RST::ListInit(vec![]))
+        }
+        
+        let mut sequences = vec![];
+
+        loop {
+          self.reader.skip_ws();
+
+          let (seq, seq_end, _) = self.parse_sequence(SequenceParseMode::CollectionInit)?;
+    
+          match seq_end {
+            SequenceEndType::CollectionInitDelim => {
+              sequences.push(Rc::new(seq));
+            },
+            SequenceEndType::CollectionInitEnd => {
+              sequences.push(Rc::new(seq));
+              break
+            },
+            SequenceEndType::ProgramEnd => {
+              self.syntax_error(Problem::UnclosedList, &super_range(start_span, &self.reader.last_token_span()));
+              return Err(())
+            },
+            _ => unreachable!()
+          }
+        }
+        Ok(RST::ListInit(sequences))
+      },
+      CollectionInitKind::Map => {
+        let mut pairs = vec![];
+
+        loop {
+          let key_expr = match self.reader.next_solid() {
+            // Allow blocks as dynamic keys
+            Some((RantToken::LeftBrace, _)) => {
+              MapKeyExpr::Dynamic(self.parse_block(PrintFlag::Hint)?)
+            },
+            // Allow fragments as keys if they are valid identifiers
+            Some((RantToken::Fragment, span)) => {
+              let key = self.reader.last_token_string();
+              if !is_valid_ident(key.as_str()) {
+                self.syntax_error(Problem::InvalidIdentifier(key.to_string()), &span);
+              }
+              MapKeyExpr::Static(key)
+            },
+            // Allow string literals as static keys
+            Some((RantToken::StringLiteral(s), _)) => {
+              MapKeyExpr::Static(s)
+            },
+            // End of map
+            Some((RantToken::RightParen, _)) => break,
+            // Soft error on anything weird
+            Some(_) => {
+              self.unexpected_last_token_error();
+              MapKeyExpr::Static(self.reader.last_token_string())
+            },
+            // Hard error on EOF
+            None => {
+              self.syntax_error(Problem::UnclosedMap, &super_range(start_span, &self.reader.last_token_span()));
+              return Err(())
+            }
+          };
+
+          self.reader.skip_ws();
+          if !self.reader.eat_where(|tok| matches!(tok, Some((RantToken::Equals, ..)))) {
+            self.syntax_error(Problem::ExpectedToken("=".to_owned()), &self.reader.last_token_span());
+            return Err(())
+          }
+          self.reader.skip_ws();
+          let (value_expr, value_end, _) = self.parse_sequence(SequenceParseMode::CollectionInit)?;
+
+          match value_end {
+            SequenceEndType::CollectionInitDelim => {
+              pairs.push((key_expr, Rc::new(value_expr)));
+            },
+            SequenceEndType::CollectionInitEnd => {
+              pairs.push((key_expr, Rc::new(value_expr)));
+              break
+            },
+            SequenceEndType::ProgramEnd => {
+              self.syntax_error(Problem::UnclosedMap, &super_range(start_span, &self.reader.last_token_span()));
+              return Err(())
+            },
+            _ => unreachable!()
+          }
+        }
+
+        Ok(RST::MapInit(pairs))
+      },
+    }
+    
   }
 
   fn parse_func_params(&mut self, start_span: &Range<usize>) -> ParseResult<Vec<Parameter>> {
@@ -595,7 +739,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           match self.reader.next_solid() {
             Some((RantToken::LeftBrace, _)) => {
               // TODO: Handle captured variables in function bodies
-              let body = Rc::new(self.parse_block(PrintFlag::None)?);
+              let body = self.parse_block(PrintFlag::None)?;
               
               Ok(RST::FuncDef(FunctionDef {
                 id: func_id,
@@ -621,7 +765,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Closure params
           let params = self.parse_func_params(&start_span)?;
           // TODO: Handle captured variables in closure bodies
-          let body = Rc::new(self.parse_block(PrintFlag::None)?);
+          let body = self.parse_block(PrintFlag::None)?;
               
           Ok(RST::Closure(ClosureExpr {
             capture_vars: Rc::new(vec![]),
@@ -782,7 +926,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   /// Parses a block.
   fn parse_block(&mut self, flag: PrintFlag) -> ParseResult<Block> {
     // Get position of starting brace for error reporting
-    let start_index = self.reader.last_token_pos();
+    let start_pos = self.reader.last_token_pos();
     // Keeps track of inherited hinting
     let mut auto_hint = false;
     // Block content
@@ -798,11 +942,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         },
         SequenceEndType::BlockEnd => {
           sequences.push(Rc::new(seq));
-          break;
+          break
         },
         SequenceEndType::ProgramEnd => {
           // Hard error if block isn't closed
-          let err_span = start_index .. self.source.len();
+          let err_span = start_pos .. self.source.len();
           self.syntax_error(Problem::UnclosedBlock, &err_span);
           return Err(())
         },
@@ -841,7 +985,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
   fn parse_var_accessor(&mut self) -> ParseResult<RST> {
     self.reader.skip_ws();
-
     let is_def = self.reader.eat_where(|t| matches!(t, Some((RantToken::Dollar, ..))));
     self.reader.skip_ws();
     
