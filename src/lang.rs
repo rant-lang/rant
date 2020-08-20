@@ -228,7 +228,7 @@ pub enum RST {
   Nop,
   Sequence(Rc<Sequence>),
   Block(Block),
-  ListInit(Vec<Rc<Sequence>>),
+  ListInit(Rc<Vec<Rc<Sequence>>>),
   MapInit(Rc<Vec<(MapKeyExpr, Rc<Sequence>)>>),
   Closure(ClosureExpr),
   AnonFuncCall(AnonFunctionCall),

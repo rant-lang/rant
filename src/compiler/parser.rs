@@ -344,6 +344,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let var_accessor = self.parse_var_accessor()?;
           match var_accessor {
             RST::VarGet(..) => {
+              is_seq_printing = true;
               whitespace!(allow);
             },
             RST::VarSet(..) | RST::VarDef(..) => {
@@ -504,7 +505,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
         // Exit early on empty list
         if self.reader.eat_where(|token| matches!(token, Some((RantToken::RightParen, ..)))) {
-          return Ok(RST::ListInit(vec![]))
+          return Ok(RST::ListInit(Rc::new(vec![])))
         }
         
         let mut sequences = vec![];
@@ -529,7 +530,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             _ => unreachable!()
           }
         }
-        Ok(RST::ListInit(sequences))
+        Ok(RST::ListInit(Rc::new(sequences)))
       },
       CollectionInitKind::Map => {
         let mut pairs = vec![];
