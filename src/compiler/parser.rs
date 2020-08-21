@@ -229,7 +229,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Block start
         RantToken::LeftBrace => {
           // Read in the entire block
-          let block = self.parse_block(next_print_flag)?;
+          let block = self.parse_block(false, next_print_flag)?;
           
           // Decide what to do with surrounding whitespace
           match next_print_flag {                        
@@ -539,7 +539,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let key_expr = match self.reader.next_solid() {
             // Allow blocks as dynamic keys
             Some((RantToken::LeftBrace, _)) => {
-              MapKeyExpr::Dynamic(self.parse_block(PrintFlag::Hint)?)
+              MapKeyExpr::Dynamic(self.parse_block(false, PrintFlag::Hint)?)
             },
             // Allow fragments as keys if they are valid identifiers
             Some((RantToken::Fragment, span)) => {
@@ -728,7 +728,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     let start_span = self.reader.last_token_span();
     self.reader.skip_ws();
     // Check if we're defining a function (with [$ ...]) or creating a closure (with [? ...])
-    if let Some((func_access_type_token, func_access_type_span)) 
+    if let Some((func_access_type_token, _func_access_type_span)) 
     = self.reader.take_where(|t| matches!(t, Some((RantToken::Dollar, ..)) | Some((RantToken::Question, ..)))) {
       match func_access_type_token {
         // Function definition
@@ -738,41 +738,30 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Function params
           let params = self.parse_func_params(&start_span)?;
           // Read function body
-          match self.reader.next_solid() {
-            Some((RantToken::LeftBrace, _)) => {
-              // TODO: Handle captured variables in function bodies
-              let body = Rc::new(self.parse_block(PrintFlag::None)?);
+          // TODO: Handle captured variables in function bodies
+          self.reader.skip_ws();          
+          let body = Rc::new(self.parse_block(true, PrintFlag::None)?);
               
-              Ok(RST::FuncDef(FunctionDef {
-                id: Rc::new(func_id),
-                params: Rc::new(params),
-                body,
-                capture_vars: Rc::new(vec![]),
-              }))
-            },
-            // If something that isn't a block is there, emit a soft error and return a NOP
-            Some((_, span)) => {
-              self.syntax_error(Problem::ExpectedToken("{".to_owned()), &span);
-              Ok(RST::Nop)
-            },
-            // Hard error on EOF
-            None => {
-              self.syntax_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
-              Err(())
-            }
-          }
+          Ok(RST::FuncDef(FunctionDef {
+            id: Rc::new(func_id),
+            params: Rc::new(params),
+            body,
+            capture_vars: Rc::new(vec![]),
+          }))
         },
         // Closure
         RantToken::Question => {
           // Closure params
           let params = self.parse_func_params(&start_span)?;
+          self.reader.skip_ws();
+          // Read function body
           // TODO: Handle captured variables in closure bodies
-          let body = self.parse_block(PrintFlag::None)?;
+          let body = Rc::new(self.parse_block(true, PrintFlag::None)?);
               
           Ok(RST::Closure(ClosureExpr {
             capture_vars: Rc::new(vec![]),
             expr: body,
-            params
+            params: Rc::new(params),
           }))
         },
         _ => unreachable!()
@@ -877,7 +866,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       },
       // An expression can also be used to provide the variable
       Some((RantToken::LeftBrace, _)) => {
-        let expr_block = self.parse_block(PrintFlag::Hint)?;
+        let expr_block = self.parse_block(false, PrintFlag::Hint)?;
         idparts.push(VarAccessComponent::Expression(Rc::new(expr_block)));
       },
       Some((RantToken::Integer(_), span)) => {
@@ -917,7 +906,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           },
           // Dynamic key
           Some((RantToken::LeftBrace, _)) => {
-            let expr_block = self.parse_block(PrintFlag::Hint)?;
+            let expr_block = self.parse_block(false, PrintFlag::Hint)?;
             idparts.push(VarAccessComponent::Expression(Rc::new(expr_block)));
           },
           Some((.., span)) => {
@@ -936,7 +925,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
   
   /// Parses a block.
-  fn parse_block(&mut self, flag: PrintFlag) -> ParseResult<Block> {
+  fn parse_block(&mut self, expect_opening_brace: bool, flag: PrintFlag) -> ParseResult<Block> {
+    if expect_opening_brace && !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
+      self.syntax_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
+      return Err(())
+    }
+
     // Get position of starting brace for error reporting
     let start_pos = self.reader.last_token_pos();
     // Keeps track of inherited hinting

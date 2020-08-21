@@ -335,7 +335,7 @@ impl<'rant> VM<'rant> {
             let func = RantValue::Function(Rc::new(RantFunction {
               params: Rc::clone(params),
               body: RantFunctionInterface::User(Rc::clone(body)),
-              captured_vars: Default::default(), // TODO
+              captured_vars: Default::default(), // TODO: Actually capture variables, don't be lazy!
               min_arg_count: params.iter().take_while(|p| p.is_required()).count(),
               vararg_index: params.iter().skip_while(|p| !p.varity.is_variadic()).count(),
             }));
@@ -352,7 +352,26 @@ impl<'rant> VM<'rant> {
 
             continue 'from_the_top;
           },
-          _ => todo!()
+          RST::Closure(closure_expr) => {
+            let ClosureExpr {
+              capture_vars,
+              expr,
+              params,
+            } = closure_expr;
+
+            let func = RantValue::Function(Rc::new(RantFunction {
+              params: Rc::clone(params),
+              body: RantFunctionInterface::User(Rc::clone(&expr)),
+              captured_vars: Default::default(), // TODO: Capture variables on anonymous functions
+              min_arg_count: params.iter().take_while(|p| p.is_required()).count(),
+              vararg_index: params.iter().skip_while(|p| !p.varity.is_variadic()).count(),
+            }));
+
+            self.cur_frame_mut().write_value(func);
+          }
+          rst => {
+            panic!(format!("Unsupported RST: {:?}", rst));
+          }
         }
       }
       

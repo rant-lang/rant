@@ -59,6 +59,7 @@ impl VarAccessPath {
     Self(parts)
   }
 
+  /// Returns a list of dynamic keys used by the path in order.
   pub fn dynamic_keys(&self) -> Vec<Rc<Block>> {
     self.iter().filter_map(|c| {
       match c {
@@ -66,6 +67,18 @@ impl VarAccessPath {
         _ => None
       }
     }).collect()
+  }
+
+  /// If the path statically accesses a variable, returns the name of the variable accessed; otherwise, returns `None`.
+  pub fn capture_var_name(&self) -> Option<Identifier> {
+    if self.len() > 0 {
+      match &self[0] {
+        VarAccessComponent::Name(id) => Some(id.clone()),
+        _ => None,
+      }
+    } else {
+      None
+    }
   }
 }
 
@@ -218,8 +231,8 @@ pub struct FunctionDef {
 /// Describes a boxing (closure) operation to turn a block into a function.
 #[derive(Debug)]
 pub struct ClosureExpr {
-  pub expr: Block,
-  pub params: Vec<Parameter>,
+  pub expr: Rc<Block>,
+  pub params: Rc<Vec<Parameter>>,
   pub capture_vars: Rc<Vec<Identifier>>,
 }
 
