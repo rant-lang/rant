@@ -1,5 +1,5 @@
 use std::{rc::Rc, ops::{DerefMut, Deref}};
-use std::{collections::VecDeque, mem};
+use std::{collections::VecDeque};
 use crate::{lang::{Sequence, RST}, RantMap, RantValue, RantResult, RantError, RuntimeErrorType, Rant};
 use super::{OutputBuffer, output::OutputWriter, Intent};
 

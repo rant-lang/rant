@@ -799,7 +799,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Create final node for anon function call
         let afcall = AnonFunctionCall {
           expr: Rc::new(func_expr),
-          args: func_args,
+          args: Rc::new(func_args),
           flag
         };
 

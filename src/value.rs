@@ -1,5 +1,5 @@
-use crate::{runtime::VM, lang::{Block, RST, Parameter}, RantResult};
-use crate::{collections::*, util::*, ToRant};
+use crate::{runtime::VM, lang::{Block, Parameter}, RantResult};
+use crate::{collections::*, util::*};
 use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg}, cmp, cell::RefCell};
 use std::mem;
 use cast::*;
@@ -203,7 +203,7 @@ impl Add for RantValue {
       (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Integer(bi64(a) + bi64(b)),
       (RantValue::Boolean(a), RantValue::Integer(b)) => RantValue::Integer(bi64(a).saturating_add(b)),
       (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) + b),
-      (RantValue::List(a), RantValue::List(b)) => RantValue::List(Rc::new(RefCell::new(RantList::from_iter(a.borrow().iter().cloned().chain(b.borrow().iter().cloned()))))),
+      (RantValue::List(a), RantValue::List(b)) => RantValue::List(Rc::new(RefCell::new(a.borrow().iter().cloned().chain(b.borrow().iter().cloned()).collect()))),
       (lhs, rhs) => RantValue::String(format!("{}{}", lhs, rhs))
     }
   }

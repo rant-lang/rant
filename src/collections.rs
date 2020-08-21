@@ -18,9 +18,11 @@ impl RantList {
     Self(Vec::with_capacity(capacity))
   }
 
-  pub fn from_iter<Iter: Iterator<Item = RantValue>>(iterator: Iter) -> Self {
-    let list = iterator.collect();
-    Self(list)
+}
+
+impl Default for RantList {
+  fn default() -> Self {
+    Self::new()
   }
 }
 

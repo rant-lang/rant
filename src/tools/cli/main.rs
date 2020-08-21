@@ -1,15 +1,19 @@
+#![allow(clippy::single_component_path_imports)]
+
 use argh::FromArgs;
+use codemap_diagnostic::{ColorConfig, Emitter, SpanLabel, SpanStyle, Diagnostic, Level};
+use codemap::CodeMap;
 use colored::*;
+use compiler::Severity;
+use ctrlc;
+use exitcode::{self, ExitCode};
+use rand::Rng;
 use rant::*;
 use rant::compiler::CompilerMessage;
-use exitcode;
-use rand::Rng;
-use std::io::{self, Write};
 use std::{path::Path, time::Instant};
+use std::io::{self, Write};
 use std::process;
-use codemap::CodeMap;
-use codemap_diagnostic::{ColorConfig, Emitter, SpanLabel, SpanStyle, Diagnostic, Level};
-use compiler::Severity;
+use std::sync::mpsc;
 
 /// Run Rant code from your terminal.
 #[derive(FromArgs)]
@@ -48,6 +52,21 @@ macro_rules! log_error {
 }
 
 fn main() {
+  // Signal handling
+  let (sig_tx, sig_rx) = mpsc::channel::<()>();
+  ctrlc::set_handler(move || {
+    sig_tx.send(()).unwrap();
+  }).expect("failed to create signal handler");
+
+  macro_rules! check_ctrl_c {
+    () => {
+      if sig_rx.try_recv().is_ok() {
+        process::exit(exitcode::OK)
+      }
+    }
+  }
+
+  // Read cmdline args
   let args: CliArgs = argh::from_env();
   
   if args.version {
@@ -61,11 +80,13 @@ fn main() {
   
   let seed = args.seed.unwrap_or_else(|| rand::thread_rng().gen());
   let mut rant = Rant::with_seed(seed);
+
+  check_ctrl_c!();
   
   // Run inline code from cmdline args
   if let Some(code) = &args.run_code {
-    run_rant(&mut rant, ProgramSource::Inline(code.to_owned()), &args);
-    return
+    let code = run_rant(&mut rant, ProgramSource::Inline(code.to_owned()), &args);
+    process::exit(code);
     // Run input file from cmdline args
   } else if let Some(path) = &args.in_file {
     // Make sure it exists
@@ -73,17 +94,19 @@ fn main() {
       log_error!("file not found: {}", path);
       process::exit(exitcode::NOINPUT);
     }
-    run_rant(&mut rant, ProgramSource::FilePath(path.clone()), &args);
-    return
+    let code = run_rant(&mut rant, ProgramSource::FilePath(path.clone()), &args);
+    process::exit(code);
   }
   
   loop {
+    check_ctrl_c!();
     print!(">> ");
     io::stdout().flush().unwrap();
     let mut input = String::new();
     
     match io::stdin().read_line(&mut input) {
       Ok(_) => {
+        check_ctrl_c!();
         run_rant(&mut rant, ProgramSource::Stdin(input.to_owned()), &args);
       },
       Err(_) => log_error!("failed to read input")
@@ -91,7 +114,7 @@ fn main() {
   }
 }
 
-fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) {
+fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) -> ExitCode {
   let show_stats = !args.quiet;
   let start_time = Instant::now();
   let mut problems: Vec<CompilerMessage> = vec![];
@@ -155,7 +178,7 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) {
       let errc = problems.iter().filter(|msg| msg.is_error()).count();
       
       eprintln!("\n{}\n", format!("{} ({} {} found)", "Compile failed".bright_red(), errc, if errc == 1 { "error" } else { "errors" }).bold());
-      return
+      return exitcode::DATAERR
     }
   }
   
@@ -174,12 +197,14 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) {
       if show_stats {
         println!("{} in {:?} (seed = {:016x})", "Executed".bright_green().bold(), run_time, seed);
       }
+      exitcode::OK
     },
     Err(err) => {
       eprintln!("{}: {:?}", "Runtime error".bright_red().bold(), err);
       if show_stats {
         eprintln!("{} in {:?} (seed = {:016x})", "Crashed".bright_red().bold(), run_time, seed);
       }
+      exitcode::SOFTWARE
     }
   }
 }

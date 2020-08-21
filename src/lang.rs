@@ -15,6 +15,21 @@ pub enum PrintFlag {
   Sink
 }
 
+impl PrintFlag {
+  #[inline]
+  pub fn prioritize(prev: PrintFlag, next: PrintFlag) -> PrintFlag {
+    match next {
+      PrintFlag::None => prev,
+      _ => next,
+    }
+  }
+
+  #[inline]
+  pub fn is_sink(&self) -> bool {
+    matches!(self, PrintFlag::Sink)
+  }
+}
+
 /// Identifiers are special strings used to name variables and static (non-procedural) map keys.
 /// This is just a wrapper around a SmartString that enforces identifier formatting requirements.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -241,7 +256,7 @@ pub struct ClosureExpr {
 pub struct AnonFunctionCall {
   pub flag: PrintFlag,
   pub expr: Rc<Sequence>,
-  pub args: Vec<Rc<Sequence>>,
+  pub args: Rc<Vec<Rc<Sequence>>>,
 }
 
 /// Key creation methods for map initializer entries.

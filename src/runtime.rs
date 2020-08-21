@@ -156,7 +156,7 @@ impl<'rant> VM<'rant> {
               } else {
                 self.cur_frame_mut().push_intent_front(Intent::BuildDynamicGetter { path, dynamic_key_count, pending_exprs, override_print });
               }
-              self.push_block_frame(block.as_ref(), true, None)?;
+              self.push_block_frame(block.as_ref(), true, None, PrintFlag::None)?;
             } else {
               self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print });
             }
@@ -193,7 +193,7 @@ impl<'rant> VM<'rant> {
                 if argc < func.min_arg_count {
                   runtime_error!(RuntimeErrorType::ArgumentMismatch, format!("arguments don't match; expected at least {}, found {}", func.min_arg_count, argc))
                 }
-                // Condense args for to turn variadic args into one arg
+                // Condense args to turn variadic args into one arg
                 let mut condensed_args = args.drain(0..func.vararg_start_index).collect::<Vec<RantValue>>();
                 let vararg = RantValue::List(Rc::new(RefCell::new(args.into_iter().collect::<RantList>())));
                 condensed_args.push(vararg);
@@ -217,7 +217,8 @@ impl<'rant> VM<'rant> {
                     func_locals.raw_set(param.name.as_str(), arg);
                   }
                   // Push the function onto the call stack
-                  self.push_block_frame(user_func.as_ref(), false, Some(func_locals))?;
+                  // TODO: Respect flag on function call
+                  self.push_block_frame(user_func.as_ref(), false, Some(func_locals), flag)?;
                   continue 'from_the_top;
                 },
               }
@@ -229,10 +230,10 @@ impl<'rant> VM<'rant> {
               if pending_exprs.is_empty() {
                 // Set value once this frame is active again
                 self.cur_frame_mut().push_intent_front(Intent::SetValue { path, auto_def, expr_count });
-                self.push_block_frame(block.as_ref(), true, None)?;
+                self.push_block_frame(block.as_ref(), true, None, PrintFlag::None)?;
               } else {
                 self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, auto_def, expr_count, pending_exprs, val_source });
-                self.push_block_frame(block.as_ref(), true, None)?;
+                self.push_block_frame(block.as_ref(), true, None, PrintFlag::None)?;
                 continue 'from_the_top;
               }
               
@@ -293,14 +294,13 @@ impl<'rant> VM<'rant> {
               let (key_expr, val_expr) = &init[pair_index];
               if let MapKeyExpr::Dynamic(key_expr_block) = key_expr {
                 // Push dynamic key expression onto call stack
-                self.push_block_frame(key_expr_block, true, None)?;
+                self.push_block_frame(key_expr_block, true, None, PrintFlag::None)?;
               }
               // Push value expression onto call stack
               self.push_frame(Rc::clone(val_expr), true, None)?;
               continue 'from_the_top;
             }
-          }
-          _ => todo!()
+          },
         }
       }
       
@@ -322,7 +322,7 @@ impl<'rant> VM<'rant> {
             continue 'from_the_top;
           },
           RST::Block(block) => {
-            self.push_block_frame(block, false, None)?;
+            self.push_block_frame(block, false, None, PrintFlag::None)?;
             continue 'from_the_top;
           },
           RST::VarDef(vname, val_expr) => {
@@ -421,10 +421,32 @@ impl<'rant> VM<'rant> {
               body: RantFunctionInterface::User(Rc::clone(&expr)),
               captured_vars: Default::default(), // TODO: Capture variables on anonymous functions
               min_arg_count: params.iter().take_while(|p| p.is_required()).count(),
-              vararg_start_index: params.iter().skip_while(|p| !p.varity.is_variadic()).count(),
+              vararg_start_index: params.iter()
+                .enumerate()
+                .find_map(|(i, p)| if p.varity.is_variadic() { Some(i) } else { None })
+                .unwrap_or_else(|| params.len()),
             }));
 
             self.cur_frame_mut().write_value(func);
+          },
+          RST::AnonFuncCall(afcall) => {
+            let AnonFunctionCall {
+              expr,
+              args,
+              flag,
+            } = afcall;
+
+            // Evaluate arguments after function is evaluated
+            self.cur_frame_mut().push_intent_front(Intent::Invoke {
+              arg_exprs: Rc::clone(args),
+              eval_count: 0,
+              flag: *flag
+            });
+
+            // Push function expression onto stack
+            self.push_frame(Rc::clone(expr), true, None)?;
+
+            continue 'from_the_top;
           },
           RST::FuncCall(fcall) => {
             let FunctionCall {
@@ -632,9 +654,9 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
-  fn push_block_frame(&mut self, block: &Block, override_print: bool, locals: Option<RantMap>) -> RantResult<()> {
+  fn push_block_frame(&mut self, block: &Block, override_print: bool, locals: Option<RantMap>, flag: PrintFlag) -> RantResult<()> {
     let elem = Rc::clone(&block.elements[self.rng.next_usize(block.len())]);
-    let is_printing = block.flag != PrintFlag::Sink;
+    let is_printing = !PrintFlag::prioritize(block.flag, flag).is_sink();
     if is_printing && !override_print {
       self.cur_frame_mut().push_intent_front(Intent::PrintLastOutput);
     }
