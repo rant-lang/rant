@@ -6,7 +6,7 @@
 #![allow(unused_variables)]
 
 use crate::value::*;
-use crate::{runtime::VM, RantError, RantResult, lang::{Varity, Parameter, Identifier}, RantString};
+use crate::{runtime::VM, RantError, RantResult, lang::{Varity, Parameter, Identifier}, RantString, RantMap, RantMapRef};
 use cast::*;
 use cast::Error as CastError;
 use std::{rc::Rc, ops::{DerefMut, Deref}};
@@ -183,6 +183,19 @@ impl FromRant for String {
     Ok(val.to_string())
   }
 
+  fn is_rant_optional() -> bool {
+    false
+  }
+}
+
+impl FromRant for RantMapRef {
+  fn from_rant(val: RantValue) -> RantResult<Self> {
+    if let RantValue::Map(map_ref) = val {
+      Ok(map_ref)
+    } else {
+      Err(RantError::ValueConversionError { from: val.type_name(), to: "map", message: None })
+    }
+  }
   fn is_rant_optional() -> bool {
     false
   }

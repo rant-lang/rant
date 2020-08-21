@@ -1,6 +1,6 @@
 use crate::{runtime::VM, lang::{Block, Parameter}, RantResult};
 use crate::{collections::*, util::*};
-use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div}, cmp, cell::RefCell};
+use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div, Rem}, cmp, cell::RefCell};
 use std::mem;
 use cast::*;
 
@@ -17,8 +17,8 @@ pub enum RantValue {
   Integer(i64),
   Boolean(bool),
   Function(Rc<RantFunction>),
-  List(Rc<RefCell<RantList>>),
-  Map(Rc<RefCell<RantMap>>),
+  List(RantListRef),
+  Map(RantMapRef),
   Empty,
 }
 
@@ -268,8 +268,58 @@ impl Div for RantValue {
   }
 }
 
+impl Rem for RantValue {
+  type Output = RantValue;
+  fn rem(self, rhs: Self) -> Self::Output {
+    match (self, rhs) {
+      (RantValue::Empty, _) | (_, RantValue::Empty) => RantValue::Empty,
+      (RantValue::Integer(a), RantValue::Integer(b)) => RantValue::Integer(a % b),
+      (RantValue::Integer(a), RantValue::Float(b)) => RantValue::Float((a as f64) % b),
+      (RantValue::Integer(a), RantValue::Boolean(b)) => RantValue::Integer(a % bi64(b)),
+      _ => RantValue::nan()
+    }
+  }
+}
+
 #[allow(clippy::len_without_is_empty)]
 impl RantValue {
+  pub fn into_rant_int(self) -> RantValue {
+    match self {
+      RantValue::Integer(_) => self,
+      RantValue::Float(n) => RantValue::Integer(n as i64),
+      RantValue::String(s) => {
+        match s.parse() {
+          Ok(n) => RantValue::Integer(n),
+          Err(_) => RantValue::Empty,
+        }
+      },
+      RantValue::Boolean(b) => RantValue::Integer(bi64(b)),
+      _ => RantValue::Empty
+    }
+  }
+
+  pub fn into_rant_float(self) -> RantValue {
+    match self {
+      RantValue::Float(_) => self,
+      RantValue::Integer(n) => RantValue::Float(n as f64),
+      RantValue::String(s) => {
+        match s.parse() {
+          Ok(n) => RantValue::Float(n),
+          Err(_) => RantValue::Empty,
+        }
+      },
+      RantValue::Boolean(b) => RantValue::Float(bf64(b)),
+      _ => RantValue::Empty
+    }
+  }
+
+  pub fn into_rant_string(self) -> RantValue {
+    match self {
+      RantValue::String(_) => self,
+      _ => RantValue::String(self.to_string())
+    }
+  }
+
   pub fn len(&self) -> usize {
     match self {
       // Length of string is character count

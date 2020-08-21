@@ -4,7 +4,7 @@
 
 use std::rc::Rc;
 use crate::{RantResult, runtime::{self, VM}};
-use crate::{RantValue, AsRantForeignFunc, RantMap, RequiredVarArgs};
+use crate::{RantValue, AsRantForeignFunc, RantMap, RequiredVarArgs, RantList, RantMapRef};
 
 fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> RantResult<()> {
   if !a.is_empty() {
@@ -62,10 +62,61 @@ fn num(vm: &mut VM, (a, b): (i64, i64)) -> RantResult<()> {
   Ok(())
 }
 
+fn numf(vm: &mut VM, (a, b): (f64, f64)) -> RantResult<()> {
+  let n = vm.rng().next_f64(a, b);
+  vm.cur_frame_mut().write_value(RantValue::Float(n));
+  Ok(())
+}
+
 fn pick(vm: &mut VM, list: RantValue) -> RantResult<()> {
   let index = vm.rng().next_usize(list.len());
   let item = runtime::convert_index_result(list.get_by_index(index as i64))?;
   vm.cur_frame_mut().write_value(item);
+  Ok(())
+}
+
+fn join(vm: &mut VM, (sep, list): (RantValue, Vec<RantValue>)) -> RantResult<()> {
+  let mut is_first = true;
+  let frame = vm.cur_frame_mut();
+  for val in list {
+    if is_first {
+      is_first = false;
+    } else {
+      frame.write_value(sep.clone());
+    }
+    frame.write_value(val);
+  }
+  Ok(())
+}
+
+fn proto(vm: &mut VM, map: RantMapRef) -> RantResult<()> {
+  vm.cur_frame_mut().write_value(map.borrow().proto().map_or(RantValue::Empty, RantValue::Map));
+  Ok(())
+}
+
+fn set_proto(vm: &mut VM, (map, proto): (RantMapRef, Option<RantMapRef>)) -> RantResult<()> {
+  map.borrow_mut().set_proto(proto);
+  Ok(())
+}
+
+fn to_int(vm: &mut VM, value: RantValue) -> RantResult<()> {
+  vm.cur_frame_mut().write_value(value.into_rant_int());
+  Ok(())
+}
+
+fn to_float(vm: &mut VM, value: RantValue) -> RantResult<()> {
+  vm.cur_frame_mut().write_value(value.into_rant_float());
+  Ok(())
+}
+
+fn to_string(vm: &mut VM, value: RantValue) -> RantResult<()> {
+  vm.cur_frame_mut().write_value(value.into_rant_string());
+  Ok(())
+}
+
+fn get(vm: &mut VM, key: String) -> RantResult<()> {
+  let val = vm.get_local(key.as_str())?;
+  vm.cur_frame_mut().write_value(val);
   Ok(())
 }
 
@@ -89,12 +140,25 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
   }
 
   load_funcs!(
-    alt,
-    add, sub, mul, div, 
-    mul_add as "mul-add",
-    len,
-    num as "n",
-    pick,
-    get_type as "type"
+    // General functions
+    alt, len, get_type as "type",
+
+    // Math functions
+    add, sub, mul, div, mul_add as "mul-add",
+
+    // Conversion functions
+    to_int as "int", to_float as "float", to_string as "string",
+
+    // Generator functions
+    num as "n", numf as "nf",
+
+    // Prototype functions
+    proto, set_proto as "set-proto",
+
+    // List functions
+    pick, join,
+
+    // Dynamic Variable Access functions
+    get
   );
 }

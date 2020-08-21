@@ -1,9 +1,12 @@
-use std::{rc::Rc, ops::{DerefMut, Deref}, iter::FromIterator};
+use std::{rc::Rc, ops::{DerefMut, Deref}, iter::FromIterator, cell::RefCell};
 use crate::{RantString, RantValue};
 use fnv::FnvHashMap;
 
 const DEFAULT_MAP_CAPACITY: usize = 16;
 const DEFAULT_LIST_CAPACITY: usize = 16;
+
+pub type RantMapRef = Rc<RefCell<RantMap>>;
+pub type RantListRef = Rc<RefCell<RantList>>;
 
 /// Represents Rant's `list` type, which stores an ordered collection of values.
 #[derive(Debug)]
@@ -56,7 +59,7 @@ pub struct RantMap {
   /// The physical contents of the map
   map: FnvHashMap<RantString, RantValue>,
   /// The prototype of the map
-  proto: Option<Rc<RantMap>>
+  proto: Option<RantMapRef>
 }
 
 impl RantMap {
@@ -73,6 +76,14 @@ impl RantMap {
   
   pub fn is_empty(&self) -> bool {
     self.map.is_empty()
+  }
+
+  pub fn proto(&self) -> Option<RantMapRef> {
+    self.proto.clone()
+  }
+
+  pub fn set_proto(&mut self, proto: Option<RantMapRef>) {
+    self.proto = proto;
   }
 
   #[inline]

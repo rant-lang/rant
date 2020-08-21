@@ -671,17 +671,17 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  fn set_local(&mut self, key: &str, val: RantValue) -> RantResult<()> {
+  pub(crate) fn set_local(&mut self, key: &str, val: RantValue) -> RantResult<()> {
     self.call_stack.set_local(self.engine, key, val)
   }
 
   #[inline(always)]
-  fn get_local(&self, key: &str) -> RantResult<RantValue> {
+  pub(crate) fn get_local(&self, key: &str) -> RantResult<RantValue> {
     self.call_stack.get_local(self.engine, key)
   }
 
   #[inline(always)]
-  fn def_local(&mut self, key: &str, val: RantValue) -> RantResult<()> {
+  pub(crate) fn def_local(&mut self, key: &str, val: RantValue) -> RantResult<()> {
     self.call_stack.def_local(self.engine, key, val)
   }
   
