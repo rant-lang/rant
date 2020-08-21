@@ -58,6 +58,15 @@ impl VarAccessPath {
   pub fn new(parts: Vec<VarAccessComponent>) -> Self {
     Self(parts)
   }
+
+  pub fn dynamic_keys(&self) -> Vec<Rc<Block>> {
+    self.iter().filter_map(|c| {
+      match c {
+        VarAccessComponent::Expression(expr) => Some(Rc::clone(expr)),
+        _ => None
+      }
+    }).collect()
+  }
 }
 
 impl Deref for VarAccessPath {
@@ -225,25 +234,46 @@ pub enum MapKeyExpr {
 /// Rant Syntax Tree
 #[derive(Debug)]
 pub enum RST {
+  /// No Operation
   Nop,
+  /// Program sequence
   Sequence(Rc<Sequence>),
+  /// Rant block containing zero or more sequences
   Block(Block),
+  /// List initializer
   ListInit(Rc<Vec<Rc<Sequence>>>),
+  /// Map initializer
   MapInit(Rc<Vec<(MapKeyExpr, Rc<Sequence>)>>),
+  /// Closure expression
   Closure(ClosureExpr),
+  /// Anonymous function call
   AnonFuncCall(AnonFunctionCall),
+  /// Named function call
   FuncCall(FunctionCall),
+  /// Function definition
   FuncDef(FunctionDef),
+  /// Variable definition
   VarDef(Identifier, Option<Rc<Sequence>>),
+  /// Value getter
   VarGet(Rc<VarAccessPath>),
+  /// Value setter
   VarSet(Rc<VarAccessPath>, Rc<Sequence>),
+  /// Fragment
   Fragment(RantString),
+  /// Whitespace
   Whitespace(RantString),
+  /// Integer value
   Integer(i64),
+  /// Floating-point value
   Float(f64),
+  /// Boolean value
   Boolean(bool),
+  /// Empty value
   EmptyVal,
-  DebugInfoUpdate(DebugInfo),
+  /// Provides debug information about the next sequence element
+  DebugInfoUpdateOuter(DebugInfo),
+  /// Provides debug information about the containing element
+  DebugInfoUpdateInner(DebugInfo),
 }
 
 impl RST {
@@ -292,6 +322,7 @@ impl Display for RST {
   }
 }
 
+/// Provides debug information about a program element.
 #[derive(Debug)]
 pub enum DebugInfo {
   Location { line: usize, col: usize },

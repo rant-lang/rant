@@ -996,6 +996,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
   }
 
+  /// Parses a value accessor (getter/setter/definition).
   fn parse_var_accessor(&mut self) -> ParseResult<RST> {
     self.reader.skip_ws();
     let is_def = self.reader.eat_where(|t| matches!(t, Some((RantToken::Dollar, ..))));

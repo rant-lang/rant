@@ -1,5 +1,6 @@
-use crate::{Rant, RantProgram, lang::*, RantResult, RantError, RuntimeErrorType, random::RantRng, RantValue, RantClosure, RantList, RantMap, RantString};
-use std::{rc::{Rc}, cell::{RefCell}, ops::{Deref}};
+use crate::*;
+use crate::lang::*;
+use std::{rc::Rc, cell::RefCell, ops::Deref};
 use resolver::Resolver;
 pub use stack::*;
 pub use output::*;
@@ -81,6 +82,44 @@ impl Intent {
   }
 }
 
+enum SetterKey<'a> {
+  Index(i64),
+  KeyRef(&'a str),
+  KeyString(RantString)
+}
+
+#[inline]
+fn convert_index_result(result: ValueIndexResult) -> RantResult<RantValue> {
+  match result {
+      Ok(val) => Ok(val),
+      Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
+  }
+}
+
+#[inline]
+fn convert_key_result(result: ValueKeyResult) -> RantResult<RantValue> {
+  match result {
+    Ok(val) => Ok(val),
+    Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
+  }
+}
+
+#[inline]
+fn convert_index_set_result(result: ValueIndexSetResult) -> RantResult<()> {
+  match result {
+    Ok(_) => Ok(()),
+    Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
+  }
+}
+
+#[inline]
+fn convert_key_set_result(result: ValueKeySetResult) -> RantResult<()> {
+  match result {
+    Ok(_) => Ok(()),
+    Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
+  }
+}
+
 impl<'rant> VM<'rant> {
   /// Runs the program.
   #[inline]
@@ -93,7 +132,7 @@ impl<'rant> VM<'rant> {
     // Run whatever is on the top of the call stack
     'from_the_top: while !self.is_stack_empty() {
       
-      // Handle intent
+      // Read frame's current intent and handle it before running the sequence
       match self.cur_frame_mut().take_intent() {
         Intent::Default => {},
         Intent::PrintLastOutput => {
@@ -125,6 +164,9 @@ impl<'rant> VM<'rant> {
         Intent::GetValue { path, expr_count } => {
           self.intent_get_value(path, expr_count)?;
         },
+        Intent::SetValue { path, expr_count } => {
+          self.intent_set_value(path, expr_count)?;
+        },
         Intent::BuildList { init, index, mut list } => {
           // Add latest evaluated value to list
           if index > 0 {
@@ -148,10 +190,8 @@ impl<'rant> VM<'rant> {
             let prev_pair = &init[pair_index - 1];
             // If the key is dynamic, there are two values to pop
             let key = match prev_pair {
-                (MapKeyExpr::Dynamic(_), _) => {
-                  RantString::from(self.pop_val()?.to_string())
-                }
-                (MapKeyExpr::Static(key), _) => key.clone()
+              (MapKeyExpr::Dynamic(_), _) => RantString::from(self.pop_val()?.to_string()),
+              (MapKeyExpr::Static(key), _) => key.clone()
             };
             let val = self.pop_val()?;
             map.raw_set(key.as_str(), val);
@@ -199,6 +239,7 @@ impl<'rant> VM<'rant> {
           },
           RST::VarDef(vname, val_expr) => {
             if let Some(val_expr) = val_expr {
+              // If a value is present, it needs to be evaluated first
               self.cur_frame_mut().set_intent(Intent::DefVar { vname: vname.clone() });
               self.push_frame(Rc::clone(val_expr), true)?;
               continue 'from_the_top;
@@ -209,12 +250,7 @@ impl<'rant> VM<'rant> {
           },
           RST::VarGet(path) => {
             // Get list of dynamic keys in path
-            let exprs = path.iter().filter_map(|c| {
-              match c {
-                VarAccessComponent::Expression(expr) => Some(Rc::clone(expr)),
-                _ => None
-              }
-            }).collect::<Vec<Rc<Block>>>();
+            let exprs = path.dynamic_keys();
 
             if exprs.is_empty() {
               // Getter is static, so run it directly
@@ -232,12 +268,7 @@ impl<'rant> VM<'rant> {
           },
           RST::VarSet(path, val_expr) => {
             // Get list of dynamic keys in path
-            let exprs = path.iter().filter_map(|c| {
-              match c {
-                VarAccessComponent::Expression(expr) => Some(Rc::clone(expr)),
-                _ => None
-              }
-            }).collect::<Vec<Rc<Block>>>();
+            let exprs = path.dynamic_keys();
 
             if exprs.is_empty() {
               // Setter is static, so run it directly
@@ -247,7 +278,10 @@ impl<'rant> VM<'rant> {
               // Build dynamic keys before running setter
               // Push dynamic key expressions onto call stack
               self.cur_frame_mut().set_intent(Intent::SetValue { path: Rc::clone(&path), expr_count: exprs.len() });
-              for expr in exprs.iter() {
+              // Value expression should be evaluated after any dynamic keys, so push it first
+              self.push_frame(Rc::clone(&val_expr), true)?;
+
+              for expr in exprs.iter().rev() {
                 self.push_block_frame(expr.as_ref(), true)?;
               }
             }
@@ -271,8 +305,71 @@ impl<'rant> VM<'rant> {
     Ok(self.pop_val().unwrap_or_default().to_string())
   }
 
+  fn intent_set_value(&mut self, path: Rc<VarAccessPath>, expr_count: usize) -> RantResult<()> {
+    // Gather evaluated dynamic keys from stack
+    let mut expr_values = vec![];
+    for _ in 0..expr_count {
+      expr_values.push(self.pop_val()?);
+    }
+
+    let mut path_iter = path.iter();
+    let mut expr_values = expr_values.drain(..).rev();
+         
+    let mut setter_key = match path_iter.next() {
+      Some(VarAccessComponent::Name(vname)) => {
+        SetterKey::KeyRef(vname.as_str())
+      },
+      Some(VarAccessComponent::Expression(_)) => {
+        let key = RantString::from(expr_values.next().unwrap().to_string());
+        SetterKey::KeyString(key)
+      },
+      _ => unreachable!()
+    };
+
+    let mut setter_target: Option<RantValue> = None;
+
+    // Evaluate the path
+    for accessor in path_iter {
+      // Update setter target by keying off setter_key
+      setter_target = match (&setter_target, &setter_key) {
+        (None, SetterKey::KeyRef(key)) => Some(self.get_local(key)?),
+        (None, SetterKey::KeyString(key)) => Some(self.get_local(key.as_str())?),
+        (Some(val), SetterKey::Index(index)) => Some(convert_index_result(val.get_by_index(*index))?),
+        (Some(val), SetterKey::KeyRef(key)) => Some(convert_key_result(val.get_by_key(key))?),
+        (Some(val), SetterKey::KeyString(key)) => Some(convert_key_result(val.get_by_key(key.as_str()))?),
+        _ => unreachable!()
+      };
+
+      setter_key = match accessor {
+        // Static key
+        VarAccessComponent::Name(key) => SetterKey::KeyRef(key.as_str()),
+        // Index
+        VarAccessComponent::Index(index) => SetterKey::Index(*index),
+        // Dynamic key
+        VarAccessComponent::Expression(_) => {
+          let key = RantString::from(self.pop_val()?.to_string());
+          SetterKey::KeyString(key)
+        }
+      }
+    }
+
+    let setter_value = self.pop_val()?;
+
+    // Finally, set the value
+    match (&mut setter_target, &setter_key) {
+      (None, SetterKey::KeyRef(vname)) => self.set_local(vname, setter_value)?,
+      (None, SetterKey::KeyString(vname)) => self.set_local(vname.as_str(), setter_value)?,
+      (Some(target), SetterKey::Index(index)) => convert_index_set_result(target.set_by_index(*index, setter_value))?,
+      (Some(target), SetterKey::KeyRef(key)) => convert_key_set_result(target.set_by_key(key, setter_value))?,
+      (Some(target), SetterKey::KeyString(key)) => convert_key_set_result(target.set_by_key(key.as_str(), setter_value))?,
+      _ => unreachable!()
+    }
+
+    Ok(())
+  }
+
   fn intent_get_value(&mut self, path: Rc<VarAccessPath>, expr_count: usize) -> RantResult<()> {
-    // Gather dynamic accessor values from stack
+    // Gather evaluated dynamic keys from stack
     let mut expr_values = vec![];
     for _ in 0..expr_count {
       expr_values.push(self.pop_val()?);
@@ -377,7 +474,7 @@ impl<'rant> VM<'rant> {
 
   #[inline]
   fn pop_val(&mut self) -> RantResult<RantValue> {
-    if self.val_stack.len() > 0 {
+    if !self.val_stack.is_empty() {
       Ok(self.val_stack.pop().unwrap())
     } else {
       runtime_error!(RuntimeErrorType::StackUnderflow, "value stack has underflowed");

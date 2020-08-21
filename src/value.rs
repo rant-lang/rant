@@ -5,6 +5,8 @@ use cast::*;
 
 pub type ValueIndexResult = Result<RantValue, ValueIndexError>;
 pub type ValueKeyResult = Result<RantValue, ValueKeyError>;
+pub type ValueIndexSetResult = Result<(), ValueIndexError>;
+pub type ValueKeySetResult = Result<(), ValueKeyError>;
 
 /// Rant variable value.
 #[derive(Clone)]
@@ -22,7 +24,8 @@ pub enum RantValue {
 #[derive(Debug)]
 pub enum ValueIndexError {
   OutOfRange,
-  CannotIndexType(&'static str)
+  CannotIndexType(&'static str),
+  CannotSetIndexOnType(&'static str),
 }
 
 #[derive(Debug)]
@@ -267,6 +270,33 @@ impl RantValue {
     }
   }
 
+  pub fn set_by_index(&mut self, index: i64, val: RantValue) -> ValueIndexSetResult {
+    if index < 0 {
+      return Err(ValueIndexError::OutOfRange)
+    }
+
+    let index = index as usize;
+
+    match self {
+      RantValue::List(list) => {
+        let mut list = list.borrow_mut();
+
+        if index < list.len() {
+          list[index] = val;
+          Ok(())
+        } else {
+          Err(ValueIndexError::OutOfRange)
+        }
+      },
+      RantValue::Map(map) => {
+        let mut map = map.borrow_mut();
+        map.raw_set(index.to_string().as_str(), val);
+        Ok(())
+      },
+      _ => Err(ValueIndexError::CannotSetIndexOnType(self.type_name()))
+    }
+  }
+
   pub fn get_by_key(&self, key: &str) -> ValueKeyResult {
     match self {
       RantValue::Map(map) => {
@@ -277,6 +307,18 @@ impl RantValue {
         } else {
           Err(ValueKeyError::KeyNotFound)
         }
+      },
+      _ => Err(ValueKeyError::CannotKeyType(self.type_name()))
+    }
+  }
+
+  pub fn set_by_key(&mut self, key: &str, val: RantValue) -> ValueKeySetResult {
+    match self {
+      RantValue::Map(map) => {
+        let mut map = map.borrow_mut();
+        // TODO: use prototype setter here
+        map.raw_set(key, val);
+        Ok(())
       },
       _ => Err(ValueKeyError::CannotKeyType(self.type_name()))
     }

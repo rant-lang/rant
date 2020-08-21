@@ -176,7 +176,7 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) {
       }
     },
     Err(err) => {
-      eprintln!("{}: {:?}", "runtime error".bright_red().bold(), err);
+      eprintln!("{}: {:?}", "Runtime error".bright_red().bold(), err);
       if show_stats {
         eprintln!("{} in {:?} (seed = {:016x})", "Crashed".bright_red().bold(), run_time, seed);
       }
