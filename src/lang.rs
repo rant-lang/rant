@@ -215,8 +215,8 @@ impl Parameter {
 #[derive(Debug)]
 pub struct FunctionCall {
   pub flag: PrintFlag,
-  pub id: VarAccessPath,
-  pub arguments: Vec<Rc<Sequence>>,
+  pub id: Rc<VarAccessPath>,
+  pub arguments: Rc<Vec<Rc<Sequence>>>,
 }
 
 /// Describes a function definition.

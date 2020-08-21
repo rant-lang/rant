@@ -65,17 +65,25 @@ impl<T> VarArgs<T> {
 #[derive(Debug)]
 pub struct RantFunction {
   pub(crate) min_arg_count: usize,
-  pub(crate) vararg_index: usize,
+  pub(crate) vararg_start_index: usize,
   pub(crate) body: RantFunctionInterface,
   pub(crate) params: Rc<Vec<Parameter>>,
   pub(crate) captured_vars: Option<RantMap>,
+}
+
+impl RantFunction {
+  /// Returns true if the function should be treated as variadic
+  #[inline]
+  pub fn is_variadic(&self) -> bool {
+    self.vararg_start_index < self.params.len() || self.vararg_start_index < self.min_arg_count
+  }
 }
 
 /// Defines endpoint variants for Rant functions.
 #[derive(Clone)]
 pub enum RantFunctionInterface {
   /// Represents a foreign function as a wrapper function accepting a variable number of arguments.
-  Foreign(Rc<dyn FnMut(&mut VM, Vec<RantValue>) -> RantResult<()>>),
+  Foreign(Rc<dyn Fn(&mut VM, Vec<RantValue>) -> RantResult<()>>),
   /// Represents a user function as an RST.
   User(Rc<Block>)
 }

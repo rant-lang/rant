@@ -1,4 +1,4 @@
-use std::{rc::Rc, ops::{DerefMut, Deref}};
+use std::{rc::Rc, ops::{DerefMut, Deref}, iter::FromIterator};
 use crate::{RantString, RantValue, Rant};
 use fnv::FnvHashMap;
 
@@ -34,6 +34,16 @@ impl Deref for RantList {
 impl DerefMut for RantList {
   fn deref_mut(&mut self) -> &mut Self::Target {
     &mut self.0
+  }
+}
+
+impl FromIterator<RantValue> for RantList {
+  fn from_iter<T: IntoIterator<Item = RantValue>>(iter: T) -> Self {
+    let mut list = Self::new();
+    for item in iter {
+      list.push(item);
+    }
+    list
   }
 }
 

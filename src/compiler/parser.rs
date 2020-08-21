@@ -832,8 +832,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
           // Create final node for function call
           let fcall = FunctionCall {
-            id: func_name,
-            arguments: func_args,
+            id: Rc::new(func_name),
+            arguments: Rc::new(func_args),
             flag
           };
 

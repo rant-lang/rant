@@ -1,5 +1,5 @@
 use std::{rc::Rc, ops::{DerefMut, Deref}};
-use std::mem;
+use std::{collections::VecDeque, mem};
 use crate::{lang::{Sequence, RST}, RantMap, RantValue, RantResult, RantError, RuntimeErrorType, Rant};
 use super::{OutputBuffer, output::OutputWriter, Intent};
 
@@ -98,10 +98,10 @@ pub struct StackFrame {
   pc: usize,
   /// Has frame sequence started running?
   started: bool,
-  /// Output for this stack frame
+  /// Output for the frame
   output: Option<OutputWriter>,
-  /// Current intent of the frame
-  intent: Intent,
+  /// Intent queue for the frame
+  intents: VecDeque<Intent>,
 }
 
 impl StackFrame {
@@ -112,7 +112,7 @@ impl StackFrame {
       output: if has_output { Some(Default::default()) } else { None },
       started: false,
       pc: 0,
-      intent: Intent::Default,
+      intents: Default::default(),
     }
   }
 }
@@ -133,24 +133,29 @@ impl StackFrame {
     self.sequence.get(self.pc).map(Rc::clone)
   }
   
+  /// Gets the Program Counter (PC) for the frame.
   pub fn pc(&self) -> usize {
     self.pc
   }
 
-  pub fn intent(&self) -> &Intent {
-    &self.intent
+  /// Takes the next intent to be handled.
+  #[inline]
+  pub fn take_intent(&mut self) -> Option<Intent> {
+    self.intents.pop_front()
   }
 
-  pub fn take_intent(&mut self) -> Intent {
-    mem::replace(&mut self.intent, Intent::Default)
+  /// Pushes an intent to the front of the queue so that it is handled next.
+  #[inline]
+  pub fn push_intent_front(&mut self, intent: Intent) -> &mut Self {
+    self.intents.push_front(intent); 
+    self
   }
 
-  pub fn set_intent(&mut self, intent: Intent) {
-    self.intent = intent;
-  }
-
-  pub fn reset_intent(&mut self) {
-    self.intent = Intent::Default;
+  /// Pushes an intent to the back of the queue so that it is handled last.
+  #[inline]
+  pub fn push_intent_back(&mut self, intent: Intent) -> &mut Self {
+    self.intents.push_back(intent);
+    self
   }
 }
 

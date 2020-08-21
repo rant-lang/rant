@@ -53,35 +53,26 @@ macro_rules! runtime_error {
 /// to override its usual behavior next time it's active.
 #[derive(Debug)]
 pub enum Intent {
-  /// Run frame sequence as normal.
-  Default,
   /// Take the pending output from last frame and print it.
   PrintLastOutput,
-  /// Invoke the following function using values from the stack.
-  Invoke { func: Rc<RantFunction>, argc: usize, varg_start: Option<usize> },
   /// Pop a value off the stack and assign it to an existing variable.
   SetVar { vname: Identifier },
   /// Pop a value off the stack and assign it to a new variable.
   DefVar { vname: Identifier },
   /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `GetValue`.
-  BuildDynamicGetter { path: Rc<VarAccessPath>, expr_count: usize, pending_exprs: Vec<Rc<Block>> },
-  /// Pop `expr_count` values off the stack and use them for expression fields in a getter.
-  GetValue { path: Rc<VarAccessPath>, expr_count: usize },
+  BuildDynamicGetter { path: Rc<VarAccessPath>, dynamic_key_count: usize, pending_exprs: Vec<Rc<Block>>, override_print: bool },
+  /// Pop `dynamic_key_count` values off the stack and use them for expression fields in a getter.
+  GetValue { path: Rc<VarAccessPath>, dynamic_key_count: usize, override_print: bool },
   /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `SetValue`.
   BuildDynamicSetter { path: Rc<VarAccessPath>, auto_def: bool, expr_count: usize, pending_exprs: Vec<Rc<Block>>, val_source: SetterValueSource },
   /// Pop `expr_count` values off the stack and use them for expression fields in a setter.
   SetValue { path: Rc<VarAccessPath>, auto_def: bool, expr_count: usize },
+  /// Evaluate `arg_exprs` in order, then pop the argument values off the stack, pop a function off the stack, and pass the arguments to the function.
+  Invoke { arg_exprs: Rc<Vec<Rc<Sequence>>>, eval_count: usize, flag: PrintFlag },
   /// Pop value from stack and add it to a list. If `index` is out of range, print the list.
   BuildList { init: Rc<Vec<Rc<Sequence>>>, index: usize, list: RantList },
   /// Pop value and optional key from stack and add them to a map. If `pair_index` is out of range, print the map.
   BuildMap { init: Rc<Vec<(MapKeyExpr, Rc<Sequence>)>>, pair_index: usize, map: RantMap },
-}
-
-impl Intent {
-  /// Returns true if the intent is `Default`.
-  fn is_default(&self) -> bool {
-    matches!(self, Intent::Default)
-  }
 }
 
 #[derive(Debug)]
@@ -135,122 +126,182 @@ impl<'rant> VM<'rant> {
   pub fn run(&mut self) -> RantResult<String> {
     //println!("RST: {:#?}", self.program.root);
 
-    // Push the root RST onto the stack
-    self.push_frame(self.program.root.clone(), true)?;
+    // Push the program's root sequence onto the call stack
+    self.push_frame(self.program.root.clone(), true, None)?;
     
     // Run whatever is on the top of the call stack
-    'from_the_top: while !self.is_stack_empty() {
+    'from_the_top: 
+    while !self.is_stack_empty() {
       
-      // Read frame's current intent and handle it before running the sequence
-      match self.cur_frame_mut().take_intent() {
-        Intent::Default => {},
-        Intent::PrintLastOutput => {
-          let val = self.pop_val()?;
-          self.cur_frame_mut().write_value(val);
-        },
-        Intent::SetVar { vname } => {
-          let val = self.pop_val()?;
-          self.set_local(vname.as_str(), val)?;
-        },
-        Intent::DefVar { vname } => {
-          let val = self.pop_val()?;
-          self.def_local(vname.as_str(), val)?;
-        },
-        Intent::BuildDynamicGetter { path, expr_count, mut pending_exprs } => {
-          if let Some(block) = pending_exprs.pop() {
-            // Set next intent based on remaining expressions in getter
-            if pending_exprs.is_empty() {
-              self.cur_frame_mut().set_intent(Intent::GetValue { path, expr_count });
+      // Read frame's current intents and handle them before running the sequence
+      while let Some(intent) = self.cur_frame_mut().take_intent() {
+        match intent {
+          Intent::PrintLastOutput => {
+            let val = self.pop_val()?;
+            self.cur_frame_mut().write_value(val);
+          },
+          Intent::SetVar { vname } => {
+            let val = self.pop_val()?;
+            self.set_local(vname.as_str(), val)?;
+          },
+          Intent::DefVar { vname } => {
+            let val = self.pop_val()?;
+            self.def_local(vname.as_str(), val)?;
+          },
+          Intent::BuildDynamicGetter { path, dynamic_key_count, mut pending_exprs, override_print } => {
+            if let Some(block) = pending_exprs.pop() {
+              // Set next intent based on remaining expressions in getter
+              if pending_exprs.is_empty() {
+                self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print });
+              } else {
+                self.cur_frame_mut().push_intent_front(Intent::BuildDynamicGetter { path, dynamic_key_count, pending_exprs, override_print });
+              }
+              self.push_block_frame(block.as_ref(), true, None)?;
             } else {
-              self.cur_frame_mut().set_intent(Intent::BuildDynamicGetter { path, expr_count, pending_exprs });
+              self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print });
             }
-            self.push_block_frame(block.as_ref(), true)?;
-          } else {
-            self.cur_frame_mut().set_intent(Intent::GetValue { path, expr_count });
-          }
-          continue 'from_the_top;
-        },
-        Intent::GetValue { path, expr_count } => {
-          self.get_value(path, expr_count)?;
-        },
-        Intent::BuildDynamicSetter { path, auto_def, expr_count, mut pending_exprs, val_source } => {
-          if let Some(block) = pending_exprs.pop() {
-            // Set next intent based on remaining expressions in setter
-            if pending_exprs.is_empty() {
-              // Set value once this frame is active again
-              self.cur_frame_mut().set_intent(Intent::SetValue { path, auto_def, expr_count });
-              self.push_block_frame(block.as_ref(), true)?;
+            continue 'from_the_top;
+          },
+          Intent::GetValue { path, dynamic_key_count, override_print } => {
+            self.get_value(path, dynamic_key_count, override_print)?;
+          },
+          Intent::Invoke { arg_exprs, eval_count, flag } => {
+            // First, evaluate all arguments
+            if eval_count < arg_exprs.len() {
+              let arg_expr = Rc::clone(arg_exprs.get(arg_exprs.len() - eval_count - 1).unwrap());
+              self.cur_frame_mut().push_intent_front(Intent::Invoke { arg_exprs, eval_count: eval_count + 1, flag });
+              self.push_frame(arg_expr, true, None)?;
+              continue 'from_the_top;
             } else {
-              self.cur_frame_mut().set_intent(Intent::BuildDynamicSetter { path, auto_def, expr_count, pending_exprs, val_source });
-              self.push_block_frame(block.as_ref(), true)?;
+              // Pop the evaluated args off the stack
+              let mut args = vec![];
+              for _ in 0..arg_exprs.len() {
+                args.push(self.pop_val()?);
+              }
+              let argc = args.len();
+
+              // Pop the function and make sure it's callable
+              let func = match self.pop_val()? {
+                RantValue::Function(func) => {
+                  func
+                },
+                other => runtime_error!(RuntimeErrorType::CannotInvokeValue, format!("cannot invoke '{}' value", other.type_name()))
+              };
+
+              // Verify the args fit the signature
+              let mut args = if func.is_variadic() {
+                if argc < func.min_arg_count {
+                  runtime_error!(RuntimeErrorType::ArgumentMismatch, format!("arguments don't match; expected at least {}, found {}", func.min_arg_count, argc))
+                }
+                // Condense args for to turn variadic args into one arg
+                let mut condensed_args = args.drain(0..func.vararg_start_index).collect::<Vec<RantValue>>();
+                let vararg = RantValue::List(Rc::new(RefCell::new(args.into_iter().collect::<RantList>())));
+                condensed_args.push(vararg);
+                condensed_args
+              } else {
+                if argc < func.min_arg_count || argc > func.params.len() {
+                  runtime_error!(RuntimeErrorType::ArgumentMismatch, format!("arguments don't match; expected {}, found {}", func.min_arg_count, argc))
+                }
+                args
+              };
+
+              // Call the function
+              match &func.body {
+                RantFunctionInterface::Foreign(foreign_func) => {
+                  foreign_func(self, args)?;
+                },
+                RantFunctionInterface::User(user_func) => {
+                  // Convert the args into a locals map
+                  let mut func_locals = RantMap::new();
+                  for (param, arg) in func.params.iter().zip(args.drain(..)) {
+                    func_locals.raw_set(param.name.as_str(), arg);
+                  }
+                  // Push the function onto the call stack
+                  self.push_block_frame(user_func.as_ref(), false, Some(func_locals))?;
+                  continue 'from_the_top;
+                },
+              }
+            }
+          },
+          Intent::BuildDynamicSetter { path, auto_def, expr_count, mut pending_exprs, val_source } => {
+            if let Some(block) = pending_exprs.pop() {
+              // Set next intent based on remaining expressions in setter
+              if pending_exprs.is_empty() {
+                // Set value once this frame is active again
+                self.cur_frame_mut().push_intent_front(Intent::SetValue { path, auto_def, expr_count });
+                self.push_block_frame(block.as_ref(), true, None)?;
+              } else {
+                self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, auto_def, expr_count, pending_exprs, val_source });
+                self.push_block_frame(block.as_ref(), true, None)?;
+                continue 'from_the_top;
+              }
+              
+            } else {
+              self.cur_frame_mut().push_intent_front(Intent::SetValue { path, auto_def, expr_count });
+            }
+  
+            // Prepare setter value
+            match val_source {
+              SetterValueSource::FromExpression(expr) => {
+                self.push_frame(Rc::clone(&expr), true, None)?;
+              }
+              SetterValueSource::FromValue(val) => {
+                self.push_val(val)?;
+              }
+            }
+            continue 'from_the_top;
+          },
+          Intent::SetValue { path, auto_def, expr_count } => {
+            self.set_value(path, auto_def, expr_count)?;
+          },
+          Intent::BuildList { init, index, mut list } => {
+            // Add latest evaluated value to list
+            if index > 0 {
+              list.push(self.pop_val()?);
+            }
+  
+            // Check if the list is complete
+            if index >= init.len() {
+              self.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list))))
+            } else {
+              // Continue list creation
+              self.cur_frame_mut().push_intent_front(Intent::BuildList { init: Rc::clone(&init), index: index + 1, list });
+              let val_expr = &init[index];
+              self.push_frame(Rc::clone(val_expr), true, None)?;
               continue 'from_the_top;
             }
-            
-          } else {
-            self.cur_frame_mut().set_intent(Intent::SetValue { path, auto_def, expr_count });
-          }
-
-          // Prepare setter value
-          match val_source {
-            SetterValueSource::FromExpression(expr) => {
-              self.push_frame(Rc::clone(&expr), true)?;
+          },
+          Intent::BuildMap { init, pair_index, mut map } => {
+            // Add latest evaluated pair to map
+            if pair_index > 0 {
+              let prev_pair = &init[pair_index - 1];
+              // If the key is dynamic, there are two values to pop
+              let key = match prev_pair {
+                (MapKeyExpr::Dynamic(_), _) => RantString::from(self.pop_val()?.to_string()),
+                (MapKeyExpr::Static(key), _) => key.clone()
+              };
+              let val = self.pop_val()?;
+              map.raw_set(key.as_str(), val);
             }
-            SetterValueSource::FromValue(val) => {
-              self.push_val(val)?;
+  
+            // Check if the map is completed
+            if pair_index >= init.len() {
+              self.cur_frame_mut().write_value(RantValue::Map(Rc::new(RefCell::new(map))));
+            } else {
+              // Continue map creation
+              self.cur_frame_mut().push_intent_front(Intent::BuildMap { init: Rc::clone(&init), pair_index: pair_index + 1, map });
+              let (key_expr, val_expr) = &init[pair_index];
+              if let MapKeyExpr::Dynamic(key_expr_block) = key_expr {
+                // Push dynamic key expression onto call stack
+                self.push_block_frame(key_expr_block, true, None)?;
+              }
+              // Push value expression onto call stack
+              self.push_frame(Rc::clone(val_expr), true, None)?;
+              continue 'from_the_top;
             }
           }
-          continue 'from_the_top;
-        },
-        Intent::SetValue { path, auto_def, expr_count } => {
-          self.set_value(path, auto_def, expr_count)?;
-        },
-        Intent::BuildList { init, index, mut list } => {
-          // Add latest evaluated value to list
-          if index > 0 {
-            list.push(self.pop_val()?);
-          }
-
-          // Check if the list is complete
-          if index >= init.len() {
-            self.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list))))
-          } else {
-            // Continue list creation
-            self.cur_frame_mut().set_intent(Intent::BuildList { init: Rc::clone(&init), index: index + 1, list });
-            let val_expr = &init[index];
-            self.push_frame(Rc::clone(val_expr), true)?;
-            continue 'from_the_top;
-          }
-        },
-        Intent::BuildMap { init, pair_index, mut map } => {
-          // Add latest evaluated pair to map
-          if pair_index > 0 {
-            let prev_pair = &init[pair_index - 1];
-            // If the key is dynamic, there are two values to pop
-            let key = match prev_pair {
-              (MapKeyExpr::Dynamic(_), _) => RantString::from(self.pop_val()?.to_string()),
-              (MapKeyExpr::Static(key), _) => key.clone()
-            };
-            let val = self.pop_val()?;
-            map.raw_set(key.as_str(), val);
-          }
-
-          // Check if the map is completed
-          if pair_index >= init.len() {
-            self.cur_frame_mut().write_value(RantValue::Map(Rc::new(RefCell::new(map))));
-          } else {
-            // Continue map creation
-            self.cur_frame_mut().set_intent(Intent::BuildMap { init: Rc::clone(&init), pair_index: pair_index + 1, map });
-            let (key_expr, val_expr) = &init[pair_index];
-            if let MapKeyExpr::Dynamic(key_expr_block) = key_expr {
-              // Push dynamic key expression onto call stack
-              self.push_block_frame(key_expr_block, true)?;
-            }
-            // Push value expression onto call stack
-            self.push_frame(Rc::clone(val_expr), true)?;
-            continue 'from_the_top;
-          }
+          _ => todo!()
         }
-        _ => todo!()
       }
       
       // Run frame's sequence elements in order
@@ -263,22 +314,22 @@ impl<'rant> VM<'rant> {
           RST::EmptyVal => self.cur_frame_mut().write_value(RantValue::Empty),
           RST::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
           RST::ListInit(elements) => {
-            self.cur_frame_mut().set_intent(Intent::BuildList { init: Rc::clone(elements), index: 0, list: RantList::new() });
+            self.cur_frame_mut().push_intent_front(Intent::BuildList { init: Rc::clone(elements), index: 0, list: RantList::new() });
             continue 'from_the_top;
           },
           RST::MapInit(elements) => {
-            self.cur_frame_mut().set_intent(Intent::BuildMap { init: Rc::clone(elements), pair_index: 0, map: RantMap::new() });
+            self.cur_frame_mut().push_intent_front(Intent::BuildMap { init: Rc::clone(elements), pair_index: 0, map: RantMap::new() });
             continue 'from_the_top;
           },
           RST::Block(block) => {
-            self.push_block_frame(block, false)?;
+            self.push_block_frame(block, false, None)?;
             continue 'from_the_top;
           },
           RST::VarDef(vname, val_expr) => {
             if let Some(val_expr) = val_expr {
               // If a value is present, it needs to be evaluated first
-              self.cur_frame_mut().set_intent(Intent::DefVar { vname: vname.clone() });
-              self.push_frame(Rc::clone(val_expr), true)?;
+              self.cur_frame_mut().push_intent_front(Intent::DefVar { vname: vname.clone() });
+              self.push_frame(Rc::clone(val_expr), true, None)?;
               continue 'from_the_top;
             } else {
               // If there's no assignment, just set it to <>
@@ -287,18 +338,22 @@ impl<'rant> VM<'rant> {
           },
           RST::VarGet(path) => {
             // Get list of dynamic keys in path
-            let exprs = path.dynamic_keys();
+            let dynamic_keys = path.dynamic_keys();
 
-            if exprs.is_empty() {
+            if dynamic_keys.is_empty() {
               // Getter is static, so run it directly
-              self.cur_frame_mut().set_intent(Intent::GetValue { path: Rc::clone(path), expr_count: 0 });
+              self.cur_frame_mut().push_intent_front(Intent::GetValue { 
+                path: Rc::clone(path), 
+                dynamic_key_count: 0, 
+                override_print: false 
+              });
             } else {
               // Build dynamic keys before running getter
-              // Push dynamic key expressions onto call stack
-              self.cur_frame_mut().set_intent(Intent::BuildDynamicGetter {
-                expr_count: exprs.len(),
+              self.cur_frame_mut().push_intent_front(Intent::BuildDynamicGetter {
+                dynamic_key_count: dynamic_keys.len(),
                 path: Rc::clone(path),
-                pending_exprs: exprs
+                pending_exprs: dynamic_keys,
+                override_print: false,
               });
             }
             continue 'from_the_top;
@@ -309,12 +364,11 @@ impl<'rant> VM<'rant> {
 
             if exprs.is_empty() {
               // Setter is static, so run it directly
-              self.cur_frame_mut().set_intent(Intent::SetValue { path: Rc::clone(&path), auto_def: false, expr_count: 0 });
-              self.push_frame(Rc::clone(&val_expr), true)?;
+              self.cur_frame_mut().push_intent_front(Intent::SetValue { path: Rc::clone(&path), auto_def: false, expr_count: 0 });
+              self.push_frame(Rc::clone(&val_expr), true, None)?;
             } else {
               // Build dynamic keys before running setter
-              // Push dynamic key expressions onto call stack
-              self.cur_frame_mut().set_intent(Intent::BuildDynamicSetter {
+              self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter {
                 expr_count: exprs.len(),
                 auto_def: false,
                 path: Rc::clone(path),
@@ -337,12 +391,15 @@ impl<'rant> VM<'rant> {
               body: RantFunctionInterface::User(Rc::clone(body)),
               captured_vars: Default::default(), // TODO: Actually capture variables, don't be lazy!
               min_arg_count: params.iter().take_while(|p| p.is_required()).count(),
-              vararg_index: params.iter().skip_while(|p| !p.varity.is_variadic()).count(),
+              vararg_start_index: params.iter()
+                .enumerate()
+                .find_map(|(i, p)| if p.varity.is_variadic() { Some(i) } else { None })
+                .unwrap_or_else(|| params.len()),
             }));
 
             let dynamic_keys = id.dynamic_keys();
 
-            self.cur_frame_mut().set_intent(Intent::BuildDynamicSetter {
+            self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter {
               expr_count: dynamic_keys.len(),
               auto_def: true,
               pending_exprs: dynamic_keys,
@@ -364,11 +421,46 @@ impl<'rant> VM<'rant> {
               body: RantFunctionInterface::User(Rc::clone(&expr)),
               captured_vars: Default::default(), // TODO: Capture variables on anonymous functions
               min_arg_count: params.iter().take_while(|p| p.is_required()).count(),
-              vararg_index: params.iter().skip_while(|p| !p.varity.is_variadic()).count(),
+              vararg_start_index: params.iter().skip_while(|p| !p.varity.is_variadic()).count(),
             }));
 
             self.cur_frame_mut().write_value(func);
-          }
+          },
+          RST::FuncCall(fcall) => {
+            let FunctionCall {
+              id,
+              arguments,
+              flag,
+            } = fcall;
+
+            let dynamic_keys = id.dynamic_keys();
+
+            // Run the getter to retrieve the function we're calling first...
+            self.cur_frame_mut().push_intent_front(if dynamic_keys.is_empty() {
+              // Getter is static, so run it directly
+              Intent::GetValue { 
+                path: Rc::clone(id), 
+                dynamic_key_count: 0, 
+                override_print: true 
+              }
+            } else {
+              // Build dynamic keys before running getter
+              Intent::BuildDynamicGetter {
+                dynamic_key_count: dynamic_keys.len(),
+                path: Rc::clone(id),
+                pending_exprs: dynamic_keys,
+                override_print: true,
+              }
+            });
+
+            // Queue up the function call next
+            self.cur_frame_mut().push_intent_back(Intent::Invoke {
+              eval_count: 0,
+              arg_exprs: Rc::clone(arguments),
+              flag: *flag,
+            });
+            continue 'from_the_top;
+          },
           rst => {
             panic!(format!("Unsupported RST: {:?}", rst));
           }
@@ -471,7 +563,7 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
-  fn get_value(&mut self, path: Rc<VarAccessPath>, dynamic_key_count: usize) -> RantResult<()> {
+  fn get_value(&mut self, path: Rc<VarAccessPath>, dynamic_key_count: usize, override_print: bool) -> RantResult<()> {
     // Gather evaluated dynamic keys from stack
     let mut dynamic_keys = vec![];
     for _ in 0..dynamic_key_count {
@@ -531,17 +623,22 @@ impl<'rant> VM<'rant> {
       }
     }
 
-    self.cur_frame_mut().write_value(getter_value);
+    if override_print {
+      self.push_val(getter_value)?;
+    } else {
+      self.cur_frame_mut().write_value(getter_value);
+    }
+
     Ok(())
   }
 
-  fn push_block_frame(&mut self, block: &Block, override_print: bool) -> RantResult<()> {
+  fn push_block_frame(&mut self, block: &Block, override_print: bool, locals: Option<RantMap>) -> RantResult<()> {
     let elem = Rc::clone(&block.elements[self.rng.next_usize(block.len())]);
     let is_printing = block.flag != PrintFlag::Sink;
     if is_printing && !override_print {
-      self.cur_frame_mut().set_intent(Intent::PrintLastOutput);
+      self.cur_frame_mut().push_intent_front(Intent::PrintLastOutput);
     }
-    self.push_frame(elem, is_printing)?;
+    self.push_frame(elem, is_printing, locals)?;
     Ok(())
   }
 
@@ -594,14 +691,14 @@ impl<'rant> VM<'rant> {
   }
   
   #[inline]
-  fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool) -> RantResult<()> {
+  fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool, locals: Option<RantMap>) -> RantResult<()> {
     
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
     }
     
-    let frame = StackFrame::new(callee, Default::default(), use_output);
+    let frame = StackFrame::new(callee, locals.unwrap_or_default(), use_output);
     self.call_stack.push(frame);
     Ok(())
   }

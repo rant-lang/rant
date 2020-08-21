@@ -160,8 +160,10 @@ pub enum RuntimeErrorType {
   ExternalError,
   /// Attempted division by zero
   DivideByZero,
-  /// Too few arguments were passed to a function
-  TooFewArguments,
+  /// Too few/many arguments were passed to a function
+  ArgumentMismatch,
+  /// Tried to invoke a non-function
+  CannotInvokeValue,
   /// Error occurred while indexing value
   IndexError(ValueIndexError),
   /// Error occurred while keying value
