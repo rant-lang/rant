@@ -193,11 +193,17 @@ impl<'rant> VM<'rant> {
                 if argc < func.min_arg_count {
                   runtime_error!(RuntimeErrorType::ArgumentMismatch, format!("arguments don't match; expected at least {}, found {}", func.min_arg_count, argc))
                 }
+
                 // Condense args to turn variadic args into one arg
-                let mut condensed_args = args.drain(0..func.vararg_start_index).collect::<Vec<RantValue>>();
-                let vararg = RantValue::List(Rc::new(RefCell::new(args.into_iter().collect::<RantList>())));
-                condensed_args.push(vararg);
-                condensed_args
+                // Only do this for user functions, since native functions take care of variadic condensation already
+                if !func.is_native() {
+                  let mut condensed_args = args.drain(0..func.vararg_start_index).collect::<Vec<RantValue>>();
+                  let vararg = RantValue::List(Rc::new(RefCell::new(args.into_iter().collect::<RantList>())));
+                  condensed_args.push(vararg);
+                  condensed_args
+                } else {
+                  args
+                }
               } else {
                 if argc < func.min_arg_count || argc > func.params.len() {
                   runtime_error!(RuntimeErrorType::ArgumentMismatch, format!("arguments don't match; expected {}, found {}", func.min_arg_count, argc))
@@ -213,11 +219,11 @@ impl<'rant> VM<'rant> {
                 RantFunctionInterface::User(user_func) => {
                   // Convert the args into a locals map
                   let mut func_locals = RantMap::new();
-                  for (param, arg) in func.params.iter().zip(args.drain(..)) {
-                    func_locals.raw_set(param.name.as_str(), arg);
+                  let mut args = args.drain(..);
+                  for param in func.params.iter() {
+                    func_locals.raw_set(param.name.as_str(), args.next().unwrap_or(RantValue::Empty));
                   }
                   // Push the function onto the call stack
-                  // TODO: Respect flag on function call
                   self.push_block_frame(user_func.as_ref(), false, Some(func_locals), flag)?;
                   continue 'from_the_top;
                 },

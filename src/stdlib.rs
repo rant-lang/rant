@@ -4,7 +4,22 @@
 
 use std::rc::Rc;
 use crate::{RantResult, runtime::{self, VM}};
-use crate::{RantValue, AsRantForeignFunc, RantMap};
+use crate::{RantValue, AsRantForeignFunc, RantMap, RequiredVarArgs};
+
+fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> RantResult<()> {
+  if !a.is_empty() {
+    vm.cur_frame_mut().write_value(a);
+    Ok(())
+  } else {
+    for val in b.drain(..) {
+      if !val.is_empty() {
+        vm.cur_frame_mut().write_value(val);
+        break
+      }
+    }
+    Ok(())
+  }
+}
 
 fn add(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantResult<()> {
   vm.cur_frame_mut().write_value(lhs + rhs);
@@ -74,6 +89,7 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
   }
 
   load_funcs!(
+    alt,
     add, sub, mul, div, 
     mul_add as "mul-add",
     len,

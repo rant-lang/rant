@@ -41,7 +41,7 @@ impl RantValue {
   }
 
   #[inline]
-  pub fn is_none(&self) -> bool {
+  pub fn is_empty(&self) -> bool {
     matches!(self, RantValue::Empty)
   }
 }
@@ -67,6 +67,12 @@ impl RantFunction {
   #[inline]
   pub fn is_variadic(&self) -> bool {
     self.vararg_start_index < self.params.len() || self.vararg_start_index < self.min_arg_count
+  }
+
+  /// Returns true if the function is native
+  #[inline]
+  pub fn is_native(&self) -> bool {
+    matches!(self.body, RantFunctionInterface::Foreign(_))
   }
 }
 

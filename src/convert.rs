@@ -9,7 +9,7 @@ use crate::value::*;
 use crate::{runtime::VM, RantError, RantResult, lang::{Varity, Parameter, Identifier}, RantString};
 use cast::*;
 use cast::Error as CastError;
-use std::{rc::Rc};
+use std::{rc::Rc, ops::{DerefMut, Deref}};
 
 /// Enables conversion from a native type to a `RantValue`.
 pub trait ToRant {
@@ -279,12 +279,38 @@ impl<T: FromRant> VarArgs<T> {
   }
 }
 
+impl<T: FromRant> Deref for VarArgs<T> {
+  type Target = Vec<T>;
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl<T: FromRant> DerefMut for VarArgs<T> {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.0
+  }
+}
+
 /// Semantic wrapper around a Vec<T> for use in required variadic argument lists.
 pub(crate) struct RequiredVarArgs<T: FromRant>(Vec<T>);
 
 impl<T: FromRant> RequiredVarArgs<T> {
   pub fn new(args: Vec<T>) -> Self {
     Self(args)
+  }
+}
+
+impl<T: FromRant> Deref for RequiredVarArgs<T> {
+  type Target = Vec<T>;
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl<T: FromRant> DerefMut for RequiredVarArgs<T> {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.0
   }
 }
 
@@ -353,7 +379,7 @@ macro_rules! impl_from_rant_args {
         },)*
         Parameter {
           name: Identifier::new(RantString::from(format!("arg{}", inc(&mut i)))),
-          varity: Varity::VariadicStar,
+          varity: Varity::VariadicPlus,
         }]
       }
     }
