@@ -367,8 +367,15 @@ impl<'rant> VM<'rant> {
         VarAccessComponent::Index(index) => SetterKey::Index(*index),
         // Dynamic key
         VarAccessComponent::Expression(_) => {
-          let key = RantString::from(dynamic_keys.next().unwrap().to_string());
-          SetterKey::KeyString(key)
+          match dynamic_keys.next().unwrap() {
+            RantValue::Integer(index) => {
+              SetterKey::Index(index)
+            },
+            key_val => {
+              let key = RantString::from(key_val.to_string());
+              SetterKey::KeyString(key)
+            }
+          }
         }
       }
     }
