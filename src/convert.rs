@@ -6,7 +6,7 @@
 #![allow(unused_variables)]
 
 use crate::value::*;
-use crate::{runtime::VM, RantError, RantResult};
+use crate::{runtime::VM, RantError, RantResult, lang::{Varity, Parameter, Identifier}, RantString};
 use cast::*;
 use cast::Error as CastError;
 use std::{rc::Rc};
@@ -226,15 +226,65 @@ impl<T: FromRant> FromRant for Vec<T> {
   }
 }
 
+#[inline(always)]
+fn as_varity<T: FromRant>() -> Varity {
+  if T::is_rant_optional() {
+    Varity::Optional
+  } else {
+    Varity::Required
+  }
+}
+
+#[inline(always)]
+fn inc(counter: &mut usize) -> usize {
+  let prev = *counter;
+  *counter += 1;
+  prev
+}
+
 /// Converts from argument list to tuple of `impl FromRant` values
 pub trait FromRantArgs: Sized {
   fn from_rant_args(args: Vec<RantValue>) -> RantResult<Self>;
+  fn as_rant_params() -> Vec<Parameter>;
 }
 
 impl<T: FromRant> FromRantArgs for T {
   fn from_rant_args(args: Vec<RantValue>) -> RantResult<Self> {
     let mut args = args.into_iter();
     Ok(T::from_rant(args.next().unwrap_or(RantValue::Empty))?)
+  }
+
+  fn as_rant_params() -> Vec<Parameter> {
+    let varity = if T::is_rant_optional() {
+      Varity::Optional
+    } else {
+      Varity::Required
+    };
+
+    let param = Parameter {
+      name: Identifier::new(RantString::from("arg0")),
+      varity
+    };
+
+    vec![param]
+  }
+}
+
+/// Semantic wrapper around a Vec<T> for use in optional variadic argument lists.
+pub(crate) struct VarArgs<T: FromRant>(Vec<T>);
+
+impl<T: FromRant> VarArgs<T> {
+  pub fn new(args: Vec<T>) -> Self {
+    Self(args)
+  }
+}
+
+/// Semantic wrapper around a Vec<T> for use in required variadic argument lists.
+pub(crate) struct RequiredVarArgs<T: FromRant>(Vec<T>);
+
+impl<T: FromRant> RequiredVarArgs<T> {
+  pub fn new(args: Vec<T>) -> Self {
+    Self(args)
   }
 }
 
@@ -246,9 +296,17 @@ macro_rules! impl_from_rant_args {
         let mut args = args.into_iter();
         Ok(($($generic_types::from_rant(args.next().unwrap_or(RantValue::Empty))?,)*))
       }
+
+      fn as_rant_params() -> Vec<Parameter> {
+        let mut i: usize = 0;
+        vec![$(Parameter { 
+          name: Identifier::new(RantString::from(format!("arg{}", inc(&mut i)))),
+          varity: as_varity::<$generic_types>(),
+        },)*]
+      }
     }
     
-    // Variadic implementation
+    // Variadic* implementation
     impl<$($generic_types: FromRant,)* VarArgItem: FromRant> FromRantArgs for ($($generic_types,)* VarArgs<VarArgItem>) {
       fn from_rant_args(mut args: Vec<RantValue>) -> RantResult<Self> {
         let mut args = args.drain(..);
@@ -259,6 +317,44 @@ macro_rules! impl_from_rant_args {
             .collect::<RantResult<Vec<VarArgItem>>>()?
           )
         ))
+      }
+
+      fn as_rant_params() -> Vec<Parameter> {
+        let mut i: usize = 0;
+        vec![$(Parameter { 
+          name: Identifier::new(RantString::from(format!("arg{}", inc(&mut i)))),
+          varity: as_varity::<$generic_types>(),
+        },)*
+        Parameter {
+          name: Identifier::new(RantString::from(format!("arg{}", inc(&mut i)))),
+          varity: Varity::VariadicStar,
+        }]
+      }
+    }
+
+    // Variadic+ implementation
+    impl<$($generic_types: FromRant,)* VarArgItem: FromRant> FromRantArgs for ($($generic_types,)* RequiredVarArgs<VarArgItem>) {
+      fn from_rant_args(mut args: Vec<RantValue>) -> RantResult<Self> {
+        let mut args = args.drain(..);
+        Ok(
+          ($($generic_types::from_rant(args.next().unwrap_or(RantValue::Empty))?,)*
+          RequiredVarArgs::new(args
+            .map(VarArgItem::from_rant)
+            .collect::<RantResult<Vec<VarArgItem>>>()?
+          )
+        ))
+      }
+
+      fn as_rant_params() -> Vec<Parameter> {
+        let mut i: usize = 0;
+        vec![$(Parameter { 
+          name: Identifier::new(RantString::from(format!("arg{}", inc(&mut i)))),
+          varity: as_varity::<$generic_types>(),
+        },)*
+        Parameter {
+          name: Identifier::new(RantString::from(format!("arg{}", inc(&mut i)))),
+          varity: Varity::VariadicStar,
+        }]
       }
     }
   }
@@ -279,13 +375,26 @@ impl_from_rant_args!(A, B, C, D, E, F, G, H, I, J, K);
 //impl_from_rant_args!(A, B, C, D, E, F, G, H, I, J, K, L);
 
 pub trait AsRantForeignFunc<Params: FromRantArgs> {
-  fn as_rant_func(&'static self) -> RantFunctionInterface;
+  fn as_rant_func(&'static self) -> RantFunction;
 }
 
 impl<Params: FromRantArgs, Function: Fn(&mut VM, Params) -> RantResult<()>> AsRantForeignFunc<Params> for Function {
-  fn as_rant_func(&'static self) -> RantFunctionInterface {
-    RantFunctionInterface::Foreign(Rc::new(move |vm, args| {
+  fn as_rant_func(&'static self) -> RantFunction {
+    let body = RantFunctionInterface::Foreign(Rc::new(move |vm, args| {
       self(vm, Params::from_rant_args(args)?)
-    }))
+    }));
+
+    let params = Rc::new(Params::as_rant_params());
+
+    RantFunction {
+      body,
+      captured_vars: None,
+      min_arg_count: params.iter().take_while(|p| p.is_required()).count(),
+      vararg_start_index: params.iter()
+      .enumerate()
+      .find_map(|(i, p)| if p.varity.is_variadic() { Some(i) } else { None })
+      .unwrap_or_else(|| params.len()),
+      params,
+    }
   }
 }

@@ -1,6 +1,6 @@
 use crate::{runtime::VM, lang::{Block, Parameter}, RantResult};
 use crate::{collections::*, util::*};
-use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg}, cmp, cell::RefCell};
+use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div}, cmp, cell::RefCell};
 use std::mem;
 use cast::*;
 
@@ -49,15 +49,6 @@ impl RantValue {
 impl Default for RantValue {
   fn default() -> Self {
     RantValue::Empty
-  }
-}
-
-/// Semantic wrapper around a Vec<T> for use in variadic argument sets.
-pub(crate) struct VarArgs<T>(Vec<T>);
-
-impl<T> VarArgs<T> {
-  pub fn new(args: Vec<T>) -> Self {
-    Self(args)
   }
 }
 
@@ -225,6 +216,47 @@ impl Sub for RantValue {
       (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Integer(bi64(a) - bi64(b)),
       (RantValue::Boolean(a), RantValue::Integer(b)) => RantValue::Integer(bi64(a).saturating_sub(b)),
       (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) - b),
+      _ => RantValue::nan()
+    }
+  }
+}
+
+impl Mul for RantValue {
+  type Output = RantValue;
+  fn mul(self, rhs: Self) -> Self::Output {
+    match (self, rhs) {
+      (RantValue::Empty, _) | (_, RantValue::Empty) => RantValue::Empty,
+      (RantValue::Integer(a), RantValue::Integer(b)) => RantValue::Integer(a.saturating_mul(b)),
+      (RantValue::Integer(a), RantValue::Float(b)) => RantValue::Float((a as f64) * b),
+      (RantValue::Integer(a), RantValue::Boolean(b)) => RantValue::Integer(a * bi64(b)),
+      (RantValue::Float(a), RantValue::Float(b)) => RantValue::Float(a * b),
+      (RantValue::Float(a), RantValue::Integer(b)) => RantValue::Float(a * (b as f64)),
+      (RantValue::Float(a), RantValue::Boolean(b)) => RantValue::Float(a * bf64(b)),
+      (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Integer(bi64(a) * bi64(b)),
+      (RantValue::Boolean(a), RantValue::Integer(b)) => RantValue::Integer(bi64(a) * b),
+      (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) * b),
+      (RantValue::String(a), RantValue::Integer(b)) => RantValue::String(a.as_str().repeat(clamp(b, 0, i64::MAX) as usize)),
+      _ => RantValue::nan()
+    }
+  }
+}
+
+impl Div for RantValue {
+  type Output = RantValue;
+  fn div(self, rhs: Self) -> Self::Output {
+    match (self, rhs) {
+      (RantValue::Empty, _) | (_, RantValue::Empty) => RantValue::Empty,
+      (_, RantValue::Integer(0)) => RantValue::nan(), // TODO: Runtime error?
+      (_, RantValue::Boolean(false)) => RantValue::nan(), // TODO: Runtime error?
+      (RantValue::Integer(a), RantValue::Integer(b)) => RantValue::Integer(a / b),
+      (RantValue::Integer(a), RantValue::Float(b)) => RantValue::Float((a as f64) / b),
+      (RantValue::Integer(a), RantValue::Boolean(b)) => RantValue::Integer(a / bi64(b)),
+      (RantValue::Float(a), RantValue::Float(b)) => RantValue::Float(a / b),
+      (RantValue::Float(a), RantValue::Integer(b)) => RantValue::Float(a / (b as f64)),
+      (RantValue::Float(a), RantValue::Boolean(b)) => RantValue::Float(a / bf64(b)),
+      (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Integer(bi64(a) / bi64(b)),
+      (RantValue::Boolean(a), RantValue::Integer(b)) => RantValue::Integer(bi64(a) / b),
+      (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) / b),
       _ => RantValue::nan()
     }
   }

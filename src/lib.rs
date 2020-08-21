@@ -38,15 +38,17 @@ pub struct Rant {
 
 impl Rant {
   pub fn new() -> Self {
-    Self {
-      globals: RefCell::new(RantMap::new()),
-      rng: Rc::new(RantRng::new(0))
-    }
+    Self::with_seed(0)
   }
   
   pub fn with_seed(seed: u64) -> Self {
+    let mut globals = RantMap::new();
+    
+    // Load standard library
+    stdlib::load_stdlib(&mut globals);
+
     Self {
-      globals: RefCell::new(RantMap::new()),
+      globals: RefCell::new(globals),
       rng: Rc::new(RantRng::new(seed))
     }
   }

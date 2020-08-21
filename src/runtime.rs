@@ -89,7 +89,7 @@ pub enum SetterValueSource {
 }
 
 #[inline]
-fn convert_index_result(result: ValueIndexResult) -> RantResult<RantValue> {
+pub(crate) fn convert_index_result(result: ValueIndexResult) -> RantResult<RantValue> {
   match result {
       Ok(val) => Ok(val),
       Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
@@ -97,7 +97,7 @@ fn convert_index_result(result: ValueIndexResult) -> RantResult<RantValue> {
 }
 
 #[inline]
-fn convert_key_result(result: ValueKeyResult) -> RantResult<RantValue> {
+pub(crate) fn convert_key_result(result: ValueKeyResult) -> RantResult<RantValue> {
   match result {
     Ok(val) => Ok(val),
     Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
@@ -105,7 +105,7 @@ fn convert_key_result(result: ValueKeyResult) -> RantResult<RantValue> {
 }
 
 #[inline]
-fn convert_index_set_result(result: ValueIndexSetResult) -> RantResult<()> {
+pub(crate) fn convert_index_set_result(result: ValueIndexSetResult) -> RantResult<()> {
   match result {
     Ok(_) => Ok(()),
     Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
@@ -113,7 +113,7 @@ fn convert_index_set_result(result: ValueIndexSetResult) -> RantResult<()> {
 }
 
 #[inline]
-fn convert_key_set_result(result: ValueKeySetResult) -> RantResult<()> {
+pub(crate) fn convert_key_set_result(result: ValueKeySetResult) -> RantResult<()> {
   match result {
     Ok(_) => Ok(()),
     Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
@@ -733,5 +733,10 @@ impl<'rant> VM<'rant> {
   #[inline(always)]
   pub fn cur_frame(&self) -> &StackFrame {
     self.call_stack.last().unwrap()
+  }
+
+  #[inline(always)]
+  pub fn rng(&self) -> &RantRng {
+    self.rng.as_ref()
   }
 }

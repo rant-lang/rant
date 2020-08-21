@@ -1,5 +1,5 @@
 use std::{rc::Rc, ops::{DerefMut, Deref}, iter::FromIterator};
-use crate::{RantString, RantValue, Rant};
+use crate::{RantString, RantValue};
 use fnv::FnvHashMap;
 
 const DEFAULT_MAP_CAPACITY: usize = 16;
