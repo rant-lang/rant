@@ -63,10 +63,12 @@ pub enum Intent {
   SetVar { vname: Identifier },
   /// Pop a value off the stack and assign it to a new variable.
   DefVar { vname: Identifier },
-  /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions yet, switch intent to `GetValue` 
+  /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `GetValue`.
   BuildDynamicGetter { path: Rc<VarAccessPath>, expr_count: usize, pending_exprs: Vec<Rc<Block>> },
   /// Pop `expr_count` values off the stack and use them for expression fields in a getter.
   GetValue { path: Rc<VarAccessPath>, expr_count: usize },
+  /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `SetValue`.
+  BuildDynamicSetter { path: Rc<VarAccessPath>, expr_count: usize, pending_exprs: Vec<Rc<Block>>, val_expr: Rc<Sequence> },
   /// Pop `expr_count` values off the stack and use them for expression fields in a setter.
   SetValue { path: Rc<VarAccessPath>, expr_count: usize },
   /// Pop value from stack and add it to a list. If `index` is out of range, print the list.
@@ -164,6 +166,22 @@ impl<'rant> VM<'rant> {
         Intent::GetValue { path, expr_count } => {
           self.intent_get_value(path, expr_count)?;
         },
+        Intent::BuildDynamicSetter { path, expr_count, mut pending_exprs, val_expr } => {
+          if let Some(block) = pending_exprs.pop() {
+            // Set next intent based on remaining expressions in setter
+            if pending_exprs.is_empty() {
+              self.cur_frame_mut().set_intent(Intent::SetValue { path, expr_count });
+              self.push_frame(Rc::clone(&val_expr), true)?;
+            } else {
+              self.cur_frame_mut().set_intent(Intent::BuildDynamicSetter { path, expr_count, pending_exprs, val_expr });
+            }
+            self.push_block_frame(block.as_ref(), true)?;
+          } else {
+            self.cur_frame_mut().set_intent(Intent::SetValue { path, expr_count });
+            self.push_frame(Rc::clone(&val_expr), true)?;
+          }
+          continue 'from_the_top;
+        }
         Intent::SetValue { path, expr_count } => {
           self.intent_set_value(path, expr_count)?;
         },
@@ -277,13 +295,12 @@ impl<'rant> VM<'rant> {
             } else {
               // Build dynamic keys before running setter
               // Push dynamic key expressions onto call stack
-              self.cur_frame_mut().set_intent(Intent::SetValue { path: Rc::clone(&path), expr_count: exprs.len() });
-              // Value expression should be evaluated after any dynamic keys, so push it first
-              self.push_frame(Rc::clone(&val_expr), true)?;
-
-              for expr in exprs.iter().rev() {
-                self.push_block_frame(expr.as_ref(), true)?;
-              }
+              self.cur_frame_mut().set_intent(Intent::BuildDynamicSetter {
+                expr_count: exprs.len(),
+                path: Rc::clone(path),
+                pending_exprs: exprs,
+                val_expr: Rc::clone(val_expr),
+              });
             }
             continue 'from_the_top;
           },
@@ -306,6 +323,9 @@ impl<'rant> VM<'rant> {
   }
 
   fn intent_set_value(&mut self, path: Rc<VarAccessPath>, expr_count: usize) -> RantResult<()> {
+    // The setter value should be at the top of the value stack, so pop that first
+    let setter_value = self.pop_val()?;
+
     // Gather evaluated dynamic keys from stack
     let mut expr_values = vec![];
     for _ in 0..expr_count {
@@ -347,13 +367,11 @@ impl<'rant> VM<'rant> {
         VarAccessComponent::Index(index) => SetterKey::Index(*index),
         // Dynamic key
         VarAccessComponent::Expression(_) => {
-          let key = RantString::from(self.pop_val()?.to_string());
+          let key = RantString::from(expr_values.next().unwrap().to_string());
           SetterKey::KeyString(key)
         }
       }
     }
-
-    let setter_value = self.pop_val()?;
 
     // Finally, set the value
     match (&mut setter_target, &setter_key) {

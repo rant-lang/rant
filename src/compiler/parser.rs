@@ -1042,7 +1042,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // If we hit a '=' here, it's a setter
           RantToken::Equals => {
             self.reader.skip_ws();
-            let (var_assign_rhs, ..) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
+            let (var_assign_rhs, end_type, _) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
+            if !matches!(end_type, SequenceEndType::VariableAccessEnd) {
+              self.syntax_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+              return Err(())
+            }
             Ok(RST::VarSet(Rc::new(var_path), Rc::new(var_assign_rhs)))
           },
           // Anything else is an error
