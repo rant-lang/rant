@@ -58,7 +58,7 @@ pub enum Intent {
   /// Take the pending output from last frame and print it.
   PrintLastOutput,
   /// Invoke the following function using values from the stack.
-  Invoke { func: Rc<RantClosure>, argc: usize, varg_start: Option<usize> },
+  Invoke { func: Rc<RantFunction>, argc: usize, varg_start: Option<usize> },
   /// Pop a value off the stack and assign it to an existing variable.
   SetVar { vname: Identifier },
   /// Pop a value off the stack and assign it to a new variable.
@@ -68,9 +68,9 @@ pub enum Intent {
   /// Pop `expr_count` values off the stack and use them for expression fields in a getter.
   GetValue { path: Rc<VarAccessPath>, expr_count: usize },
   /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `SetValue`.
-  BuildDynamicSetter { path: Rc<VarAccessPath>, expr_count: usize, pending_exprs: Vec<Rc<Block>>, val_expr: Rc<Sequence> },
+  BuildDynamicSetter { path: Rc<VarAccessPath>, auto_def: bool, expr_count: usize, pending_exprs: Vec<Rc<Block>>, val_source: SetterValueSource },
   /// Pop `expr_count` values off the stack and use them for expression fields in a setter.
-  SetValue { path: Rc<VarAccessPath>, expr_count: usize },
+  SetValue { path: Rc<VarAccessPath>, auto_def: bool, expr_count: usize },
   /// Pop value from stack and add it to a list. If `index` is out of range, print the list.
   BuildList { init: Rc<Vec<Rc<Sequence>>>, index: usize, list: RantList },
   /// Pop value and optional key from stack and add them to a map. If `pair_index` is out of range, print the map.
@@ -84,10 +84,17 @@ impl Intent {
   }
 }
 
+#[derive(Debug)]
 enum SetterKey<'a> {
   Index(i64),
   KeyRef(&'a str),
   KeyString(RantString)
+}
+
+#[derive(Debug)]
+pub enum SetterValueSource {
+  FromExpression(Rc<Sequence>),
+  FromValue(RantValue),
 }
 
 #[inline]
@@ -166,24 +173,36 @@ impl<'rant> VM<'rant> {
         Intent::GetValue { path, expr_count } => {
           self.get_value(path, expr_count)?;
         },
-        Intent::BuildDynamicSetter { path, expr_count, mut pending_exprs, val_expr } => {
+        Intent::BuildDynamicSetter { path, auto_def, expr_count, mut pending_exprs, val_source } => {
           if let Some(block) = pending_exprs.pop() {
             // Set next intent based on remaining expressions in setter
             if pending_exprs.is_empty() {
-              self.cur_frame_mut().set_intent(Intent::SetValue { path, expr_count });
-              self.push_frame(Rc::clone(&val_expr), true)?;
+              // Set value once this frame is active again
+              self.cur_frame_mut().set_intent(Intent::SetValue { path, auto_def, expr_count });
+              self.push_block_frame(block.as_ref(), true)?;
             } else {
-              self.cur_frame_mut().set_intent(Intent::BuildDynamicSetter { path, expr_count, pending_exprs, val_expr });
+              self.cur_frame_mut().set_intent(Intent::BuildDynamicSetter { path, auto_def, expr_count, pending_exprs, val_source });
+              self.push_block_frame(block.as_ref(), true)?;
+              continue 'from_the_top;
             }
-            self.push_block_frame(block.as_ref(), true)?;
+            
           } else {
-            self.cur_frame_mut().set_intent(Intent::SetValue { path, expr_count });
-            self.push_frame(Rc::clone(&val_expr), true)?;
+            self.cur_frame_mut().set_intent(Intent::SetValue { path, auto_def, expr_count });
+          }
+
+          // Prepare setter value
+          match val_source {
+            SetterValueSource::FromExpression(expr) => {
+              self.push_frame(Rc::clone(&expr), true)?;
+            }
+            SetterValueSource::FromValue(val) => {
+              self.push_val(val)?;
+            }
           }
           continue 'from_the_top;
-        }
-        Intent::SetValue { path, expr_count } => {
-          self.set_value(path, expr_count)?;
+        },
+        Intent::SetValue { path, auto_def, expr_count } => {
+          self.set_value(path, auto_def, expr_count)?;
         },
         Intent::BuildList { init, index, mut list } => {
           // Add latest evaluated value to list
@@ -290,24 +309,50 @@ impl<'rant> VM<'rant> {
 
             if exprs.is_empty() {
               // Setter is static, so run it directly
-              self.cur_frame_mut().set_intent(Intent::SetValue { path: Rc::clone(&path), expr_count: 0 });
+              self.cur_frame_mut().set_intent(Intent::SetValue { path: Rc::clone(&path), auto_def: false, expr_count: 0 });
               self.push_frame(Rc::clone(&val_expr), true)?;
             } else {
               // Build dynamic keys before running setter
               // Push dynamic key expressions onto call stack
               self.cur_frame_mut().set_intent(Intent::BuildDynamicSetter {
                 expr_count: exprs.len(),
+                auto_def: false,
                 path: Rc::clone(path),
                 pending_exprs: exprs,
-                val_expr: Rc::clone(val_expr),
+                val_source: SetterValueSource::FromExpression(Rc::clone(val_expr))
               });
             }
             continue 'from_the_top;
           },
           RST::FuncDef(fdef) => {
-            todo!()
+            let FunctionDef { 
+              id, 
+              body, 
+              params, 
+              capture_vars 
+            } = fdef;
+
+            let func = RantValue::Function(Rc::new(RantFunction {
+              params: Rc::clone(params),
+              body: RantFunctionInterface::User(Rc::clone(body)),
+              captured_vars: Default::default(), // TODO
+              min_arg_count: params.iter().take_while(|p| p.is_required()).count(),
+              vararg_index: params.iter().skip_while(|p| !p.varity.is_variadic()).count(),
+            }));
+
+            let dynamic_keys = id.dynamic_keys();
+
+            self.cur_frame_mut().set_intent(Intent::BuildDynamicSetter {
+              expr_count: dynamic_keys.len(),
+              auto_def: true,
+              pending_exprs: dynamic_keys,
+              path: Rc::clone(id),
+              val_source: SetterValueSource::FromValue(func)
+            });
+
+            continue 'from_the_top;
           },
-          _ => {}
+          _ => todo!()
         }
       }
       
@@ -322,7 +367,7 @@ impl<'rant> VM<'rant> {
     Ok(self.pop_val().unwrap_or_default().to_string())
   }
 
-  fn set_value(&mut self, path: Rc<VarAccessPath>, dynamic_key_count: usize) -> RantResult<()> {
+  fn set_value(&mut self, path: Rc<VarAccessPath>, auto_def: bool, dynamic_key_count: usize) -> RantResult<()> {
     // The setter value should be at the top of the value stack, so pop that first
     let setter_value = self.pop_val()?;
 
@@ -335,6 +380,7 @@ impl<'rant> VM<'rant> {
     let mut path_iter = path.iter();
     let mut dynamic_keys = dynamic_keys.drain(..).rev();
          
+    // The setter key is the location on the setter target that will be written to.
     let mut setter_key = match path_iter.next() {
       Some(VarAccessComponent::Name(vname)) => {
         SetterKey::KeyRef(vname.as_str())
@@ -346,6 +392,7 @@ impl<'rant> VM<'rant> {
       _ => unreachable!()
     };
 
+    // The setter target is the value that will be modified. If None, the setter key is a variable.
     let mut setter_target: Option<RantValue> = None;
 
     // Evaluate the path
@@ -382,8 +429,20 @@ impl<'rant> VM<'rant> {
 
     // Finally, set the value
     match (&mut setter_target, &setter_key) {
-      (None, SetterKey::KeyRef(vname)) => self.set_local(vname, setter_value)?,
-      (None, SetterKey::KeyString(vname)) => self.set_local(vname.as_str(), setter_value)?,
+      (None, SetterKey::KeyRef(vname)) => {
+        if auto_def {
+          self.def_local(vname, setter_value)?;
+        } else {
+          self.set_local(vname, setter_value)?;
+        }
+      },
+      (None, SetterKey::KeyString(vname)) => {
+        if auto_def {
+          self.def_local(vname.as_str(), setter_value)?
+        } else {
+          self.set_local(vname.as_str(), setter_value)?
+        }
+      },
       (Some(target), SetterKey::Index(index)) => convert_index_set_result(target.set_by_index(*index, setter_value))?,
       (Some(target), SetterKey::KeyRef(key)) => convert_key_set_result(target.set_by_key(key, setter_value))?,
       (Some(target), SetterKey::KeyString(key)) => convert_key_set_result(target.set_by_key(key.as_str(), setter_value))?,

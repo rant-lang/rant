@@ -1,6 +1,7 @@
-use crate::{runtime::VM, lang::RST, RantResult};
+use crate::{runtime::VM, lang::{Block, RST, Parameter}, RantResult};
 use crate::{collections::*, util::*, ToRant};
 use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg}, cmp, cell::RefCell};
+use std::mem;
 use cast::*;
 
 pub type ValueIndexResult = Result<RantValue, ValueIndexError>;
@@ -15,7 +16,7 @@ pub enum RantValue {
   Float(f64),
   Integer(i64),
   Boolean(bool),
-  Function(Rc<RantClosure>),
+  Function(Rc<RantFunction>),
   List(Rc<RefCell<RantList>>),
   Map(Rc<RefCell<RantMap>>),
   Empty,
@@ -60,27 +61,32 @@ impl<T> VarArgs<T> {
   }
 }
 
-/// Closure type used to implement all Rant functions.
+/// A function callable from Rant.
 #[derive(Debug)]
-pub struct RantClosure {
-  func: RantFunction,
-  locals: Option<RantMap>,
+pub struct RantFunction {
+  pub(crate) min_arg_count: usize,
+  pub(crate) vararg_index: usize,
+  pub(crate) body: RantFunctionInterface,
+  pub(crate) params: Rc<Vec<Parameter>>,
+  pub(crate) captured_vars: Option<RantMap>,
 }
 
 /// Defines endpoint variants for Rant functions.
 #[derive(Clone)]
-pub enum RantFunction {
+pub enum RantFunctionInterface {
   /// Represents a foreign function as a wrapper function accepting a variable number of arguments.
   Foreign(Rc<dyn FnMut(&mut VM, Vec<RantValue>) -> RantResult<()>>),
   /// Represents a user function as an RST.
-  User(Rc<RST>)
+  User(Rc<Block>)
 }
 
-impl Debug for RantFunction {
+impl Debug for RantFunctionInterface {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      RantFunction::Foreign(func) => write!(f, "{:?}", Rc::as_ptr(func)),
-      RantFunction::User(func) => write!(f, "{:?}", Rc::as_ptr(func))
+    unsafe {
+      match self {
+        RantFunctionInterface::Foreign(func) => write!(f, "{:#016x}", mem::transmute::<_, u128>(Rc::as_ptr(func))),
+        RantFunctionInterface::User(func) => write!(f, "{:#016x}", mem::transmute::<_, usize>(Rc::as_ptr(func)))
+      }
     }
   }
 }
@@ -92,7 +98,7 @@ impl Debug for RantValue {
       RantValue::Float(n) => write!(f, "{}", n),
       RantValue::Integer(n) => write!(f, "{}", n),
       RantValue::Boolean(b) => write!(f, "{}", bstr(*b)),
-      RantValue::Function(func) => write!(f, "[function: {:?}]", func),
+      RantValue::Function(func) => write!(f, "[function({:?})]", func.body),
       RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
       RantValue::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
       RantValue::Empty => write!(f, "<>"),
@@ -107,7 +113,7 @@ impl Display for RantValue {
       RantValue::Integer(n) => write!(f, "{}", n),
       RantValue::Float(n) => write!(f, "{}", n),
       RantValue::Boolean(b) => write!(f, "{}", bstr(*b)),
-      RantValue::Function(func) => write!(f, "[function: {:?}]", func),
+      RantValue::Function(func) => write!(f, "[function({:?})]", func.body),
       RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
       RantValue::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
       RantValue::Empty => Ok(())

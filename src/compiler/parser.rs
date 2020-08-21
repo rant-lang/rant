@@ -741,11 +741,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           match self.reader.next_solid() {
             Some((RantToken::LeftBrace, _)) => {
               // TODO: Handle captured variables in function bodies
-              let body = self.parse_block(PrintFlag::None)?;
+              let body = Rc::new(self.parse_block(PrintFlag::None)?);
               
               Ok(RST::FuncDef(FunctionDef {
-                id: func_id,
-                params,
+                id: Rc::new(func_id),
+                params: Rc::new(params),
                 body,
                 capture_vars: Rc::new(vec![]),
               }))

@@ -279,12 +279,12 @@ impl_from_rant_args!(A, B, C, D, E, F, G, H, I, J, K);
 //impl_from_rant_args!(A, B, C, D, E, F, G, H, I, J, K, L);
 
 pub trait AsRantForeignFunc<Params: FromRantArgs> {
-  fn as_rant_func(&'static self) -> RantFunction;
+  fn as_rant_func(&'static self) -> RantFunctionInterface;
 }
 
 impl<Params: FromRantArgs, Function: Fn(&mut VM, Params) -> RantResult<()>> AsRantForeignFunc<Params> for Function {
-  fn as_rant_func(&'static self) -> RantFunction {
-    RantFunction::Foreign(Rc::new(move |vm, args| {
+  fn as_rant_func(&'static self) -> RantFunctionInterface {
+    RantFunctionInterface::Foreign(Rc::new(move |vm, args| {
       self(vm, Params::from_rant_args(args)?)
     }))
   }

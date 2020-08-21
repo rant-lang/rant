@@ -1,6 +1,6 @@
-use std::{cell::RefCell, rc::Rc, ops::{DerefMut, Deref}};
+use std::{rc::Rc, ops::{DerefMut, Deref}};
 use std::mem;
-use crate::{lang::{Sequence, RST, Identifier}, RantMap, RantString, RantValue, RantResult, RantError, RuntimeErrorType, Rant};
+use crate::{lang::{Sequence, RST}, RantMap, RantValue, RantResult, RantError, RuntimeErrorType, Rant};
 use super::{OutputBuffer, output::OutputWriter, Intent};
 
 const STACK_INITIAL_CAPACITY: usize = 16;

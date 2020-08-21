@@ -189,6 +189,15 @@ pub struct Parameter {
   pub varity: Varity,
 }
 
+impl Parameter {
+  /// Returns true if the parameter is required.
+  #[inline]
+  pub fn is_required(&self) -> bool {
+    use Varity::*;
+    matches!(self.varity, Required | VariadicPlus)
+  }
+}
+
 /// Describes a function call.
 #[derive(Debug)]
 pub struct FunctionCall {
@@ -200,10 +209,10 @@ pub struct FunctionCall {
 /// Describes a function definition.
 #[derive(Debug)]
 pub struct FunctionDef {
-  pub id: VarAccessPath,
-  pub params: Vec<Parameter>,
+  pub id: Rc<VarAccessPath>,
+  pub params: Rc<Vec<Parameter>>,
   pub capture_vars: Rc<Vec<Identifier>>,
-  pub body: Block,
+  pub body: Rc<Block>,
 }
 
 /// Describes a boxing (closure) operation to turn a block into a function.
