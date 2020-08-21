@@ -50,7 +50,7 @@ macro_rules! runtime_error {
 }
 
 /// RSTs can assign intents to the current stack frame
-/// to override the its usual behavior next time it's active.
+/// to override its usual behavior next time it's active.
 #[derive(Debug)]
 pub enum Intent {
   /// Run frame sequence as normal.
@@ -164,7 +164,7 @@ impl<'rant> VM<'rant> {
           continue 'from_the_top;
         },
         Intent::GetValue { path, expr_count } => {
-          self.intent_get_value(path, expr_count)?;
+          self.get_value(path, expr_count)?;
         },
         Intent::BuildDynamicSetter { path, expr_count, mut pending_exprs, val_expr } => {
           if let Some(block) = pending_exprs.pop() {
@@ -183,7 +183,7 @@ impl<'rant> VM<'rant> {
           continue 'from_the_top;
         }
         Intent::SetValue { path, expr_count } => {
-          self.intent_set_value(path, expr_count)?;
+          self.set_value(path, expr_count)?;
         },
         Intent::BuildList { init, index, mut list } => {
           // Add latest evaluated value to list
@@ -322,25 +322,25 @@ impl<'rant> VM<'rant> {
     Ok(self.pop_val().unwrap_or_default().to_string())
   }
 
-  fn intent_set_value(&mut self, path: Rc<VarAccessPath>, expr_count: usize) -> RantResult<()> {
+  fn set_value(&mut self, path: Rc<VarAccessPath>, dynamic_key_count: usize) -> RantResult<()> {
     // The setter value should be at the top of the value stack, so pop that first
     let setter_value = self.pop_val()?;
 
     // Gather evaluated dynamic keys from stack
-    let mut expr_values = vec![];
-    for _ in 0..expr_count {
-      expr_values.push(self.pop_val()?);
+    let mut dynamic_keys = vec![];
+    for _ in 0..dynamic_key_count {
+      dynamic_keys.push(self.pop_val()?);
     }
 
     let mut path_iter = path.iter();
-    let mut expr_values = expr_values.drain(..).rev();
+    let mut dynamic_keys = dynamic_keys.drain(..).rev();
          
     let mut setter_key = match path_iter.next() {
       Some(VarAccessComponent::Name(vname)) => {
         SetterKey::KeyRef(vname.as_str())
       },
       Some(VarAccessComponent::Expression(_)) => {
-        let key = RantString::from(expr_values.next().unwrap().to_string());
+        let key = RantString::from(dynamic_keys.next().unwrap().to_string());
         SetterKey::KeyString(key)
       },
       _ => unreachable!()
@@ -367,7 +367,7 @@ impl<'rant> VM<'rant> {
         VarAccessComponent::Index(index) => SetterKey::Index(*index),
         // Dynamic key
         VarAccessComponent::Expression(_) => {
-          let key = RantString::from(expr_values.next().unwrap().to_string());
+          let key = RantString::from(dynamic_keys.next().unwrap().to_string());
           SetterKey::KeyString(key)
         }
       }
@@ -386,15 +386,15 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
-  fn intent_get_value(&mut self, path: Rc<VarAccessPath>, expr_count: usize) -> RantResult<()> {
+  fn get_value(&mut self, path: Rc<VarAccessPath>, dynamic_key_count: usize) -> RantResult<()> {
     // Gather evaluated dynamic keys from stack
-    let mut expr_values = vec![];
-    for _ in 0..expr_count {
-      expr_values.push(self.pop_val()?);
+    let mut dynamic_keys = vec![];
+    for _ in 0..dynamic_key_count {
+      dynamic_keys.push(self.pop_val()?);
     }
 
     let mut path_iter = path.iter();
-    let mut expr_values = expr_values.drain(..);
+    let mut dynamic_keys = dynamic_keys.drain(..);
 
     // Get the root variable
     let mut getter_value = match path_iter.next() {
@@ -402,7 +402,7 @@ impl<'rant> VM<'rant> {
           self.get_local(vname.as_str())?
         },
         Some(VarAccessComponent::Expression(_)) => {
-          let key = expr_values.next().unwrap().to_string();
+          let key = dynamic_keys.next().unwrap().to_string();
           self.get_local(key.as_str())?
         },
         _ => unreachable!()
@@ -427,7 +427,7 @@ impl<'rant> VM<'rant> {
         },
         // Dynamic key
         VarAccessComponent::Expression(_) => {
-          let key = expr_values.next().unwrap();
+          let key = dynamic_keys.next().unwrap();
           match key {
             RantValue::Integer(index) => {
               getter_value = match getter_value.get_by_index(index) {
