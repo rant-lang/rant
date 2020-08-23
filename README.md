@@ -42,6 +42,8 @@ Rant does more than generate random strings: its behavior is infinitely configur
 
 In addition to its rock-solid string generation tools, Rant offers a fully-featured variable system including common primitives like numbers and booleans as well as collection types. And with Rant's extensive formatting tools, you can fine-tune how anything prints.
 
-## Licensing
+## License
 
-TBA
+Rant is licensed under the GNU Affero General Public License v3. See [LICENSE](./LICENSE) for more details.
+
+An alternative, commercial license is planned for the future.
