@@ -734,7 +734,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Function definition
         RantToken::Dollar => {
           // Name of variable function will be stored in
-          let func_id = self.parse_var_access_path()?;
+          let func_id = self.parse_accessor()?;
           // Function params
           let params = self.parse_func_params(&start_span)?;
           // Read function body
@@ -806,7 +806,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         Ok(RST::AnonFuncCall(afcall))
       } else {
         // Named function call
-        let func_name = self.parse_var_access_path()?;
+        let func_name = self.parse_accessor()?;
         if let Some((token, _)) = self.reader.next_solid() {
           match token {
             RantToken::RightBracket => {
@@ -847,8 +847,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
   }
   
-  /// Parses a variable access path.
-  fn parse_var_access_path(&mut self) -> ParseResult<VarAccessPath> {
+  // TODO: Anonymous getters/setters
+  /// Parses an accessor.
+  fn parse_accessor(&mut self) -> ParseResult<VarAccessPath> {
     let mut idparts = vec![];
     let preceding_span = self.reader.last_token_span();
     let first_part = self.reader.next_solid();
@@ -1025,7 +1026,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       }
     } else {
       // Read the path to what we're accessing
-      let var_path = self.parse_var_access_path()?;
+      let var_path = self.parse_accessor()?;
 
       if let Some((token, _)) = self.reader.next_solid() {
         match token {

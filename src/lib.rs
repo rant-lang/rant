@@ -16,7 +16,7 @@ pub use value::*;
 pub use convert::*;
 use crate::lang::{Sequence};
 use crate::compiler::{CompileResult, RantCompiler, Reporter};
-use crate::runtime::VM;
+use crate::runtime::*;
 use std::{path::Path, rc::Rc, cell::RefCell};
 use random::RantRng;
 
@@ -27,7 +27,6 @@ pub const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const RANT_VERSION: &str = "4.0";
 
 pub(crate) type RantString = smartstring::alias::CompactString;
-pub type RantResult<T> = Result<T, RantError>;
 
 /// A Rant execution context.
 #[derive(Debug)]
@@ -102,7 +101,7 @@ impl Rant {
   }
   
   /// Runs the specified program.
-  pub fn run(&mut self, program: &RantProgram) -> RantResult<String> {
+  pub fn run(&mut self, program: &RantProgram) -> RuntimeResult<String> {
     VM::new(self.rng.clone(), self, program).run()
   }
 }
@@ -145,29 +144,4 @@ pub enum RantError {
     message: Option<String>
   },
   Other
-}
-
-/// Provides general categories of runtime errors encountered in Rant.
-#[derive(Debug)]
-pub enum RuntimeErrorType {
-  /// General error type; check message attached to error
-  GeneralError,
-  /// Stack overflow
-  StackOverflow,
-  /// Stack underflow
-  StackUnderflow,
-  /// Variable access error, such as attempting to access a nonexistent variable
-  InvalidAccess,
-  /// Error in function outside of Rant
-  ExternalError,
-  /// Attempted division by zero
-  DivideByZero,
-  /// Too few/many arguments were passed to a function
-  ArgumentMismatch,
-  /// Tried to invoke a non-function
-  CannotInvokeValue,
-  /// Error occurred while indexing value
-  IndexError(ValueIndexError),
-  /// Error occurred while keying value
-  KeyError(ValueKeyError),
 }

@@ -1,13 +1,15 @@
-use crate::{runtime::VM, lang::{Block, Parameter}, RantResult};
-use crate::{collections::*, util::*};
+use crate::{lang::{Block, Parameter}};
+use crate::runtime::*;
+use crate::{collections::*, util::*, IntoRuntimeResult, RuntimeResult, RuntimeError, RuntimeErrorType};
 use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div, Rem}, cmp, cell::RefCell};
 use std::mem;
 use cast::*;
 
-pub type ValueIndexResult = Result<RantValue, ValueIndexError>;
-pub type ValueKeyResult = Result<RantValue, ValueKeyError>;
-pub type ValueIndexSetResult = Result<(), ValueIndexError>;
-pub type ValueKeySetResult = Result<(), ValueKeyError>;
+pub type ValueResult<T> = Result<T, ValueError>;
+pub type ValueIndexResult = Result<RantValue, IndexError>;
+pub type ValueKeyResult = Result<RantValue, KeyError>;
+pub type ValueIndexSetResult = Result<(), IndexError>;
+pub type ValueKeySetResult = Result<(), KeyError>;
 
 /// Rant variable value.
 #[derive(Clone)]
@@ -22,17 +24,111 @@ pub enum RantValue {
   Empty,
 }
 
+/// Error produced by a RantValue operator or conversion.
 #[derive(Debug)]
-pub enum ValueIndexError {
+pub enum ValueError {
+  /// A conversion between two value types failed.
+  InvalidConversion {
+    from: &'static str,
+    to: &'static str,
+    message: Option<String>,
+  },
+  /// Attempted to divide by zero.
+  DivideByZero,
+}
+
+impl Display for ValueError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      ValueError::InvalidConversion { from, to, message } => {
+        if let Some(message) = message {
+          write!(f, "unable to convert from {} to {}: {}", from, to, message)
+        } else {
+          write!(f, "unable to convert from {} to {}", from, to)
+        }
+      },
+      ValueError::DivideByZero => write!(f, "attempted to divide by zero"),
+    }
+  }
+}
+
+impl<T> IntoRuntimeResult<T> for Result<T, ValueError> {
+  fn into_runtime_result(self) -> RuntimeResult<T> {
+    self.map_err(|err| RuntimeError {
+      description: err.to_string(),
+      error_type: RuntimeErrorType::ValueError(err),
+    })
+  }
+}
+
+/// Error produced by indexing a RantValue.
+#[derive(Debug)]
+pub enum IndexError {
   OutOfRange,
   CannotIndexType(&'static str),
   CannotSetIndexOnType(&'static str),
 }
 
+impl Display for IndexError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      IndexError::OutOfRange => write!(f, "value index is out of range"),
+      IndexError::CannotIndexType(t) => write!(f, "cannot read index on value of type '{}'", t),
+      IndexError::CannotSetIndexOnType(t) => write!(f, "cannot write index on value of type '{}'", t),
+    }
+  }
+}
+
+impl IntoRuntimeResult<RantValue> for ValueIndexResult {
+  fn into_runtime_result(self) -> RuntimeResult<RantValue> {
+    self.map_err(|err| RuntimeError {
+      description: err.to_string(),
+      error_type: RuntimeErrorType::IndexError(err),
+    })
+  }
+}
+
+impl IntoRuntimeResult<()> for ValueIndexSetResult {
+  fn into_runtime_result(self) -> RuntimeResult<()> {
+    self.map_err(|err| RuntimeError {
+      description: err.to_string(),
+      error_type: RuntimeErrorType::IndexError(err),
+    })
+  }
+}
+
+/// Error produced by keying a RantValue.
 #[derive(Debug)]
-pub enum ValueKeyError {
-  KeyNotFound,
+pub enum KeyError {
+  KeyNotFound(String),
   CannotKeyType(&'static str),
+}
+
+impl Display for KeyError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+        KeyError::KeyNotFound(k) => write!(f, "key not found: '{}'", k),
+        KeyError::CannotKeyType(t) => write!(f, "cannot key value of type '{}'", t),
+    }
+  }
+}
+
+impl IntoRuntimeResult<RantValue> for ValueKeyResult {
+  fn into_runtime_result(self) -> RuntimeResult<RantValue> {
+    self.map_err(|err| RuntimeError {
+      description: err.to_string(),
+      error_type: RuntimeErrorType::KeyError(err),
+    })
+  }
+}
+
+impl IntoRuntimeResult<()> for ValueKeySetResult {
+  fn into_runtime_result(self) -> RuntimeResult<()> {
+    self.map_err(|err| RuntimeError {
+      description: err.to_string(),
+      error_type: RuntimeErrorType::KeyError(err),
+    })
+  }
 }
 
 impl RantValue {
@@ -80,7 +176,7 @@ impl RantFunction {
 #[derive(Clone)]
 pub enum RantFunctionInterface {
   /// Represents a foreign function as a wrapper function accepting a variable number of arguments.
-  Foreign(Rc<dyn Fn(&mut VM, Vec<RantValue>) -> RantResult<()>>),
+  Foreign(Rc<dyn Fn(&mut VM, Vec<RantValue>) -> Result<(), RuntimeError>>),
   /// Represents a user function as an RST.
   User(Rc<Block>)
 }
@@ -252,8 +348,8 @@ impl Div for RantValue {
   fn div(self, rhs: Self) -> Self::Output {
     match (self, rhs) {
       (RantValue::Empty, _) | (_, RantValue::Empty) => RantValue::Empty,
-      (_, RantValue::Integer(0)) => RantValue::nan(), // TODO: Runtime error?
-      (_, RantValue::Boolean(false)) => RantValue::nan(), // TODO: Runtime error?
+      (_, RantValue::Integer(0)) => RantValue::nan(), // TODO: Replace with divide by zero error
+      (_, RantValue::Boolean(false)) => RantValue::nan(), // TODO: Replace with divide by zero error
       (RantValue::Integer(a), RantValue::Integer(b)) => RantValue::Integer(a / b),
       (RantValue::Integer(a), RantValue::Float(b)) => RantValue::Float((a as f64) / b),
       (RantValue::Integer(a), RantValue::Boolean(b)) => RantValue::Integer(a / bi64(b)),
@@ -273,6 +369,8 @@ impl Rem for RantValue {
   fn rem(self, rhs: Self) -> Self::Output {
     match (self, rhs) {
       (RantValue::Empty, _) | (_, RantValue::Empty) => RantValue::Empty,
+      (_, RantValue::Integer(0)) => RantValue::nan(), // TODO: Replace with divide by zero error
+      (_, RantValue::Boolean(false)) => RantValue::nan(), // TODO: Replace with divide by zero error
       (RantValue::Integer(a), RantValue::Integer(b)) => RantValue::Integer(a % b),
       (RantValue::Integer(a), RantValue::Float(b)) => RantValue::Float((a as f64) % b),
       (RantValue::Integer(a), RantValue::Boolean(b)) => RantValue::Integer(a % bi64(b)),
@@ -348,7 +446,7 @@ impl RantValue {
 
   pub fn get_by_index(&self, index: i64) -> ValueIndexResult {
     if index < 0 {
-      return Err(ValueIndexError::OutOfRange)
+      return Err(IndexError::OutOfRange)
     }
     let index = index as usize;
 
@@ -357,7 +455,7 @@ impl RantValue {
           if index < s.len() {
             Ok(RantValue::String(s[index..index + 1].to_owned()))
           } else {
-            Err(ValueIndexError::OutOfRange)
+            Err(IndexError::OutOfRange)
           }
         },
         RantValue::List(list) => {
@@ -365,16 +463,16 @@ impl RantValue {
           if index < list.len() {
             Ok(list[index].clone())
           } else {
-            Err(ValueIndexError::OutOfRange)
+            Err(IndexError::OutOfRange)
           }
         },
-        _ => Err(ValueIndexError::CannotIndexType(self.type_name()))
+        _ => Err(IndexError::CannotIndexType(self.type_name()))
     }
   }
 
   pub fn set_by_index(&mut self, index: i64, val: RantValue) -> ValueIndexSetResult {
     if index < 0 {
-      return Err(ValueIndexError::OutOfRange)
+      return Err(IndexError::OutOfRange)
     }
 
     let index = index as usize;
@@ -387,7 +485,7 @@ impl RantValue {
           list[index] = val;
           Ok(())
         } else {
-          Err(ValueIndexError::OutOfRange)
+          Err(IndexError::OutOfRange)
         }
       },
       RantValue::Map(map) => {
@@ -395,7 +493,7 @@ impl RantValue {
         map.raw_set(index.to_string().as_str(), val);
         Ok(())
       },
-      _ => Err(ValueIndexError::CannotSetIndexOnType(self.type_name()))
+      _ => Err(IndexError::CannotSetIndexOnType(self.type_name()))
     }
   }
 
@@ -407,10 +505,10 @@ impl RantValue {
         if let Some(val) = map.raw_get(key) {
           Ok(val.clone())
         } else {
-          Err(ValueKeyError::KeyNotFound)
+          Err(KeyError::KeyNotFound(key.to_owned()))
         }
       },
-      _ => Err(ValueKeyError::CannotKeyType(self.type_name()))
+      _ => Err(KeyError::CannotKeyType(self.type_name()))
     }
   }
 
@@ -422,7 +520,7 @@ impl RantValue {
         map.raw_set(key, val);
         Ok(())
       },
-      _ => Err(ValueKeyError::CannotKeyType(self.type_name()))
+      _ => Err(KeyError::CannotKeyType(self.type_name()))
     }
   }
 }

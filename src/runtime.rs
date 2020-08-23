@@ -9,6 +9,8 @@ mod resolver;
 mod output;
 mod stack;
 
+pub type RuntimeResult<T> = Result<T, RuntimeError>;
+
 pub const MAX_STACK_SIZE: usize = 20000;
 
 pub struct VM<'rant> {
@@ -33,18 +35,18 @@ impl<'rant> VM<'rant> {
   }
 }
 
-/// Returns a `RantResult::Err(RantError::RuntimeError { .. })` from the current execution context with the specified error type and optional description.
+/// Returns a runtime error from the current execution context with the specified error type and optional description.
 macro_rules! runtime_error {
   ($err_type:expr) => {
-    return Err(RantError::RuntimeError {
+    return Err(RuntimeError {
       error_type: $err_type,
-      description: None
+      description: "".to_owned()
     })
   };
   ($err_type:expr, $desc:expr) => {
-    return Err(RantError::RuntimeError {
+    return Err(RuntimeError {
       error_type: $err_type,
-      description: Some($desc.to_string())
+      description: $desc.to_string()
     })
   };
 }
@@ -88,42 +90,10 @@ pub enum SetterValueSource {
   FromValue(RantValue),
 }
 
-#[inline]
-pub(crate) fn convert_index_result(result: ValueIndexResult) -> RantResult<RantValue> {
-  match result {
-      Ok(val) => Ok(val),
-      Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
-  }
-}
-
-#[inline]
-pub(crate) fn convert_key_result(result: ValueKeyResult) -> RantResult<RantValue> {
-  match result {
-    Ok(val) => Ok(val),
-    Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
-  }
-}
-
-#[inline]
-pub(crate) fn convert_index_set_result(result: ValueIndexSetResult) -> RantResult<()> {
-  match result {
-    Ok(_) => Ok(()),
-    Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
-  }
-}
-
-#[inline]
-pub(crate) fn convert_key_set_result(result: ValueKeySetResult) -> RantResult<()> {
-  match result {
-    Ok(_) => Ok(()),
-    Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
-  }
-}
-
 impl<'rant> VM<'rant> {
   /// Runs the program.
   #[inline]
-  pub fn run(&mut self) -> RantResult<String> {
+  pub fn run(&mut self) -> RuntimeResult<String> {
     //println!("RST: {:#?}", self.program.root);
 
     // Push the program's root sequence onto the call stack
@@ -506,7 +476,7 @@ impl<'rant> VM<'rant> {
     Ok(self.pop_val().unwrap_or_default().to_string())
   }
 
-  fn set_value(&mut self, path: Rc<VarAccessPath>, auto_def: bool, dynamic_key_count: usize) -> RantResult<()> {
+  fn set_value(&mut self, path: Rc<VarAccessPath>, auto_def: bool, dynamic_key_count: usize) -> RuntimeResult<()> {
     // The setter value should be at the top of the value stack, so pop that first
     let setter_value = self.pop_val()?;
 
@@ -540,9 +510,9 @@ impl<'rant> VM<'rant> {
       setter_target = match (&setter_target, &setter_key) {
         (None, SetterKey::KeyRef(key)) => Some(self.get_local(key)?),
         (None, SetterKey::KeyString(key)) => Some(self.get_local(key.as_str())?),
-        (Some(val), SetterKey::Index(index)) => Some(convert_index_result(val.get_by_index(*index))?),
-        (Some(val), SetterKey::KeyRef(key)) => Some(convert_key_result(val.get_by_key(key))?),
-        (Some(val), SetterKey::KeyString(key)) => Some(convert_key_result(val.get_by_key(key.as_str()))?),
+        (Some(val), SetterKey::Index(index)) => Some(val.get_by_index(*index).into_runtime_result()?),
+        (Some(val), SetterKey::KeyRef(key)) => Some(val.get_by_key(key).into_runtime_result()?),
+        (Some(val), SetterKey::KeyString(key)) => Some(val.get_by_key(key.as_str()).into_runtime_result()?),
         _ => unreachable!()
       };
 
@@ -582,16 +552,16 @@ impl<'rant> VM<'rant> {
           self.set_local(vname.as_str(), setter_value)?
         }
       },
-      (Some(target), SetterKey::Index(index)) => convert_index_set_result(target.set_by_index(*index, setter_value))?,
-      (Some(target), SetterKey::KeyRef(key)) => convert_key_set_result(target.set_by_key(key, setter_value))?,
-      (Some(target), SetterKey::KeyString(key)) => convert_key_set_result(target.set_by_key(key.as_str(), setter_value))?,
+      (Some(target), SetterKey::Index(index)) => target.set_by_index(*index, setter_value).into_runtime_result()?,
+      (Some(target), SetterKey::KeyRef(key)) => target.set_by_key(key, setter_value).into_runtime_result()?,
+      (Some(target), SetterKey::KeyString(key)) => target.set_by_key(key.as_str(), setter_value).into_runtime_result()?,
       _ => unreachable!()
     }
 
     Ok(())
   }
 
-  fn get_value(&mut self, path: Rc<VarAccessPath>, dynamic_key_count: usize, override_print: bool) -> RantResult<()> {
+  fn get_value(&mut self, path: Rc<VarAccessPath>, dynamic_key_count: usize, override_print: bool) -> RuntimeResult<()> {
     // Gather evaluated dynamic keys from stack
     let mut dynamic_keys = vec![];
     for _ in 0..dynamic_key_count {
@@ -660,7 +630,7 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
-  fn push_block_frame(&mut self, block: &Block, override_print: bool, locals: Option<RantMap>, flag: PrintFlag) -> RantResult<()> {
+  fn push_block_frame(&mut self, block: &Block, override_print: bool, locals: Option<RantMap>, flag: PrintFlag) -> RuntimeResult<()> {
     let elem = Rc::clone(&block.elements[self.rng.next_usize(block.len())]);
     let is_printing = !PrintFlag::prioritize(block.flag, flag).is_sink();
     if is_printing && !override_print {
@@ -671,17 +641,17 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  pub(crate) fn set_local(&mut self, key: &str, val: RantValue) -> RantResult<()> {
+  pub(crate) fn set_local(&mut self, key: &str, val: RantValue) -> RuntimeResult<()> {
     self.call_stack.set_local(self.engine, key, val)
   }
 
   #[inline(always)]
-  pub(crate) fn get_local(&self, key: &str) -> RantResult<RantValue> {
+  pub(crate) fn get_local(&self, key: &str) -> RuntimeResult<RantValue> {
     self.call_stack.get_local(self.engine, key)
   }
 
   #[inline(always)]
-  pub(crate) fn def_local(&mut self, key: &str, val: RantValue) -> RantResult<()> {
+  pub(crate) fn def_local(&mut self, key: &str, val: RantValue) -> RuntimeResult<()> {
     self.call_stack.def_local(self.engine, key, val)
   }
   
@@ -691,7 +661,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline]
-  fn push_val(&mut self, val: RantValue) -> RantResult<usize> {
+  fn push_val(&mut self, val: RantValue) -> RuntimeResult<usize> {
     if self.val_stack.len() < MAX_STACK_SIZE {
       self.val_stack.push(val);
       Ok(self.val_stack.len())
@@ -701,7 +671,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline]
-  fn pop_val(&mut self) -> RantResult<RantValue> {
+  fn pop_val(&mut self) -> RuntimeResult<RantValue> {
     if !self.val_stack.is_empty() {
       Ok(self.val_stack.pop().unwrap())
     } else {
@@ -710,7 +680,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline]
-  fn pop_frame(&mut self) -> RantResult<StackFrame> {
+  fn pop_frame(&mut self) -> RuntimeResult<StackFrame> {
     if let Some(frame) = self.call_stack.pop() {
       Ok(frame)
     } else {
@@ -719,7 +689,7 @@ impl<'rant> VM<'rant> {
   }
   
   #[inline]
-  fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool, locals: Option<RantMap>) -> RantResult<()> {
+  fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool, locals: Option<RantMap>) -> RuntimeResult<()> {
     
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
@@ -745,4 +715,41 @@ impl<'rant> VM<'rant> {
   pub fn rng(&self) -> &RantRng {
     self.rng.as_ref()
   }
+}
+
+pub(crate) trait IntoRuntimeResult<T> {
+  fn into_runtime_result(self) -> RuntimeResult<T>;
+}
+
+#[derive(Debug)]
+pub struct RuntimeError {
+  pub error_type: RuntimeErrorType,
+  pub description: String,
+}
+
+/// Provides general categories of runtime errors encountered in Rant.
+#[derive(Debug)]
+pub enum RuntimeErrorType {
+  /// General error type; check message attached to error
+  GeneralError,
+  /// Stack overflow
+  StackOverflow,
+  /// Stack underflow
+  StackUnderflow,
+  /// Variable access error, such as attempting to access a nonexistent variable
+  InvalidAccess,
+  /// Error in function outside of Rant
+  ExternalError,
+  /// Attempted division by zero
+  DivideByZero,
+  /// Too few/many arguments were passed to a function
+  ArgumentMismatch,
+  /// Tried to invoke a non-function
+  CannotInvokeValue,
+  /// Error occurred when creating value
+  ValueError(ValueError),
+  /// Error occurred while indexing value
+  IndexError(IndexError),
+  /// Error occurred while keying value
+  KeyError(KeyError),
 }

@@ -1,6 +1,7 @@
 use std::{rc::Rc, ops::{DerefMut, Deref}};
 use std::{collections::VecDeque};
-use crate::{lang::{Sequence, RST}, RantMap, RantValue, RantResult, RantError, RuntimeErrorType, Rant};
+use crate::{lang::{Sequence, RST}, RantMap, RantValue, RantError, Rant, RuntimeResult};
+use crate::runtime::*;
 use super::{OutputBuffer, output::OutputWriter, Intent};
 
 const STACK_INITIAL_CAPACITY: usize = 16;
@@ -34,7 +35,7 @@ impl CallStack {
     Self(Vec::with_capacity(STACK_INITIAL_CAPACITY))
   }
 
-  pub fn set_local(&mut self, context: &Rant, id: &str, val: RantValue) -> RantResult<()> {
+  pub fn set_local(&mut self, context: &Rant, id: &str, val: RantValue) -> RuntimeResult<()> {
     // Check locals
     for frame in self.iter_mut().rev() {
       if frame.locals.raw_has_key(id) {
@@ -50,13 +51,13 @@ impl CallStack {
       return Ok(())
     }
 
-    Err(RantError::RuntimeError {
+    Err(RuntimeError {
       error_type: RuntimeErrorType::InvalidAccess,
-      description: Some(format!("variable '{}' not found", id)),
+      description: format!("variable '{}' not found", id),
     })
   }
 
-  pub fn get_local(&self, context: &Rant, id: &str) -> RantResult<RantValue> {
+  pub fn get_local(&self, context: &Rant, id: &str) -> RuntimeResult<RantValue> {
     // Check locals
     for frame in self.iter().rev() {
       if let Some(val) = frame.locals.raw_get(id) {
@@ -69,13 +70,13 @@ impl CallStack {
       return Ok(val.clone())
     }
 
-    Err(RantError::RuntimeError {
+    Err(RuntimeError {
       error_type: RuntimeErrorType::InvalidAccess,
-      description: Some(format!("variable '{}' not found", id))
+      description: format!("variable '{}' not found", id),
     })
   }
 
-  pub fn def_local(&mut self, context: &Rant, id: &str, val: RantValue) -> RantResult<()> {
+  pub fn def_local(&mut self, context: &Rant, id: &str, val: RantValue) -> RuntimeResult<()> {
     if self.len() > 1 {
       if let Some(frame) = self.last_mut() {
         frame.locals.raw_set(id, val);
