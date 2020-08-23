@@ -6,7 +6,7 @@
 #![allow(unused_variables)]
 
 use crate::value::*;
-use crate::{lang::{Varity, Parameter, Identifier}, RantString, RantMap, RantMapRef, stdlib::RantStdResult};
+use crate::{lang::{Varity, Parameter, Identifier}, RantString, RantMapRef, stdlib::RantStdResult};
 use crate::runtime::*;
 use cast::*;
 use cast::Error as CastError;

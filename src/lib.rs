@@ -36,10 +36,12 @@ pub struct Rant {
 }
 
 impl Rant {
+  /// Creates a new Rant context with the default seed (0).
   pub fn new() -> Self {
     Self::with_seed(0)
   }
   
+  /// Creates a new Rant context with the specified seed.
   pub fn with_seed(seed: u64) -> Self {
     let mut globals = RantMap::new();
     
@@ -121,10 +123,16 @@ impl RantProgram {
     }
   }
 
+  /// Consumes a program, assigns the specified name to it, and returns it.
   pub fn with_name<S: ToString>(self, name: S) -> Self {
     Self {
       root: self.root,
       name: Some(name.to_string())
     }
+  }
+
+  /// Gets the name of the program, if any.
+  pub fn name(&self) -> Option<String> {
+    self.name.clone()
   }
 }

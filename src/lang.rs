@@ -1,4 +1,4 @@
-//! The `lang` module contains Rant's syntax tree implementation and supporting data structures.
+//! Contains Rant's syntax tree implementation and supporting data structures.
 
 use std::{ops::{DerefMut, Deref}, fmt::Display, rc::Rc};
 use crate::RantString;

@@ -16,13 +16,13 @@ Rant 4.0 is a complete redesign and reimplementation of the Rant language and ru
 Rant is basically the opposite of Regex: Instead of matching a string to a pattern, you provide the pattern and a matching string comes out!
 
 Rant makes it easy to express your desired output as a set of branching possibilities.
-For example, here is a simple regex that matches on three strings:
+For example, consider a simple regex that matches on three strings:
 
 ```regex
 (foo|bar|baz)
 ```
 
-And its equivalent in Rant:
+The Rant equivalent to generate any matching string is quite similar:
 
 ```rant
 {foo|bar|baz} # Resolves randomly to "foo", "bar", or "baz"

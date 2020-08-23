@@ -1,4 +1,4 @@
-//! # Rant standard library
+//! The Rant standard library.
 
 #![allow(unused_variables)]
 
@@ -82,6 +82,30 @@ fn num(vm: &mut VM, (a, b): (i64, i64)) -> RantStdResult {
 fn numf(vm: &mut VM, (a, b): (f64, f64)) -> RantStdResult {
   let n = vm.rng().next_f64(a, b);
   vm.cur_frame_mut().write_value(RantValue::Float(n));
+  Ok(())
+}
+
+fn hex(vm: &mut VM, count: Option<usize>) -> RantStdResult {
+  let count = count.unwrap_or(1);
+  let mut s = String::with_capacity(count);
+  let rng = vm.rng();
+  for _ in 0..count {
+    let ch = (&b"0123456789abcdef")[rng.next_usize(16)] as char;
+    s.push(ch);
+  }
+  vm.cur_frame_mut().write_frag(s.as_str());
+  Ok(())
+}
+
+fn dec(vm: &mut VM, count: Option<usize>) -> RantStdResult {
+  let count = count.unwrap_or(1);
+  let mut s = String::with_capacity(count);
+  let rng = vm.rng();
+  for _ in 0..count {
+    let ch = (&b"0123456789")[rng.next_usize(10)] as char;
+    s.push(ch);
+  }
+  vm.cur_frame_mut().write_frag(s.as_str());
   Ok(())
 }
 
@@ -177,7 +201,7 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     to_int as "int", to_float as "float", to_string as "string",
 
     // Generator functions
-    num as "n", numf as "nf",
+    dec, hex, num as "n", numf as "nf",
 
     // Prototype functions
     proto, set_proto as "set-proto",
