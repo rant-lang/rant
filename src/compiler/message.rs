@@ -18,14 +18,17 @@ impl Position {
     }
   }
   
+  /// Gets the line number of the position.
   pub fn line(&self) -> usize {
     self.line
   }
   
+  /// Gets the column number of the position.
   pub fn col(&self) -> usize {
     self.col
   }
 
+  /// Gets the span associated with the position.
   pub fn span(&self) -> Range<usize> {
     self.span.clone()
   }
