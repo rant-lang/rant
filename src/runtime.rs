@@ -740,8 +740,6 @@ pub enum RuntimeErrorType {
   InvalidAccess,
   /// Error in function outside of Rant
   ExternalError,
-  /// Attempted division by zero
-  DivideByZero,
   /// Too few/many arguments were passed to a function
   ArgumentMismatch,
   /// Tried to invoke a non-function

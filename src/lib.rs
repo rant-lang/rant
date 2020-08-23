@@ -128,20 +128,3 @@ impl RantProgram {
     }
   }
 }
-
-/// Provides information about errors encountered in Rant.
-#[derive(Debug)]
-pub enum RantError {
-  /// Indicates a runtime error.
-  RuntimeError {
-    error_type: RuntimeErrorType,
-    description: Option<String>
-  },
-  /// Indicates that a value conversion to/from a Rant value type has failed.
-  ValueConversionError {
-    from: &'static str,
-    to: &'static str,
-    message: Option<String>
-  },
-  Other
-}

@@ -1,6 +1,6 @@
 use crate::{lang::{Block, Parameter}};
 use crate::runtime::*;
-use crate::{collections::*, util::*, IntoRuntimeResult, RuntimeResult, RuntimeError, RuntimeErrorType};
+use crate::{collections::*, util::*, IntoRuntimeResult, RuntimeResult, RuntimeError, RuntimeErrorType, stdlib::RantStdResult};
 use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div, Rem}, cmp, cell::RefCell};
 use std::mem;
 use cast::*;
@@ -176,7 +176,7 @@ impl RantFunction {
 #[derive(Clone)]
 pub enum RantFunctionInterface {
   /// Represents a foreign function as a wrapper function accepting a variable number of arguments.
-  Foreign(Rc<dyn Fn(&mut VM, Vec<RantValue>) -> Result<(), RuntimeError>>),
+  Foreign(Rc<dyn Fn(&mut VM, Vec<RantValue>) -> RantStdResult>),
   /// Represents a user function as an RST.
   User(Rc<Block>)
 }
@@ -344,12 +344,11 @@ impl Mul for RantValue {
 }
 
 impl Div for RantValue {
-  type Output = RantValue;
+  type Output = ValueResult<RantValue>;
   fn div(self, rhs: Self) -> Self::Output {
-    match (self, rhs) {
+    Ok(match (self, rhs) {
       (RantValue::Empty, _) | (_, RantValue::Empty) => RantValue::Empty,
-      (_, RantValue::Integer(0)) => RantValue::nan(), // TODO: Replace with divide by zero error
-      (_, RantValue::Boolean(false)) => RantValue::nan(), // TODO: Replace with divide by zero error
+      (_, RantValue::Integer(0)) | (_, RantValue::Boolean(false)) => return Err(ValueError::DivideByZero),
       (RantValue::Integer(a), RantValue::Integer(b)) => RantValue::Integer(a / b),
       (RantValue::Integer(a), RantValue::Float(b)) => RantValue::Float((a as f64) / b),
       (RantValue::Integer(a), RantValue::Boolean(b)) => RantValue::Integer(a / bi64(b)),
@@ -360,22 +359,21 @@ impl Div for RantValue {
       (RantValue::Boolean(a), RantValue::Integer(b)) => RantValue::Integer(bi64(a) / b),
       (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) / b),
       _ => RantValue::nan()
-    }
+    })
   }
 }
 
 impl Rem for RantValue {
-  type Output = RantValue;
+  type Output = ValueResult<RantValue>;
   fn rem(self, rhs: Self) -> Self::Output {
-    match (self, rhs) {
+    Ok(match (self, rhs) {
       (RantValue::Empty, _) | (_, RantValue::Empty) => RantValue::Empty,
-      (_, RantValue::Integer(0)) => RantValue::nan(), // TODO: Replace with divide by zero error
-      (_, RantValue::Boolean(false)) => RantValue::nan(), // TODO: Replace with divide by zero error
+      (_, RantValue::Integer(0)) | (_, RantValue::Boolean(false)) => return Err(ValueError::DivideByZero),
       (RantValue::Integer(a), RantValue::Integer(b)) => RantValue::Integer(a % b),
       (RantValue::Integer(a), RantValue::Float(b)) => RantValue::Float((a as f64) % b),
       (RantValue::Integer(a), RantValue::Boolean(b)) => RantValue::Integer(a % bi64(b)),
       _ => RantValue::nan()
-    }
+    })
   }
 }
 

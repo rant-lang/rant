@@ -3,8 +3,8 @@
 #![allow(unused_variables)]
 
 use std::rc::Rc;
+use crate::*;
 use crate::runtime::*;
-use crate::{RantValue, AsRantForeignFunc, RantMap, RequiredVarArgs, RantList, RantMapRef, IntoRuntimeResult, RuntimeError};
 use std::mem;
 
 pub(crate) type RantStdResult = Result<(), RuntimeError>;
@@ -25,7 +25,6 @@ fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> Rant
 }
 
 fn seed(vm: &mut VM, _: ()) -> RantStdResult {
-  // Yeah, I know, but this is pretty much guaranteed not to fail
   let signed_seed = unsafe {
     mem::transmute::<u64, i64>(vm.rng().seed())
   };
@@ -55,7 +54,12 @@ fn sub(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
 }
 
 fn div(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
-  vm.cur_frame_mut().write_value(lhs / rhs);
+  vm.cur_frame_mut().write_value((lhs / rhs).into_runtime_result()?);
+  Ok(())
+}
+
+fn rem(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
+  vm.cur_frame_mut().write_value((lhs % rhs).into_runtime_result()?);
   Ok(())
 }
 
@@ -127,6 +131,16 @@ fn to_string(vm: &mut VM, value: RantValue) -> RantStdResult {
   Ok(())
 }
 
+fn upper(vm: &mut VM, s: String) -> RantStdResult {
+  vm.cur_frame_mut().write_frag(s.to_uppercase().as_str());
+  Ok(())
+}
+
+fn lower(vm: &mut VM, s: String) -> RantStdResult {
+  vm.cur_frame_mut().write_frag(s.to_lowercase().as_str());
+  Ok(())
+}
+
 fn get(vm: &mut VM, key: String) -> RantStdResult {
   let val = vm.get_local(key.as_str())?;
   vm.cur_frame_mut().write_value(val);
@@ -157,7 +171,7 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     alt, len, get_type as "type", seed,
 
     // Math functions
-    add, sub, mul, div, mul_add as "mul-add",
+    add, sub, mul, div, mul_add as "mul-add", rem as "mod",
 
     // Conversion functions
     to_int as "int", to_float as "float", to_string as "string",
@@ -170,6 +184,9 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
 
     // List functions
     pick, join,
+
+    // String functions
+    lower, upper,
 
     // Dynamic Variable Access functions
     get
