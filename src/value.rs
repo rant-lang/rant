@@ -53,6 +53,7 @@ impl Display for ValueError {
 }
 
 impl<T> IntoRuntimeResult<T> for Result<T, ValueError> {
+  #[inline]
   fn into_runtime_result(self) -> RuntimeResult<T> {
     self.map_err(|err| RuntimeError {
       description: err.to_string(),
@@ -80,6 +81,7 @@ impl Display for IndexError {
 }
 
 impl IntoRuntimeResult<RantValue> for ValueIndexResult {
+  #[inline]
   fn into_runtime_result(self) -> RuntimeResult<RantValue> {
     self.map_err(|err| RuntimeError {
       description: err.to_string(),
@@ -89,6 +91,7 @@ impl IntoRuntimeResult<RantValue> for ValueIndexResult {
 }
 
 impl IntoRuntimeResult<()> for ValueIndexSetResult {
+  #[inline]
   fn into_runtime_result(self) -> RuntimeResult<()> {
     self.map_err(|err| RuntimeError {
       description: err.to_string(),
@@ -114,6 +117,7 @@ impl Display for KeyError {
 }
 
 impl IntoRuntimeResult<RantValue> for ValueKeyResult {
+  #[inline]
   fn into_runtime_result(self) -> RuntimeResult<RantValue> {
     self.map_err(|err| RuntimeError {
       description: err.to_string(),
@@ -123,6 +127,7 @@ impl IntoRuntimeResult<RantValue> for ValueKeyResult {
 }
 
 impl IntoRuntimeResult<()> for ValueKeySetResult {
+  #[inline]
   fn into_runtime_result(self) -> RuntimeResult<()> {
     self.map_err(|err| RuntimeError {
       description: err.to_string(),

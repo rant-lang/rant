@@ -13,6 +13,11 @@ description = "The Rant procedural text generation language"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = true
+
 [[bin]]
 name = "rant"
 path = "src/tools/cli/main.rs"
@@ -27,7 +32,6 @@ logos = "0.11.4"
 rand = "0.7.3"
 rand_xoshiro = "0.4.0"
 smartstring = "0.2.3"
-tuple-arity = "0.1.2"
 
 # CLI
 argh = "0.1.3"

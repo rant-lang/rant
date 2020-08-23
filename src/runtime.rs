@@ -476,6 +476,7 @@ impl<'rant> VM<'rant> {
     Ok(self.pop_val().unwrap_or_default().to_string())
   }
 
+  #[inline]
   fn set_value(&mut self, path: Rc<VarAccessPath>, auto_def: bool, dynamic_key_count: usize) -> RuntimeResult<()> {
     // The setter value should be at the top of the value stack, so pop that first
     let setter_value = self.pop_val()?;
@@ -561,6 +562,7 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
+  #[inline]
   fn get_value(&mut self, path: Rc<VarAccessPath>, dynamic_key_count: usize, override_print: bool) -> RuntimeResult<()> {
     // Gather evaluated dynamic keys from stack
     let mut dynamic_keys = vec![];
@@ -630,6 +632,7 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
+  #[inline(always)]
   fn push_block_frame(&mut self, block: &Block, override_print: bool, locals: Option<RantMap>, flag: PrintFlag) -> RuntimeResult<()> {
     let elem = Rc::clone(&block.elements[self.rng.next_usize(block.len())]);
     let is_printing = !PrintFlag::prioritize(block.flag, flag).is_sink();
@@ -660,7 +663,7 @@ impl<'rant> VM<'rant> {
     self.call_stack.is_empty()
   }
 
-  #[inline]
+  #[inline(always)]
   fn push_val(&mut self, val: RantValue) -> RuntimeResult<usize> {
     if self.val_stack.len() < MAX_STACK_SIZE {
       self.val_stack.push(val);
@@ -670,16 +673,16 @@ impl<'rant> VM<'rant> {
     }
   }
 
-  #[inline]
+  #[inline(always)]
   fn pop_val(&mut self) -> RuntimeResult<RantValue> {
-    if !self.val_stack.is_empty() {
-      Ok(self.val_stack.pop().unwrap())
+    if let Some(val) = self.val_stack.pop() {
+      Ok(val)
     } else {
       runtime_error!(RuntimeErrorType::StackUnderflow, "value stack has underflowed");
     }
   }
 
-  #[inline]
+  #[inline(always)]
   fn pop_frame(&mut self) -> RuntimeResult<StackFrame> {
     if let Some(frame) = self.call_stack.pop() {
       Ok(frame)
@@ -688,7 +691,7 @@ impl<'rant> VM<'rant> {
     }
   }
   
-  #[inline]
+  #[inline(always)]
   fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool, locals: Option<RantMap>) -> RuntimeResult<()> {
     
     // Check if this push would overflow the stack
