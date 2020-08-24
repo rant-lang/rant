@@ -4,9 +4,16 @@
 [![Crates.io](https://img.shields.io/crates/d/rant)](https://crates.io/crates/rant)
 [![Docs.rs](https://docs.rs/rant/badge.svg)](https://docs.rs/rant)
 
-|**IMPORTANT:**<br>This project is in early alpha, and there are a lot of broken/missing features.<br>While I encourage you to try it out and give feedback, please do not use in production environments until a stable version is released.<br>Features may appear or disappear at any time for any reason. Assume that every alpha release will be breaking.|
-|-|
-<br>
+***
+### IMPORTANT:
+
+**This project is in early alpha, and there are a lot of broken/missing features.**
+
+**While I encourage you to try it out and give feedback, please do not use in production environments until a stable version is released.**
+
+**Features may appear or disappear at any time for any reason. Assume that every alpha release will be breaking.**
+
+***
 
 Rant is a language for procedural text generation.
 It is designed to help you write more dynamic and expressive templates, dialogue, stories, names, test data, and much more.
