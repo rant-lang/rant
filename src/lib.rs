@@ -31,15 +31,15 @@ mod convert;
 mod random;
 mod util;
 mod collections;
-pub mod stdlib;
-pub mod value;
+mod stdlib;
+mod value;
 pub mod compiler;
 
 pub use collections::*;
 pub use value::*;
 pub use convert::*;
 use crate::lang::{Sequence};
-use crate::compiler::{CompileResult, RantCompiler, Reporter};
+use crate::compiler::{RantCompiler, Reporter};
 use crate::runtime::*;
 use std::{path::Path, rc::Rc, cell::RefCell};
 use random::RantRng;
@@ -56,6 +56,7 @@ pub(crate) type RantString = smartstring::alias::CompactString;
 #[derive(Debug)]
 pub struct Rant {
   rng: Rc<RantRng>,
+  debug_mode: bool,
   globals: RantMapRef,
 }
 
@@ -67,18 +68,34 @@ impl Rant {
   
   /// Creates a new Rant context with the specified seed and loads the standard library.
   pub fn with_seed(seed: u64) -> Self {
+    Self::with_options(RantOptions {
+      seed,
+      .. Default::default()
+    })
+  }
+
+  /// Creates a new Rant context with the specified options.
+  pub fn with_options(options: RantOptions) -> Self {
     let mut rant = Self {
+      debug_mode: options.debug_mode,
       globals: Rc::new(RefCell::new(RantMap::new())),
-      rng: Rc::new(RantRng::new(seed))
+      rng: Rc::new(RantRng::new(options.seed))
     };
-    rant.load_stdlib();
+    if options.use_stdlib {
+      rant.load_stdlib();
+    }
+    rant.set_default_globals();
     rant
   }
 
   fn load_stdlib(&mut self) {
     let mut globals = self.globals.borrow_mut();
     // Load standard library
-    stdlib::load_stdlib(&mut globals);
+    stdlib::load_stdlib(&mut globals);    
+  }
+
+  fn set_default_globals(&mut self) {
+    let mut globals = self.globals.borrow_mut();
     // Add standard variables
     // TODO: Make these read-only
     globals.raw_set("RANT_VERSION", RantValue::String(RANT_VERSION.to_owned()));
@@ -87,6 +104,7 @@ impl Rant {
 }
 
 impl Default for Rant {
+  /// Creates a default `Rant` instance.
   fn default() -> Self {
     Self::new()
   }
@@ -141,6 +159,26 @@ impl Rant {
   /// Runs the specified program.
   pub fn run(&mut self, program: &RantProgram) -> RuntimeResult<String> {
     VM::new(self.rng.clone(), self, program).run()
+  }
+}
+
+/// Provides options for customizing the creation of a `Rant` instance.
+pub struct RantOptions {
+  /// Specifies whether the standard library should be loaded.
+  pub use_stdlib: bool,
+  /// Enables debug mode, which includes additional debug information in compiled programs and more detailed runtime error data.
+  pub debug_mode: bool,
+  /// The initial seed to pass to the RNG. Defaults to 0.
+  pub seed: u64,
+}
+
+impl Default for RantOptions {
+  fn default() -> Self {
+    Self {
+      use_stdlib: true,
+      debug_mode: false,
+      seed: 0,
+    }
   }
 }
 

@@ -32,16 +32,19 @@ pub fn saturate(val: f64) -> f64 {
   }
 }
 
+/// Converts `true` to `1` and `false` to `0`.
 #[inline(always)]
 pub fn bi64(val: bool) -> i64 {
   if val { 1 } else { 0 }
 }
 
+/// Converts `true` to `1.0` and `false` to `0.0`.
 #[inline(always)]
 pub fn bf64(val: bool) -> f64 {
   if val { 1.0 } else { 0.0 }
 }
 
+/// Converts a boolean value to its string equivalent (i.e. `"true"` or `"false"`).
 #[inline(always)]
 pub fn bstr(val: bool) -> &'static str {
   if val { "true" } else { "false" }

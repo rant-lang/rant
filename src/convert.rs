@@ -421,11 +421,13 @@ impl_from_rant_args!(A, B, C, D, E, F, G, H, I, J);
 impl_from_rant_args!(A, B, C, D, E, F, G, H, I, J, K);
 //impl_from_rant_args!(A, B, C, D, E, F, G, H, I, J, K, L);
 
-pub trait AsRantForeignFunc<Params: FromRantArgs> {
+/// Trait for converting something to a Rant function.
+pub trait AsRantFunction<Params: FromRantArgs> {
+  /// Performs the conversion.
   fn as_rant_func(&'static self) -> RantFunction;
 }
 
-impl<Params: FromRantArgs, Function: Fn(&mut VM, Params) -> RantStdResult> AsRantForeignFunc<Params> for Function {
+impl<Params: FromRantArgs, Function: Fn(&mut VM, Params) -> RantStdResult> AsRantFunction<Params> for Function {
   fn as_rant_func(&'static self) -> RantFunction {
     let body = RantFunctionInterface::Foreign(Rc::new(move |vm, args| {
       self(vm, Params::from_rant_args(args).into_runtime_result()?)
