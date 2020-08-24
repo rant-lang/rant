@@ -111,6 +111,12 @@ fn dec(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   Ok(())
 }
 
+fn maybe(vm: &mut VM, p: f64) -> RantStdResult {
+  let b = vm.rng().next_bool(p);
+  vm.cur_frame_mut().write_value(RantValue::Boolean(b));
+  Ok(())
+}
+
 fn pick(vm: &mut VM, list: RantValue) -> RantStdResult {
   let index = vm.rng().next_usize(list.len());
   let item = list.index_get(index as i64).into_runtime_result()?;
@@ -243,7 +249,7 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     to_int as "int", to_float as "float", to_string as "string",
 
     // Generator functions
-    dec, hex, num as "n", numf as "nf",
+    dec, hex, maybe, num as "n", numf as "nf",
 
     // Prototype functions
     proto, set_proto as "set-proto",

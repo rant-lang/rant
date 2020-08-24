@@ -1,6 +1,7 @@
 ## 4.0.0-alpha.2
 
-* Added `get_global()` and `set_global()` to `Rant`
+* Added `special` Rant type to represent opaque internal runtime data.
+* Added `get_global()` and `set_global()` to `Rant`.
 * Added new `Rant::with_options` constructor that lets you customize the context using new `RantOptions` struct.
 * Added `RantValueType` to represent the type of a value.
 * Replaced empty `Err` variant on `Rant::compile*` methods with new `compiler::ErrorKind` enum.
@@ -11,4 +12,4 @@
 
 ## 4.0.0-alpha.1
 
-* Initial alpha release
+* Initial alpha release.

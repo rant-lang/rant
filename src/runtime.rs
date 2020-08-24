@@ -5,7 +5,7 @@ use resolver::Resolver;
 pub use stack::*;
 pub use output::*;
 
-mod resolver;
+pub(crate) mod resolver;
 mod output;
 mod stack;
 

@@ -1,10 +1,27 @@
 use crate::{lang::{Block, Parameter}};
 use crate::runtime::*;
+use crate::runtime::resolver::Selector;
 use crate::{collections::*, util::*, IntoRuntimeResult, RuntimeResult, RuntimeError, RuntimeErrorType, stdlib::RantStdResult};
-use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div, Rem}, cmp, cell::RefCell};
+use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div, Rem}, cmp, cell::{Ref, RefCell, RefMut}};
 use std::mem;
 use std::error::Error;
 use cast::*;
+use resolver::SelectorRef;
+
+/// Adds a barebones `Error` implementation to the specified type.
+macro_rules! impl_error_default {
+  ($t:ty) => {
+    impl Error for $t {
+      fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
+      }
+    
+      fn cause(&self) -> Option<&dyn Error> {
+        self.source()
+      }
+    }
+  }
+}
 
 /// The result type used by Rant value operators and conversion.
 pub type ValueResult<T> = Result<T, ValueError>;
@@ -43,8 +60,41 @@ pub enum RantValue {
   List(RantListRef),
   /// A Rant value of type `map`. Passed by-reference.
   Map(RantMapRef),
+  /// A Rant value of type `special`. Passed by-reference.
+  Special(RantSpecialHandle),
   /// A Rant unit value of type `empty`. Passed by-value.
   Empty,
+}
+
+impl RantValue {
+  /// Returns NaN (Not a Number).
+  #[inline]
+  pub fn nan() -> Self {
+    RantValue::Float(f64::NAN)
+  }
+
+  /// Returns true if the value is of type `empty`.
+  #[inline]
+  pub fn is_empty(&self) -> bool {
+    matches!(self, RantValue::Empty)
+  }
+
+  /// Returns true if the value is NaN (Not a Number).
+  #[inline]
+  pub fn is_nan(&self) -> bool {
+    if let RantValue::Float(f) = self {
+      f64::is_nan(*f)
+    } else {
+      false
+    }
+  }
+}
+
+impl Default for RantValue {
+  /// Gets the default RantValue (`empty`).
+  fn default() -> Self {
+    RantValue::Empty
+  }
 }
 
 /// A lightweight representation of a Rant value's type.
@@ -64,6 +114,8 @@ pub enum RantValueType {
   List,
   /// The `map` type.
   Map,
+  /// The `special` type.
+  Special,
   /// The `empty` type.
   Empty
 }
@@ -72,14 +124,15 @@ impl RantValueType {
   /// Gets a string slice representing the type.
   pub fn name(&self) -> &'static str {
     match self {
-        RantValueType::String =>      "string",
-        RantValueType::Float =>       "float",
-        RantValueType::Integer =>     "integer",
-        RantValueType::Boolean =>     "bool",
-        RantValueType::Function =>    "function",
-        RantValueType::List =>        "list",
-        RantValueType::Map =>         "map",
-        RantValueType::Empty =>       "empty",
+      RantValueType::String =>      "string",
+      RantValueType::Float =>       "float",
+      RantValueType::Integer =>     "integer",
+      RantValueType::Boolean =>     "bool",
+      RantValueType::Function =>    "function",
+      RantValueType::List =>        "list",
+      RantValueType::Map =>         "map",
+      RantValueType::Special =>     "special",
+      RantValueType::Empty =>       "empty",
     }
   }
 }
@@ -87,21 +140,6 @@ impl RantValueType {
 impl Display for RantValueType {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}", self.name())
-  }
-}
-
-/// Adds a barebones `Error` implementation to the specified type.
-macro_rules! impl_error_default {
-  ($t:ty) => {
-    impl Error for $t {
-      fn source(&self) -> Option<&(dyn Error + 'static)> {
-        None
-      }
-    
-      fn cause(&self) -> Option<&dyn Error> {
-        self.source()
-      }
-    }
   }
 }
 
@@ -228,31 +266,37 @@ impl IntoRuntimeResult<()> for ValueKeySetResult {
   }
 }
 
-impl RantValue {
-  pub fn nan() -> Self {
-    RantValue::Float(f64::NAN)
-  }
+/// A handle to dynamically typed internal runtime data.
+#[derive(Debug)]
+pub struct RantSpecialHandle(Rc<RantSpecial>);
 
-  #[inline]
-  pub fn is_empty(&self) -> bool {
-    matches!(self, RantValue::Empty)
+impl Clone for RantSpecialHandle {
+  fn clone(&self) -> Self {
+    RantSpecialHandle(Rc::clone(&self.0))
   }
 }
 
-impl Default for RantValue {
-  fn default() -> Self {
-    RantValue::Empty
+impl RantSpecialHandle {
+  #[inline]
+  pub(crate) fn as_ptr(&self) -> *const RantSpecial {
+    Rc::as_ptr(&self.0)
   }
+}
+
+/// Represents "special" values; opaque data structures for various internal runtime uses.
+#[derive(Debug)]
+pub(crate) enum RantSpecial {
+  Selector(SelectorRef),
 }
 
 /// A function callable from Rant.
 #[derive(Debug)]
 pub struct RantFunction {
+  pub(crate) params: Rc<Vec<Parameter>>,
   pub(crate) min_arg_count: usize,
   pub(crate) vararg_start_index: usize,
-  pub(crate) body: RantFunctionInterface,
-  pub(crate) params: Rc<Vec<Parameter>>,
   pub(crate) captured_vars: Option<RantMap>,
+  pub(crate) body: RantFunctionInterface,
 }
 
 impl RantFunction {
@@ -299,6 +343,7 @@ impl Debug for RantValue {
       RantValue::Function(func) => write!(f, "[function({:?})]", func.body),
       RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
       RantValue::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
+      RantValue::Special(special) => write!(f, "[special({:?})]", special),
       RantValue::Empty => write!(f, "<>"),
     }
   }
@@ -314,7 +359,8 @@ impl Display for RantValue {
       RantValue::Function(func) => write!(f, "[function({:?})]", func.body),
       RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
       RantValue::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
-      RantValue::Empty => Ok(())
+      RantValue::Special(_) => write!(f, "[special]"),
+      RantValue::Empty => Ok(()),
     }
   }
 }
@@ -331,6 +377,7 @@ impl PartialEq for RantValue {
       (RantValue::Boolean(a), RantValue::Boolean(b)) => a == b,
       (RantValue::List(a), RantValue::List(b)) => Rc::as_ptr(a) == Rc::as_ptr(b),
       (RantValue::Map(a), RantValue::Map(b)) => Rc::as_ptr(a) == Rc::as_ptr(b),
+      (RantValue::Special(a), RantValue::Special(b)) => a.as_ptr() == b.as_ptr(),
       _ => false
     }
   }
@@ -521,7 +568,8 @@ impl RantValue {
       RantValue::List(lst) => lst.borrow().len(),
       // Length of map is element count
       RantValue::Map(map) => map.borrow().raw_len(),
-      _ => 0
+      // Treat everything else as length 1, since all other value types are primitives
+      _ => 1
     }
   }
 
@@ -535,6 +583,7 @@ impl RantValue {
       RantValue::Function(_) =>   RantValueType::Function,
       RantValue::List(_) =>       RantValueType::List,
       RantValue::Map(_) =>        RantValueType::Map,
+      RantValue::Special(_) =>    RantValueType::Special,
       RantValue::Empty =>         RantValueType::Empty,
     }
   }
@@ -553,22 +602,22 @@ impl RantValue {
     let index = index as usize;
 
     match self {
-        RantValue::String(s) => {
-          if index < s.len() {
-            Ok(RantValue::String(s[index..index + 1].to_owned()))
-          } else {
-            Err(IndexError::OutOfRange)
-          }
-        },
-        RantValue::List(list) => {
-          let list = list.borrow();
-          if index < list.len() {
-            Ok(list[index].clone())
-          } else {
-            Err(IndexError::OutOfRange)
-          }
-        },
-        _ => Err(IndexError::CannotIndexType(self.get_type()))
+      RantValue::String(s) => {
+        if index < s.len() {
+          Ok(RantValue::String(s[index..index + 1].to_owned()))
+        } else {
+          Err(IndexError::OutOfRange)
+        }
+      },
+      RantValue::List(list) => {
+        let list = list.borrow();
+        if index < list.len() {
+          Ok(list[index].clone())
+        } else {
+          Err(IndexError::OutOfRange)
+        }
+      },
+      _ => Err(IndexError::CannotIndexType(self.get_type()))
     }
   }
 
