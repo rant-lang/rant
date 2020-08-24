@@ -118,6 +118,12 @@ impl Rant {
   }
 
   /// Compiles a source string without reporting problems.
+  ///
+  /// ## Note
+  ///
+  /// This method will not generate any compiler messages, even if it fails.
+  ///
+  /// If you require this information, use the `compile()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_quiet(&self, source: &str) -> Result<RantProgram, CompilerErrorKind> {
     RantCompiler::compile_string(source, &mut ())
@@ -130,6 +136,12 @@ impl Rant {
   }
 
   /// Compiles a source file without reporting problems.
+  ///
+  /// ## Note
+  ///
+  /// This method will not generate any compiler messages, even if it fails.
+  ///
+  /// If you require this information, use the `compile_file()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_file_quiet<P: AsRef<Path>>(&self, path: P) -> Result<RantProgram, CompilerErrorKind> {
     RantCompiler::compile_file(path, &mut ())
@@ -138,6 +150,16 @@ impl Rant {
   /// Gets the global variable map of the Rant context.
   pub fn globals(&self) -> RantMapRef {
     Rc::clone(&self.globals)
+  }
+
+  /// Sets a global variable.
+  pub fn set_global(&mut self, key: &str, value: RantValue) {
+    self.globals.borrow_mut().raw_set(key, value);
+  }
+
+  /// Gets a global variable.
+  pub fn get_global(&self, key: &str) -> Option<RantValue> {
+    self.globals.borrow().raw_get(key).cloned()
   }
   
   /// Gets the current RNG seed.
@@ -156,7 +178,7 @@ impl Rant {
     self.rng = Rc::new(RantRng::new(seed));
   }
   
-  /// Runs the specified program.
+  /// Runs the specified Rant program and returns the generated output.
   pub fn run(&mut self, program: &RantProgram) -> RuntimeResult<String> {
     VM::new(self.rng.clone(), self, program).run()
   }
