@@ -4,7 +4,7 @@
 [![Crates.io](https://img.shields.io/crates/d/rant)](https://crates.io/crates/rant)
 [![Docs.rs](https://docs.rs/rant/badge.svg)](https://docs.rs/rant)
 
-|**IMPORTANT:**<br>This project is in early alpha, and there are a lot of broken/missing features.<br>Please do not use in production environments until a stable version is released.|
+|**IMPORTANT:**<br>This project is in early alpha, and there are a lot of broken/missing features.<br>While I encourage you to try it out and give feedback, please do not use in production environments until a stable version is released.<br>Features may appear or disappear at any time for any reason. Assume that every alpha release will be breaking.|
 |-|
 <br>
 
@@ -15,7 +15,7 @@ It is designed to help you write more dynamic and expressive templates, dialogue
 
 Rant 4.0 is a complete redesign and reimplementation of the Rant language and runtime. The result is a completely redefined and superior text generation experience designed around the needs of everyone-- from writers and programmers, to anybody else!
 
-### Rant is **intuitive**
+### Rant is intuitive
 
 Rant is basically the opposite of Regex: Instead of matching a string to a pattern, you provide the pattern and a matching string comes out!
 
@@ -32,13 +32,13 @@ The Rant equivalent to generate any matching string is quite similar:
 {foo|bar|baz} # Resolves randomly to "foo", "bar", or "baz"
 ```
 
-### Rant is **concise**
+### Rant is concise
 
 Common operations have shorter syntax. This means you can apply Rant to your most common use cases with minimal code. 
 
 For more complex generation, Rant makes templating tasks far more painless than in conventional programming languages with its powerful set of synchronization, branching, and generation tools.
 
-### Rant is **flexible**
+### Rant is flexible
 
 Rant does more than generate random strings: its behavior is infinitely configurable for a wide range of use cases ranging from natural language generation to simple code templating. What you do with it is up to you!
 
