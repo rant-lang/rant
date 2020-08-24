@@ -12,17 +12,74 @@ pub type ValueKeyResult = Result<RantValue, KeyError>;
 pub type ValueIndexSetResult = Result<(), IndexError>;
 pub type ValueKeySetResult = Result<(), KeyError>;
 
-/// Rant variable value.
+/// A dynamically-typed Rant value.
+///
+/// ## Cloning
+///
+/// It is important to note that calling `clone()` on a `RantValue` will only result in a shallow clone of the data.
+/// Since collection types like `list` and `map` are represented by handles to their actual contents, cloning these will
+/// only make copies of these handles; both copies will still point to the same data.
 #[derive(Clone)]
 pub enum RantValue {
+  /// A Rant value of type `string`. Passed by-value.
   String(String),
+  /// A Rant value of type `float`. Passed by-value.
   Float(f64),
+  /// A Rant value of type `integer`. Passed by-value.
   Integer(i64),
+  /// A Rant value of type `bool`. Passed by-value.
   Boolean(bool),
+  /// A Rant value of type `function`. Passed by-reference.
   Function(Rc<RantFunction>),
+  /// A Rant value of type `list`. Passed by-reference.
   List(RantListRef),
+  /// A Rant value of type `map`. Passed by-reference.
   Map(RantMapRef),
+  /// A Rant unit value of type `empty`. Passed by-value.
   Empty,
+}
+
+/// A lightweight representation of a Rant value's type.
+#[derive(Copy, Clone, Debug)]
+pub enum RantValueType {
+  /// The `string` type.
+  String,
+  /// The `float` type.
+  Float,
+  /// The `integer` type.
+  Integer,
+  /// The `bool` type.
+  Boolean,
+  /// The `function` type.
+  Function,
+  /// The `list` type.
+  List,
+  /// The `map` type.
+  Map,
+  /// The `empty` type.
+  Empty
+}
+
+impl RantValueType {
+  /// Gets a string slice representing the type.
+  pub fn name(&self) -> &'static str {
+    match self {
+        RantValueType::String =>      "string",
+        RantValueType::Float =>       "float",
+        RantValueType::Integer =>     "integer",
+        RantValueType::Boolean =>     "bool",
+        RantValueType::Function =>    "function",
+        RantValueType::List =>        "list",
+        RantValueType::Map =>         "map",
+        RantValueType::Empty =>       "empty",
+    }
+  }
+}
+
+impl Display for RantValueType {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.name())
+  }
 }
 
 /// Adds a barebones `Error` implementation to the specified type.
@@ -83,9 +140,12 @@ impl<T> IntoRuntimeResult<T> for Result<T, ValueError> {
 /// Error produced by indexing a RantValue.
 #[derive(Debug)]
 pub enum IndexError {
+  /// Index was out of range.
   OutOfRange,
-  CannotIndexType(&'static str),
-  CannotSetIndexOnType(&'static str),
+  /// Values of this type cannot be indexed.
+  CannotIndexType(RantValueType),
+  /// Values of this type cannot have indices written to.
+  CannotSetIndexOnType(RantValueType),
 }
 
 impl_error_default!(IndexError);
@@ -124,7 +184,7 @@ impl IntoRuntimeResult<()> for ValueIndexSetResult {
 #[derive(Debug)]
 pub enum KeyError {
   KeyNotFound(String),
-  CannotKeyType(&'static str),
+  CannotKeyType(RantValueType),
 }
 
 impl_error_default!(KeyError);
@@ -454,19 +514,25 @@ impl RantValue {
       _ => 0
     }
   }
+
+  /// Gets the Rant type associated with the value.
+  pub fn get_type(&self) -> RantValueType {
+    match self {
+      RantValue::String(_) =>     RantValueType::String,
+      RantValue::Float(_) =>      RantValueType::Float,
+      RantValue::Integer(_) =>    RantValueType::Integer,
+      RantValue::Boolean(_) =>    RantValueType::Boolean,
+      RantValue::Function(_) =>   RantValueType::Function,
+      RantValue::List(_) =>       RantValueType::List,
+      RantValue::Map(_) =>        RantValueType::Map,
+      RantValue::Empty =>         RantValueType::Empty,
+    }
+  }
   
   /// Gets the type name of the value.
+  #[inline]
   pub fn type_name(&self) -> &'static str {
-    match self {
-      RantValue::String(_) =>     "string",
-      RantValue::Float(_) =>      "float",
-      RantValue::Integer(_) =>    "integer",
-      RantValue::Boolean(_) =>    "bool",
-      RantValue::Function(_) =>   "function",
-      RantValue::List(_) =>       "list",
-      RantValue::Map(_) =>        "map",
-      RantValue::Empty =>         "empty"
-    }
+    self.get_type().name()
   }
 
   pub fn get_by_index(&self, index: i64) -> ValueIndexResult {
@@ -491,7 +557,7 @@ impl RantValue {
             Err(IndexError::OutOfRange)
           }
         },
-        _ => Err(IndexError::CannotIndexType(self.type_name()))
+        _ => Err(IndexError::CannotIndexType(self.get_type()))
     }
   }
 
@@ -518,7 +584,7 @@ impl RantValue {
         map.raw_set(index.to_string().as_str(), val);
         Ok(())
       },
-      _ => Err(IndexError::CannotSetIndexOnType(self.type_name()))
+      _ => Err(IndexError::CannotSetIndexOnType(self.get_type()))
     }
   }
 
@@ -533,7 +599,7 @@ impl RantValue {
           Err(KeyError::KeyNotFound(key.to_owned()))
         }
       },
-      _ => Err(KeyError::CannotKeyType(self.type_name()))
+      _ => Err(KeyError::CannotKeyType(self.get_type()))
     }
   }
 
@@ -545,7 +611,7 @@ impl RantValue {
         map.raw_set(key, val);
         Ok(())
       },
-      _ => Err(KeyError::CannotKeyType(self.type_name()))
+      _ => Err(KeyError::CannotKeyType(self.get_type()))
     }
   }
 }
