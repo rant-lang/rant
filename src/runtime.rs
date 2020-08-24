@@ -71,6 +71,8 @@ pub enum Intent {
   SetValue { path: Rc<VarAccessPath>, auto_def: bool, expr_count: usize },
   /// Evaluate `arg_exprs` in order, then pop the argument values off the stack, pop a function off the stack, and pass the arguments to the function.
   Invoke { arg_exprs: Rc<Vec<Rc<Sequence>>>, eval_count: usize, flag: PrintFlag },
+  /// Pop `argc` args off the stack, then pop a function off the stack and call it with the args.
+  Call { argc: usize, flag: PrintFlag },
   /// Pop value from stack and add it to a list. If `index` is out of range, print the list.
   BuildList { init: Rc<Vec<Rc<Sequence>>>, index: usize, list: RantList },
   /// Pop value and optional key from stack and add them to a map. If `pair_index` is out of range, print the map.
@@ -148,7 +150,6 @@ impl<'rant> VM<'rant> {
               for _ in 0..arg_exprs.len() {
                 args.push(self.pop_val()?);
               }
-              let argc = args.len();
 
               // Pop the function and make sure it's callable
               let func = match self.pop_val()? {
@@ -158,47 +159,29 @@ impl<'rant> VM<'rant> {
                 other => runtime_error!(RuntimeErrorType::CannotInvokeValue, format!("cannot invoke '{}' value", other.type_name()))
               };
 
-              // Verify the args fit the signature
-              let mut args = if func.is_variadic() {
-                if argc < func.min_arg_count {
-                  runtime_error!(RuntimeErrorType::ArgumentMismatch, format!("arguments don't match; expected at least {}, found {}", func.min_arg_count, argc))
-                }
-
-                // Condense args to turn variadic args into one arg
-                // Only do this for user functions, since native functions take care of variadic condensation already
-                if !func.is_native() {
-                  let mut condensed_args = args.drain(0..func.vararg_start_index).collect::<Vec<RantValue>>();
-                  let vararg = RantValue::List(Rc::new(RefCell::new(args.into_iter().collect::<RantList>())));
-                  condensed_args.push(vararg);
-                  condensed_args
-                } else {
-                  args
-                }
-              } else {
-                if argc < func.min_arg_count || argc > func.params.len() {
-                  runtime_error!(RuntimeErrorType::ArgumentMismatch, format!("arguments don't match; expected {}, found {}", func.min_arg_count, argc))
-                }
-                args
-              };
-
               // Call the function
-              match &func.body {
-                RantFunctionInterface::Foreign(foreign_func) => {
-                  foreign_func(self, args)?;
-                },
-                RantFunctionInterface::User(user_func) => {
-                  // Convert the args into a locals map
-                  let mut func_locals = RantMap::new();
-                  let mut args = args.drain(..);
-                  for param in func.params.iter() {
-                    func_locals.raw_set(param.name.as_str(), args.next().unwrap_or(RantValue::Empty));
-                  }
-                  // Push the function onto the call stack
-                  self.push_block_frame(user_func.as_ref(), false, Some(func_locals), flag)?;
-                  continue 'from_the_top;
-                },
-              }
+              self.call_func(func, args, flag)?;
+              continue 'from_the_top;
             }
+          },
+          Intent::Call { argc, flag } => {
+            // Pop the evaluated args off the stack
+            let mut args = vec![];
+            for _ in 0..argc {
+              args.push(self.pop_val()?);
+            }
+
+            // Pop the function and make sure it's callable
+            let func = match self.pop_val()? {
+              RantValue::Function(func) => {
+                func
+              },
+              other => runtime_error!(RuntimeErrorType::CannotInvokeValue, format!("cannot invoke '{}' value", other.type_name()))
+            };
+
+            // Call the function
+            self.call_func(func, args, flag)?;
+            continue 'from_the_top;
           },
           Intent::BuildDynamicSetter { path, auto_def, expr_count, mut pending_exprs, val_source } => {
             if let Some(block) = pending_exprs.pop() {
@@ -477,6 +460,52 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline]
+  fn call_func(&mut self, func: RantFunctionRef, mut args: Vec<RantValue>, flag: PrintFlag) -> RuntimeResult<()> {
+    let argc = args.len();
+
+    // Verify the args fit the signature
+    let mut args = if func.is_variadic() {
+      if argc < func.min_arg_count {
+        runtime_error!(RuntimeErrorType::ArgumentMismatch, format!("arguments don't match; expected at least {}, found {}", func.min_arg_count, argc))
+      }
+
+      // Condense args to turn variadic args into one arg
+      // Only do this for user functions, since native functions take care of variadic condensation already
+      if !func.is_native() {
+        let mut condensed_args = args.drain(0..func.vararg_start_index).collect::<Vec<RantValue>>();
+        let vararg = RantValue::List(Rc::new(RefCell::new(args.into_iter().collect::<RantList>())));
+        condensed_args.push(vararg);
+        condensed_args
+      } else {
+        args
+      }
+    } else {
+      if argc < func.min_arg_count || argc > func.params.len() {
+        runtime_error!(RuntimeErrorType::ArgumentMismatch, format!("arguments don't match; expected {}, found {}", func.min_arg_count, argc))
+      }
+      args
+    };
+
+    // Call the function
+    match &func.body {
+      RantFunctionInterface::Foreign(foreign_func) => {
+        foreign_func(self, args)?;
+      },
+      RantFunctionInterface::User(user_func) => {
+        // Convert the args into a locals map
+        let mut func_locals = RantMap::new();
+        let mut args = args.drain(..);
+        for param in func.params.iter() {
+          func_locals.raw_set(param.name.as_str(), args.next().unwrap_or(RantValue::Empty));
+        }
+        // Push the function onto the call stack
+        self.push_block_frame(user_func.as_ref(), false, Some(func_locals), flag)?;
+      },
+    }
+    Ok(())
+  }
+
+  #[inline]
   fn set_value(&mut self, path: Rc<VarAccessPath>, auto_def: bool, dynamic_key_count: usize) -> RuntimeResult<()> {
     // The setter value should be at the top of the value stack, so pop that first
     let setter_value = self.pop_val()?;
@@ -633,7 +662,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  fn push_block_frame(&mut self, block: &Block, override_print: bool, locals: Option<RantMap>, flag: PrintFlag) -> RuntimeResult<()> {
+  pub(crate) fn push_block_frame(&mut self, block: &Block, override_print: bool, locals: Option<RantMap>, flag: PrintFlag) -> RuntimeResult<()> {
     let elem = Rc::clone(&block.elements[self.rng.next_usize(block.len())]);
     let is_printing = !PrintFlag::prioritize(block.flag, flag).is_sink();
     if is_printing && !override_print {
@@ -664,7 +693,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  fn push_val(&mut self, val: RantValue) -> RuntimeResult<usize> {
+  pub(crate) fn push_val(&mut self, val: RantValue) -> RuntimeResult<usize> {
     if self.val_stack.len() < MAX_STACK_SIZE {
       self.val_stack.push(val);
       Ok(self.val_stack.len())
@@ -674,7 +703,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  fn pop_val(&mut self) -> RuntimeResult<RantValue> {
+  pub(crate) fn pop_val(&mut self) -> RuntimeResult<RantValue> {
     if let Some(val) = self.val_stack.pop() {
       Ok(val)
     } else {
@@ -683,7 +712,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  fn pop_frame(&mut self) -> RuntimeResult<StackFrame> {
+  pub(crate) fn pop_frame(&mut self) -> RuntimeResult<StackFrame> {
     if let Some(frame) = self.call_stack.pop() {
       Ok(frame)
     } else {
@@ -692,7 +721,7 @@ impl<'rant> VM<'rant> {
   }
   
   #[inline(always)]
-  fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool, locals: Option<RantMap>) -> RuntimeResult<()> {
+  pub(crate) fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool, locals: Option<RantMap>) -> RuntimeResult<()> {
     
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {

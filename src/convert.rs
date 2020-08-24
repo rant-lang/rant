@@ -209,6 +209,19 @@ impl FromRant for RantMapRef {
   }
 }
 
+impl FromRant for RantFunctionRef {
+  fn from_rant(val: RantValue) -> Result<Self, ValueError> {
+    if let RantValue::Function(func_ref) = val {
+      Ok(func_ref)
+    } else {
+      Err(ValueError::InvalidConversion { from: val.type_name(), to: "function", message: None })
+    }
+  }
+  fn is_rant_optional() -> bool {
+    false
+  }
+}
+
 impl<T: FromRant> FromRant for Option<T> {
   fn from_rant(val: RantValue) -> ValueResult<Self> {
     match val {

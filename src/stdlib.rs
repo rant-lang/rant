@@ -8,6 +8,7 @@ use crate::runtime::*;
 use crate::convert::*;
 use crate::convert::ToRant;
 use std::mem;
+use lang::PrintFlag;
 
 pub(crate) type RantStdResult = Result<(), RuntimeError>;
 
@@ -62,6 +63,16 @@ fn div(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
 
 fn rem(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
   vm.cur_frame_mut().write_value((lhs % rhs).into_runtime_result()?);
+  Ok(())
+}
+
+fn neg(vm: &mut VM, val: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write_value(-val);
+  Ok(())
+}
+
+fn recip(vm: &mut VM, val: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write_value((RantValue::Float(1.0) / val).into_runtime_result()?);
   Ok(())
 }
 
@@ -213,6 +224,18 @@ fn lower(vm: &mut VM, s: String) -> RantStdResult {
   Ok(())
 }
 
+fn call(vm: &mut VM, (func, args): (RantFunctionRef, Option<Vec<RantValue>>)) -> RantStdResult {
+  vm.push_val(RantValue::Function(Rc::clone(&func)))?;
+  let argc = args.as_ref().map(|args| args.len()).unwrap_or(0);
+  if let Some(mut args) = args {
+    for arg in args.drain(..).rev() {
+      vm.push_val(arg)?;
+    }
+  }
+  vm.cur_frame_mut().push_intent_front(Intent::Call { argc, flag: PrintFlag::None });
+  Ok(())
+}
+
 fn get(vm: &mut VM, key: String) -> RantStdResult {
   let val = vm.get_local(key.as_str())?;
   vm.cur_frame_mut().write_value(val);
@@ -240,10 +263,10 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
 
   load_funcs!(
     // General functions
-    alt, len, get_type as "type", seed,
+    alt, call, len, get_type as "type", seed,
 
     // Math functions
-    add, sub, mul, div, mul_add as "mul-add", rem as "mod",
+    add, sub, mul, div, mul_add as "mul-add", rem as "mod", neg, recip,
 
     // Conversion functions
     to_int as "int", to_float as "float", to_string as "string",

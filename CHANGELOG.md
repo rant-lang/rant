@@ -1,5 +1,6 @@
 ## 4.0.0-alpha.2
 
+* Added a lot of new stdlib functions
 * Added `special` Rant type to represent opaque internal runtime data.
 * Added `get_global()` and `set_global()` to `Rant`.
 * Added new `Rant::with_options` constructor that lets you customize the context using new `RantOptions` struct.
