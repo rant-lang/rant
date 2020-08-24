@@ -1,5 +1,9 @@
 # Rant
 
+[![Crates.io](https://img.shields.io/crates/v/rant)](https://crates.io/crates/rant)
+[![Crates.io](https://img.shields.io/crates/d/rant)](https://crates.io/crates/rant)
+[![Docs.rs](https://docs.rs/rant/badge.svg)](https://docs.rs/rant)
+
 |**IMPORTANT:**<br>This project is in early alpha, and there are a lot of broken/missing features.<br>Please do not use in production environments until a stable version is released.|
 |-|
 <br>
@@ -81,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   // Run the program and fetch the result string
   let output = rant.run(&program)?;
   println!("{}", output);
-  
+
   Ok(())
 }
 ```
