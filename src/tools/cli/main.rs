@@ -76,6 +76,7 @@ fn main() {
   
   if !args.quiet && args.run_code.is_none() && args.in_file.is_none() {
     println!("Rant {} ({})", BUILD_VERSION, embedded_triple::get());
+    println!("Run this tool with --help for available options.");
   }
   
   let seed = args.seed.unwrap_or_else(|| rand::thread_rng().gen());

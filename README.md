@@ -59,7 +59,7 @@ Rant comes with a CLI tool that includes a REPL. You can install and run it with
 
 ```sh
 $ cargo install rant
-$ rant # --help to see options
+$ rant
 ```
 
 ### Library
