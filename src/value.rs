@@ -3,14 +3,22 @@ use crate::runtime::*;
 use crate::{collections::*, util::*, IntoRuntimeResult, RuntimeResult, RuntimeError, RuntimeErrorType, stdlib::RantStdResult};
 use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div, Rem}, cmp, cell::RefCell};
 use std::mem;
-use std::error::{self, Error};
+use std::error::Error;
 use cast::*;
 
+/// The result type used by Rant value operators and conversion.
 pub type ValueResult<T> = Result<T, ValueError>;
+/// The result type used by Rant value index read operations.
 pub type ValueIndexResult = Result<RantValue, IndexError>;
+/// The result type used by Rant value key read operations.
 pub type ValueKeyResult = Result<RantValue, KeyError>;
+/// The result type used by Rant value index write operations.
 pub type ValueIndexSetResult = Result<(), IndexError>;
+/// The result type used by Rant value key write operations.
 pub type ValueKeySetResult = Result<(), KeyError>;
+
+/// A reference-counting handle to a Rant function.
+pub type RantFunctionRef = Rc<RantFunction>;
 
 /// A dynamically-typed Rant value.
 ///
@@ -30,7 +38,7 @@ pub enum RantValue {
   /// A Rant value of type `bool`. Passed by-value.
   Boolean(bool),
   /// A Rant value of type `function`. Passed by-reference.
-  Function(Rc<RantFunction>),
+  Function(RantFunctionRef),
   /// A Rant value of type `list`. Passed by-reference.
   List(RantListRef),
   /// A Rant value of type `map`. Passed by-reference.
@@ -183,7 +191,9 @@ impl IntoRuntimeResult<()> for ValueIndexSetResult {
 /// Error produced by keying a RantValue.
 #[derive(Debug)]
 pub enum KeyError {
+  /// The specified key could not be found.
   KeyNotFound(String),
+  /// Values of this type cannot be keyed.
   CannotKeyType(RantValueType),
 }
 
