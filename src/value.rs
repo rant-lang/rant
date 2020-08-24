@@ -545,7 +545,8 @@ impl RantValue {
     self.get_type().name()
   }
 
-  pub fn get_by_index(&self, index: i64) -> ValueIndexResult {
+  /// Attempts to get a value by index.
+  pub fn index_get(&self, index: i64) -> ValueIndexResult {
     if index < 0 {
       return Err(IndexError::OutOfRange)
     }
@@ -571,7 +572,8 @@ impl RantValue {
     }
   }
 
-  pub fn set_by_index(&mut self, index: i64, val: RantValue) -> ValueIndexSetResult {
+  /// Attempts to set a value by index.
+  pub fn index_set(&mut self, index: i64, val: RantValue) -> ValueIndexSetResult {
     if index < 0 {
       return Err(IndexError::OutOfRange)
     }
@@ -598,7 +600,8 @@ impl RantValue {
     }
   }
 
-  pub fn get_by_key(&self, key: &str) -> ValueKeyResult {
+  /// Attempts to get a value by key.
+  pub fn key_get(&self, key: &str) -> ValueKeyResult {
     match self {
       RantValue::Map(map) => {
         let map = map.borrow();
@@ -613,7 +616,8 @@ impl RantValue {
     }
   }
 
-  pub fn set_by_key(&mut self, key: &str, val: RantValue) -> ValueKeySetResult {
+  /// Attempts to set a value by key.
+  pub fn key_set(&mut self, key: &str, val: RantValue) -> ValueKeySetResult {
     match self {
       RantValue::Map(map) => {
         let mut map = map.borrow_mut();

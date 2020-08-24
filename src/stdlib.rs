@@ -113,7 +113,7 @@ fn dec(vm: &mut VM, count: Option<usize>) -> RantStdResult {
 
 fn pick(vm: &mut VM, list: RantValue) -> RantStdResult {
   let index = vm.rng().next_usize(list.len());
-  let item = list.get_by_index(index as i64).into_runtime_result()?;
+  let item = list.index_get(index as i64).into_runtime_result()?;
   vm.cur_frame_mut().write_value(item);
   Ok(())
 }

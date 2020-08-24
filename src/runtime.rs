@@ -511,9 +511,9 @@ impl<'rant> VM<'rant> {
       setter_target = match (&setter_target, &setter_key) {
         (None, SetterKey::KeyRef(key)) => Some(self.get_local(key)?),
         (None, SetterKey::KeyString(key)) => Some(self.get_local(key.as_str())?),
-        (Some(val), SetterKey::Index(index)) => Some(val.get_by_index(*index).into_runtime_result()?),
-        (Some(val), SetterKey::KeyRef(key)) => Some(val.get_by_key(key).into_runtime_result()?),
-        (Some(val), SetterKey::KeyString(key)) => Some(val.get_by_key(key.as_str()).into_runtime_result()?),
+        (Some(val), SetterKey::Index(index)) => Some(val.index_get(*index).into_runtime_result()?),
+        (Some(val), SetterKey::KeyRef(key)) => Some(val.key_get(key).into_runtime_result()?),
+        (Some(val), SetterKey::KeyString(key)) => Some(val.key_get(key.as_str()).into_runtime_result()?),
         _ => unreachable!()
       };
 
@@ -553,9 +553,9 @@ impl<'rant> VM<'rant> {
           self.set_local(vname.as_str(), setter_value)?
         }
       },
-      (Some(target), SetterKey::Index(index)) => target.set_by_index(*index, setter_value).into_runtime_result()?,
-      (Some(target), SetterKey::KeyRef(key)) => target.set_by_key(key, setter_value).into_runtime_result()?,
-      (Some(target), SetterKey::KeyString(key)) => target.set_by_key(key.as_str(), setter_value).into_runtime_result()?,
+      (Some(target), SetterKey::Index(index)) => target.index_set(*index, setter_value).into_runtime_result()?,
+      (Some(target), SetterKey::KeyRef(key)) => target.key_set(key, setter_value).into_runtime_result()?,
+      (Some(target), SetterKey::KeyString(key)) => target.key_set(key.as_str(), setter_value).into_runtime_result()?,
       _ => unreachable!()
     }
 
@@ -590,14 +590,14 @@ impl<'rant> VM<'rant> {
       match accessor {
         // Static key
         VarAccessComponent::Name(key) => {
-          getter_value = match getter_value.get_by_key(key.as_str()) {
+          getter_value = match getter_value.key_get(key.as_str()) {
             Ok(val) => val,
             Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
           };
         },
         // Index
         VarAccessComponent::Index(index) => {
-          getter_value = match getter_value.get_by_index(*index) {
+          getter_value = match getter_value.index_get(*index) {
             Ok(val) => val,
             Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
           }
@@ -607,13 +607,13 @@ impl<'rant> VM<'rant> {
           let key = dynamic_keys.next().unwrap();
           match key {
             RantValue::Integer(index) => {
-              getter_value = match getter_value.get_by_index(index) {
+              getter_value = match getter_value.index_get(index) {
                 Ok(val) => val,
                 Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
               }
             },
             _ => {
-              getter_value = match getter_value.get_by_key(key.to_string().as_str()) {
+              getter_value = match getter_value.key_get(key.to_string().as_str()) {
                 Ok(val) => val,
                 Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
               };
