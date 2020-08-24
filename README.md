@@ -86,8 +86,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {Hello|Hi|Hey} <name>!
   }
   [greet:world]
-  "#)
-  .expect("failed to compile");
+  "#)?;
 
   // Run the program and fetch the result string
   let output = rant.run(&program)?;

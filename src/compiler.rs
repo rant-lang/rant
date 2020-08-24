@@ -2,7 +2,7 @@ use crate::{lang::{RST, Sequence}, RantProgram};
 use parser::RantParser;
 use std::{fmt::Display, rc::Rc, path::Path};
 use std::io::ErrorKind as IOErrorKind;
-use std::fs;
+use std::{error::Error, fs};
 
 pub(crate) mod lexer;
 pub(crate) mod reader;
@@ -11,7 +11,34 @@ pub(crate) mod message;
 
 pub use message::*;
 
-pub type CompileResult = Result<RantProgram, ()>;
+pub type CompileResult = Result<RantProgram, ErrorKind>;
+
+/// Describes why a compilation failed.
+#[derive(Debug)]
+pub enum ErrorKind {
+  /// Compilation failed due to one or more syntax errors.
+  SyntaxError,
+  /// Compilation failed due to a file I/O error.
+  IOError(IOErrorKind),
+}
+
+impl Display for ErrorKind {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+        ErrorKind::SyntaxError => write!(f, "syntax error"),
+        ErrorKind::IOError(_) => write!(f, "I/O error"),
+    }
+  }
+}
+
+impl Error for ErrorKind {
+  fn source(&self) -> Option<&(dyn Error + 'static)> {
+    None
+  }
+  fn cause(&self) -> Option<&dyn Error> {
+    self.source()
+  }  
+}
 
 /// Provides an interface through which the compiler can report errors and warnings.
 pub trait Reporter {
@@ -44,7 +71,7 @@ impl RantCompiler {
         RST::Sequence(seq) => seq,
         other => Rc::new(Sequence::new(vec![Rc::new(other)]))
       })),
-      Err(()) => Err(()),
+      Err(()) => Err(ErrorKind::SyntaxError),
     }
   }
   
@@ -63,7 +90,7 @@ impl RantCompiler {
             _ => Problem::FileIOError(err.to_string())
         };
         reporter.report(CompilerMessage::new(problem, Severity::Error, None));
-        Err(())
+        Err(ErrorKind::IOError(err.kind()))
       }
     }
   }
