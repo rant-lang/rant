@@ -11,7 +11,7 @@ It is designed to help you write more dynamic and expressive templates, dialogue
 
 Rant 4.0 is a complete redesign and reimplementation of the Rant language and runtime. The result is a completely redefined and superior text generation experience designed around the needs of everyone-- from writers and programmers, to anybody else!
 
-## Rant is **intuitive**
+### Rant is **intuitive**
 
 Rant is basically the opposite of Regex: Instead of matching a string to a pattern, you provide the pattern and a matching string comes out!
 
@@ -28,19 +28,63 @@ The Rant equivalent to generate any matching string is quite similar:
 {foo|bar|baz} # Resolves randomly to "foo", "bar", or "baz"
 ```
 
-## Rant is **concise**
+### Rant is **concise**
 
 Common operations have shorter syntax. This means you can apply Rant to your most common use cases with minimal code. 
 
 For more complex generation, Rant makes templating tasks far more painless than in conventional programming languages with its powerful set of synchronization, branching, and generation tools.
 
-While randomization is one of the cornerstones of Rant's power, deterministic selection is just as easy.
-
-## Rant is **flexible**
+### Rant is **flexible**
 
 Rant does more than generate random strings: its behavior is infinitely configurable for a wide range of use cases ranging from natural language generation to simple code templating. What you do with it is up to you!
 
 In addition to its rock-solid string generation tools, Rant offers a fully-featured variable system including common primitives like numbers and booleans as well as collection types. And with Rant's extensive formatting tools, you can fine-tune how anything prints.
+
+## Getting started
+
+### CLI
+
+Rant comes with a CLI tool that includes a REPL. You can install and run it with:
+
+```sh
+$ cargo install rant
+$ rant # --help to see options
+```
+
+### Library
+
+Add Rant to your `Cargo.toml`:
+
+```toml
+[dependencies]
+rant = "*" # Actual version may vary
+```
+
+You can run a Rant program with just a few lines of code:
+
+```rust
+use rant::Rant;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+  // Create a default Rant context and load the standard library
+  let mut rant = Rant::new();
+
+  // Compile a simple program
+  let program = rant.compile_quiet(r#"
+  [$greet:name] {
+    {Hello|Hi|Hey} <name>!
+  }
+  [greet:world]
+  "#)
+  .expect("failed to compile");
+
+  // Run the program and fetch the result string
+  let output = rant.run(&program)?;
+  println!("{}", output);
+  
+  Ok(())
+}
+```
 
 ## License
 

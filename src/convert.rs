@@ -7,10 +7,10 @@
 
 use crate::value::*;
 use crate::{lang::{Varity, Parameter, Identifier}, RantString, RantMapRef, stdlib::RantStdResult};
-use crate::runtime::*;
+use crate::{RantList, runtime::*};
 use cast::*;
 use cast::Error as CastError;
-use std::{rc::Rc, ops::{DerefMut, Deref}};
+use std::{rc::Rc, ops::{DerefMut, Deref}, cell::RefCell};
 
 /// Enables conversion from a native type to a `RantValue`.
 pub trait ToRant {
@@ -176,6 +176,13 @@ impl ToRant for String {
 impl ToRant for &'static str {
   fn to_rant(self) -> ValueResult<RantValue> {
     Ok(RantValue::String(self.to_owned()))
+  }
+}
+
+impl<T: ToRant> ToRant for Vec<T> {
+  fn to_rant(mut self) -> Result<RantValue, ValueError> {
+    let list = self.drain(..).map(|v| v.to_rant()).collect::<Result<RantList, ValueError>>()?;
+    Ok(RantValue::List(Rc::new(RefCell::new(list))))
   }
 }
 

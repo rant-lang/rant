@@ -3,6 +3,7 @@ use crate::runtime::*;
 use crate::{collections::*, util::*, IntoRuntimeResult, RuntimeResult, RuntimeError, RuntimeErrorType, stdlib::RantStdResult};
 use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div, Rem}, cmp, cell::RefCell};
 use std::mem;
+use std::error::{self, Error};
 use cast::*;
 
 pub type ValueResult<T> = Result<T, ValueError>;
@@ -24,6 +25,21 @@ pub enum RantValue {
   Empty,
 }
 
+/// Adds a barebones `Error` implementation to the specified type.
+macro_rules! impl_error_default {
+  ($t:ty) => {
+    impl Error for $t {
+      fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
+      }
+    
+      fn cause(&self) -> Option<&dyn Error> {
+        self.source()
+      }
+    }
+  }
+}
+
 /// Error produced by a RantValue operator or conversion.
 #[derive(Debug)]
 pub enum ValueError {
@@ -36,6 +52,8 @@ pub enum ValueError {
   /// Attempted to divide by zero.
   DivideByZero,
 }
+
+impl_error_default!(ValueError);
 
 impl Display for ValueError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -69,6 +87,8 @@ pub enum IndexError {
   CannotIndexType(&'static str),
   CannotSetIndexOnType(&'static str),
 }
+
+impl_error_default!(IndexError);
 
 impl Display for IndexError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -106,6 +126,8 @@ pub enum KeyError {
   KeyNotFound(String),
   CannotKeyType(&'static str),
 }
+
+impl_error_default!(KeyError);
 
 impl Display for KeyError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -1,6 +1,6 @@
 use crate::*;
 use crate::lang::*;
-use std::{rc::Rc, cell::RefCell, ops::Deref};
+use std::{rc::Rc, cell::RefCell, ops::Deref, error::Error, fmt::Display};
 use resolver::Resolver;
 pub use stack::*;
 pub use output::*;
@@ -724,10 +724,34 @@ pub(crate) trait IntoRuntimeResult<T> {
   fn into_runtime_result(self) -> RuntimeResult<T>;
 }
 
+// TODO: Add stack trace to runtime errors
 #[derive(Debug)]
 pub struct RuntimeError {
+  /// The type of runtime error.
   pub error_type: RuntimeErrorType,
+  /// A description of what went wrong.
   pub description: String,
+}
+
+impl Error for RuntimeError {
+  fn source(&self) -> Option<&(dyn Error + 'static)> {
+    match &self.error_type {
+      RuntimeErrorType::IndexError(err) => Some(err),
+      RuntimeErrorType::KeyError(err) => Some(err),
+      RuntimeErrorType::ValueError(err) => Some(err),
+      _ => None,
+    }
+  }
+
+  fn cause(&self) -> Option<&dyn Error> {
+    self.source()
+  }
+}
+
+impl Display for RuntimeError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.description)
+  }
 }
 
 /// Provides general categories of runtime errors encountered in Rant.

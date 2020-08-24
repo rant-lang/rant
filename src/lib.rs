@@ -1,3 +1,25 @@
+//! # Rant
+//!
+//! Rant is a language for procedural text generation.
+//! It is designed to help you write more dynamic and expressive templates, dialogue, stories, names, test data, and much more.
+//! 
+//! ## The Rant context
+//!
+//! All programs are run through a Rant context, represented by the [`Rant`] struct.
+//! It allows you to execute Rant programs, define and retrieve global variables, manipulate the RNG, and compile Rant code.
+//! 
+//! ## Reading compiler errors
+//! 
+//! You will notice that the `Err` variant of the `Rant::compile*` methods is `()` instead of providing an error list. Instead, 
+//! errors and warnings are reported via implementors of the [`Reporter`] trait, which allows the user to control what happens to messages emitted by the compiler.
+//! Currently, Rant has two built-in `Reporter` implementations: the unit type `()`, and `Vec<CompilerMessage>`.
+//! You can also make your own custom reporters to suit your specific needs.
+//!
+//! [`Rant`]: struct.Rant.html
+//! [`Reporter`]: compiler/trait.Reporter.html
+//! [`Vec<CompilerMessage>`]: compiler/struct.CompilerMessage.html
+
+
 #![allow(dead_code)]
 #![allow(unused_macros)]
 
@@ -32,26 +54,33 @@ pub(crate) type RantString = smartstring::alias::CompactString;
 #[derive(Debug)]
 pub struct Rant {
   rng: Rc<RantRng>,
-  globals: RefCell<RantMap>
+  globals: RantMapRef,
 }
 
 impl Rant {
-  /// Creates a new Rant context with the default seed (0).
+  /// Creates a new Rant context with the default seed (0) and loads the standard library.
   pub fn new() -> Self {
     Self::with_seed(0)
   }
   
-  /// Creates a new Rant context with the specified seed.
+  /// Creates a new Rant context with the specified seed and loads the standard library.
   pub fn with_seed(seed: u64) -> Self {
-    let mut globals = RantMap::new();
-    
+    let mut rant = Self {
+      globals: Rc::new(RefCell::new(RantMap::new())),
+      rng: Rc::new(RantRng::new(seed))
+    };
+    rant.load_stdlib();
+    rant
+  }
+
+  fn load_stdlib(&mut self) {
+    let mut globals = self.globals.borrow_mut();
     // Load standard library
     stdlib::load_stdlib(&mut globals);
-
-    Self {
-      globals: RefCell::new(globals),
-      rng: Rc::new(RantRng::new(seed))
-    }
+    // Add standard variables
+    // TODO: Make these read-only
+    globals.raw_set("RANT_VERSION", RantValue::String(RANT_VERSION.to_owned()));
+    globals.raw_set("_GLOBALS", RantValue::Map(Rc::clone(&self.globals)));
   }
 }
 
@@ -84,6 +113,11 @@ impl Rant {
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_file_quiet<P: AsRef<Path>>(&self, path: P) -> CompileResult {
     RantCompiler::compile_file(path, &mut ())
+  }
+
+  /// Gets the global variable map of the Rant context.
+  pub fn globals(&self) -> RantMapRef {
+    Rc::clone(&self.globals)
   }
   
   /// Gets the current RNG seed.
