@@ -56,17 +56,19 @@ macro_rules! runtime_error {
 #[derive(Debug)]
 pub enum Intent {
   /// Take the pending output from last frame and print it.
-  PrintLastOutput,
+  PrintValue,
+  /// Check if the active block is finished and either continue the block or pop the state from the stack
+  CheckBlock { no_print: bool },
   /// Pop a value off the stack and assign it to an existing variable.
   SetVar { vname: Identifier },
   /// Pop a value off the stack and assign it to a new variable.
   DefVar { vname: Identifier },
   /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `GetValue`.
-  BuildDynamicGetter { path: Rc<VarAccessPath>, dynamic_key_count: usize, pending_exprs: Vec<Rc<Block>>, override_print: bool },
+  BuildDynamicGetter { path: Rc<VarAccessPath>, dynamic_key_count: usize, pending_exprs: Vec<Rc<Sequence>>, override_print: bool },
   /// Pop `dynamic_key_count` values off the stack and use them for expression fields in a getter.
   GetValue { path: Rc<VarAccessPath>, dynamic_key_count: usize, override_print: bool },
   /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `SetValue`.
-  BuildDynamicSetter { path: Rc<VarAccessPath>, auto_def: bool, expr_count: usize, pending_exprs: Vec<Rc<Block>>, val_source: SetterValueSource },
+  BuildDynamicSetter { path: Rc<VarAccessPath>, auto_def: bool, expr_count: usize, pending_exprs: Vec<Rc<Sequence>>, val_source: SetterValueSource },
   /// Pop `expr_count` values off the stack and use them for expression fields in a setter.
   SetValue { path: Rc<VarAccessPath>, auto_def: bool, expr_count: usize },
   /// Evaluate `arg_exprs` in order, then pop the argument values off the stack, pop a function off the stack, and pass the arguments to the function.
@@ -108,9 +110,12 @@ impl<'rant> VM<'rant> {
       // Read frame's current intents and handle them before running the sequence
       while let Some(intent) = self.cur_frame_mut().take_intent() {
         match intent {
-          Intent::PrintLastOutput => {
+          Intent::PrintValue => {
             let val = self.pop_val()?;
             self.cur_frame_mut().write_value(val);
+          },
+          Intent::CheckBlock { no_print } => {
+            self.check_block(no_print)?;
           },
           Intent::SetVar { vname } => {
             let val = self.pop_val()?;
@@ -121,14 +126,14 @@ impl<'rant> VM<'rant> {
             self.def_local(vname.as_str(), val)?;
           },
           Intent::BuildDynamicGetter { path, dynamic_key_count, mut pending_exprs, override_print } => {
-            if let Some(block) = pending_exprs.pop() {
+            if let Some(key_expr) = pending_exprs.pop() {
               // Set next intent based on remaining expressions in getter
               if pending_exprs.is_empty() {
                 self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print });
               } else {
                 self.cur_frame_mut().push_intent_front(Intent::BuildDynamicGetter { path, dynamic_key_count, pending_exprs, override_print });
               }
-              self.push_block_frame(block.as_ref(), true, None, PrintFlag::None)?;
+              self.push_frame(Rc::clone(&key_expr), true, None)?;
             } else {
               self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print });
             }
@@ -184,15 +189,15 @@ impl<'rant> VM<'rant> {
             continue 'from_the_top;
           },
           Intent::BuildDynamicSetter { path, auto_def, expr_count, mut pending_exprs, val_source } => {
-            if let Some(block) = pending_exprs.pop() {
+            if let Some(key_expr) = pending_exprs.pop() {
               // Set next intent based on remaining expressions in setter
               if pending_exprs.is_empty() {
                 // Set value once this frame is active again
                 self.cur_frame_mut().push_intent_front(Intent::SetValue { path, auto_def, expr_count });
-                self.push_block_frame(block.as_ref(), true, None, PrintFlag::None)?;
+                self.push_frame(Rc::clone(&key_expr), true, None)?;
               } else {
                 self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, auto_def, expr_count, pending_exprs, val_source });
-                self.push_block_frame(block.as_ref(), true, None, PrintFlag::None)?;
+                self.push_frame(Rc::clone(&key_expr), true, None)?;
                 continue 'from_the_top;
               }
               
@@ -251,9 +256,9 @@ impl<'rant> VM<'rant> {
               // Continue map creation
               self.cur_frame_mut().push_intent_front(Intent::BuildMap { init: Rc::clone(&init), pair_index: pair_index + 1, map });
               let (key_expr, val_expr) = &init[pair_index];
-              if let MapKeyExpr::Dynamic(key_expr_block) = key_expr {
+              if let MapKeyExpr::Dynamic(key_expr) = key_expr {
                 // Push dynamic key expression onto call stack
-                self.push_block_frame(key_expr_block, true, None, PrintFlag::None)?;
+                self.push_frame(Rc::clone(&key_expr), true, None)?;
               }
               // Push value expression onto call stack
               self.push_frame(Rc::clone(val_expr), true, None)?;
@@ -281,7 +286,7 @@ impl<'rant> VM<'rant> {
             continue 'from_the_top;
           },
           RST::Block(block) => {
-            self.push_block_frame(block, false, None, PrintFlag::None)?;
+            self.push_block(block, false, PrintFlag::None)?;
             continue 'from_the_top;
           },
           RST::VarDef(vname, val_expr) => {
@@ -342,7 +347,7 @@ impl<'rant> VM<'rant> {
               id, 
               body, 
               params, 
-              capture_vars 
+              capture_vars
             } = fdef;
 
             let func = RantValue::Function(Rc::new(RantFunction {
@@ -489,6 +494,7 @@ impl<'rant> VM<'rant> {
     // Call the function
     match &func.body {
       RantFunctionInterface::Foreign(foreign_func) => {
+        // TODO: Honor sinks on native function calls
         foreign_func(self, args)?;
       },
       RantFunctionInterface::User(user_func) => {
@@ -498,8 +504,14 @@ impl<'rant> VM<'rant> {
         for param in func.params.iter() {
           func_locals.raw_set(param.name.as_str(), args.next().unwrap_or(RantValue::Empty));
         }
+        let is_printing = !flag.is_sink();
+
+        // Tell frame to print output if it's available
+        if is_printing {
+          self.cur_frame_mut().push_intent_front(Intent::PrintValue);
+        }
         // Push the function onto the call stack
-        self.push_block_frame(user_func.as_ref(), false, Some(func_locals), flag)?;
+        self.push_frame(Rc::clone(user_func), is_printing, Some(func_locals))?;
       },
     }
     Ok(())
@@ -661,14 +673,50 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
-  #[inline(always)]
-  pub(crate) fn push_block_frame(&mut self, block: &Block, override_print: bool, locals: Option<RantMap>, flag: PrintFlag) -> RuntimeResult<()> {
-    let elem = Rc::clone(&block.elements[self.rng.next_usize(block.len())]);
-    let is_printing = !PrintFlag::prioritize(block.flag, flag).is_sink();
-    if is_printing && !override_print {
-      self.cur_frame_mut().push_intent_front(Intent::PrintLastOutput);
+  /// Checks for an active block and attempts to iterate it. If a valid element is returned, it is pushed onto the call stack.
+  pub(crate) fn check_block(&mut self, no_print: bool) -> RuntimeResult<()> {
+    let mut is_printing = false;
+    
+    // Check if there's an active block and try to iterate it
+    let next_element = if let Some(state) = self.resolver.active_block_mut() {
+      // Get the next element
+      if let Some(element) = state.next_element() {
+        // Figure out if the block is supposed to print anything
+        is_printing = !state.flag().is_sink();
+        Some(element)
+      } else {
+        // If the block is done, pop the state from the block stack
+        self.resolver.pop_block();
+        None
+      }
+    } else {
+      None
+    };
+
+    // Push frame for next block element, if available
+    if let Some(element) = next_element {
+      // Tell the calling frame to check the block status once the element returns
+      self.cur_frame_mut().push_intent_front(Intent::CheckBlock { no_print });
+      // Combine with no_print to determine if we *should* print anything, or just push the result to the stack
+      if is_printing && !no_print {
+        self.cur_frame_mut().push_intent_front(Intent::PrintValue);
+      }
+      // Push the next element
+      self.push_frame(Rc::clone(&element), true, Default::default())?;
     }
-    self.push_frame(elem, is_printing, locals)?;
+    
+    Ok(())
+  }
+
+  #[inline(always)]
+  pub(crate) fn push_block(&mut self, block: &Block, override_print: bool, flag: PrintFlag) -> RuntimeResult<()> {
+    // Push a new state onto the block stack
+    self.resolver.push_block(block, flag);
+
+    // Check the block to make sure it actually does something.
+    // If the block has some skip condition, it will automatically remove it, and this method will have no net effect.
+    self.check_block(override_print)?;
+
     Ok(())
   }
 
@@ -722,7 +770,6 @@ impl<'rant> VM<'rant> {
   
   #[inline(always)]
   pub(crate) fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool, locals: Option<RantMap>) -> RuntimeResult<()> {
-    
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
@@ -746,6 +793,16 @@ impl<'rant> VM<'rant> {
   #[inline(always)]
   pub fn rng(&self) -> &RantRng {
     self.rng.as_ref()
+  }
+
+  #[inline(always)]
+  pub fn resolver(&self) -> &Resolver {
+    &self.resolver
+  }
+
+  #[inline(always)]
+  pub fn resolver_mut(&mut self) -> &mut Resolver {
+    &mut self.resolver
   }
 }
 
@@ -798,6 +855,8 @@ pub enum RuntimeErrorType {
   ExternalError,
   /// Too few/many arguments were passed to a function
   ArgumentMismatch,
+  /// Invalid argument passed to function
+  ArgumentError,
   /// Tried to invoke a non-function
   CannotInvokeValue,
   /// Error occurred when creating value

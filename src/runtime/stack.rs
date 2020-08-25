@@ -135,6 +135,7 @@ impl StackFrame {
   }
   
   /// Gets the Program Counter (PC) for the frame.
+  #[inline]
   pub fn pc(&self) -> usize {
     self.pc
   }

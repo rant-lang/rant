@@ -20,6 +20,14 @@ enum SequenceParseMode {
   ///
   /// Breaks on `Semi` and `RightBracket`.
   FunctionArg,
+  /// Parse a sequence like a function body.
+  ///
+  /// Breaks on `RightBrace`.
+  FunctionBody,
+  /// Parse a sequence like a dynamic key expression.
+  ///
+  /// Breaks on `RightBrace`.
+  DynamicKey,
   /// Parse a sequence like an anonymous function expression.
   ///
   /// Breaks on `Colon` and `RightBracket`.
@@ -54,6 +62,10 @@ enum SequenceEndType {
   FunctionArgEndNext,
   /// Function argument sequence was terminated by `RightBracket`.
   FunctionArgEndBreak,
+  /// Function body sequence was terminated by `RightBrace`.
+  FunctionBodyEnd,
+  /// Dynamic key sequencce was terminated by `RightBrace`.
+  DynamicKeyEnd,
   /// Anonymous function expression was terminated by `Colon`.
   AnonFunctionExprToArgs,
   /// Anonymous function expression was terminated by `RightBracket` and does not expect arguments.
@@ -263,11 +275,17 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             SequenceParseMode::BlockElement => {
               return Ok((sequence, SequenceEndType::BlockDelim, is_seq_printing))
             },
+            SequenceParseMode::DynamicKey => {
+              self.syntax_error(Problem::DynamicKeyBlockMultiElement, &span);
+            },
+            SequenceParseMode::FunctionBody => {
+              self.syntax_error(Problem::FunctionBodyBlockMultiElement, &span);
+            },
             _ => unexpected_token_error!()
           }
         }),
         
-        // Block end (when in block parsing mode)
+        // Block/func body/dynamic key end
         RantToken::RightBrace => no_flags!({
           // Ignore pending whitespace
           whitespace!(ignore prev);
@@ -275,6 +293,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             SequenceParseMode::BlockElement => {
               return Ok((sequence, SequenceEndType::BlockEnd, is_seq_printing))
             },
+            SequenceParseMode::FunctionBody => {
+              return Ok((sequence, SequenceEndType::FunctionBodyEnd, true))
+            },
+            SequenceParseMode::DynamicKey => {
+              return Ok((sequence, SequenceEndType::DynamicKeyEnd, true))
+            }
             _ => unexpected_token_error!()
           }
         }),
@@ -539,7 +563,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let key_expr = match self.reader.next_solid() {
             // Allow blocks as dynamic keys
             Some((RantToken::LeftBrace, _)) => {
-              MapKeyExpr::Dynamic(self.parse_block(false, PrintFlag::Hint)?)
+              MapKeyExpr::Dynamic(Rc::new(self.parse_dynamic_key(false)?))
             },
             // Allow fragments as keys if they are valid identifiers
             Some((RantToken::Fragment, span)) => {
@@ -740,7 +764,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Read function body
           // TODO: Handle captured variables in function bodies
           self.reader.skip_ws();          
-          let body = Rc::new(self.parse_block(true, PrintFlag::None)?);
+          let body = Rc::new(self.parse_func_body()?);
               
           Ok(RST::FuncDef(FunctionDef {
             id: Rc::new(func_id),
@@ -756,7 +780,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           self.reader.skip_ws();
           // Read function body
           // TODO: Handle captured variables in closure bodies
-          let body = Rc::new(self.parse_block(true, PrintFlag::None)?);
+          let body = Rc::new(self.parse_func_body()?);
               
           Ok(RST::Closure(ClosureExpr {
             capture_vars: Rc::new(vec![]),
@@ -867,8 +891,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       },
       // An expression can also be used to provide the variable
       Some((RantToken::LeftBrace, _)) => {
-        let expr_block = self.parse_block(false, PrintFlag::Hint)?;
-        idparts.push(VarAccessComponent::Expression(Rc::new(expr_block)));
+        let dynamic_key_expr = self.parse_dynamic_key(false)?;
+        idparts.push(VarAccessComponent::Expression(Rc::new(dynamic_key_expr)));
       },
       Some((RantToken::Integer(_), span)) => {
         self.syntax_error(Problem::LocalPathStartsWithIndex, &span);
@@ -907,8 +931,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           },
           // Dynamic key
           Some((RantToken::LeftBrace, _)) => {
-            let expr_block = self.parse_block(false, PrintFlag::Hint)?;
-            idparts.push(VarAccessComponent::Expression(Rc::new(expr_block)));
+            let dynamic_key_expr = self.parse_dynamic_key(false)?;
+            idparts.push(VarAccessComponent::Expression(Rc::new(dynamic_key_expr)));
           },
           Some((.., span)) => {
             // error
@@ -923,6 +947,54 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         return Ok(VarAccessPath::new(idparts))
       }
     }
+  }
+
+  /// Parses a dynamic key.
+  fn parse_dynamic_key(&mut self, expect_opening_brace: bool) -> ParseResult<Sequence> {
+    if expect_opening_brace && !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
+      self.syntax_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
+      return Err(())
+    }
+
+    let start_span = self.reader.last_token_span();
+    let (seq, seq_end, _) = self.parse_sequence(SequenceParseMode::DynamicKey)?;
+
+    match seq_end {
+      SequenceEndType::DynamicKeyEnd => {},
+      SequenceEndType::ProgramEnd => {
+        // Hard error if block isn't closed
+        let err_span = start_span.start .. self.source.len();
+        self.syntax_error(Problem::UnclosedBlock, &err_span);
+        return Err(())
+      },
+      _ => unreachable!()
+    }
+
+    Ok(seq)
+  }
+
+  /// Parses a function body.
+  fn parse_func_body(&mut self) -> ParseResult<Sequence> {
+    if !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
+      self.syntax_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
+      return Err(())
+    }
+
+    let start_span = self.reader.last_token_span();
+    let (seq, seq_end, _) = self.parse_sequence(SequenceParseMode::FunctionBody)?;
+
+    match seq_end {
+      SequenceEndType::FunctionBodyEnd => {},
+      SequenceEndType::ProgramEnd => {
+        // Hard error if block isn't closed
+        let err_span = start_span.start .. self.source.len();
+        self.syntax_error(Problem::UnclosedBlock, &err_span);
+        return Err(())
+      },
+      _ => unreachable!()
+    }
+
+    Ok(seq)
   }
   
   /// Parses a block.

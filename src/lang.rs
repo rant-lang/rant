@@ -62,7 +62,7 @@ pub enum VarAccessComponent {
   /// List index
   Index(i64),
   /// Dynamic key
-  Expression(Rc<Block>),
+  Expression(Rc<Sequence>),
 }
 
 /// An accessor consisting of a chain of variable names and indices
@@ -75,7 +75,7 @@ impl VarAccessPath {
   }
 
   /// Returns a list of dynamic keys used by the path in order.
-  pub fn dynamic_keys(&self) -> Vec<Rc<Block>> {
+  pub fn dynamic_keys(&self) -> Vec<Rc<Sequence>> {
     self.iter().filter_map(|c| {
       match c {
         VarAccessComponent::Expression(expr) => Some(Rc::clone(expr)),
@@ -145,14 +145,14 @@ impl DerefMut for Sequence {
 #[derive(Debug)]
 pub struct Block {
   pub flag: PrintFlag,
-  pub elements: Vec<Rc<Sequence>>
+  pub elements: Rc<Vec<Rc<Sequence>>>
 }
 
 impl Block {
   pub fn new(flag: PrintFlag, elements: Vec<Rc<Sequence>>) -> Self {
     Block {
       flag,
-      elements
+      elements: Rc::new(elements)
     }
   }
   
@@ -240,13 +240,13 @@ pub struct FunctionDef {
   pub id: Rc<VarAccessPath>,
   pub params: Rc<Vec<Parameter>>,
   pub capture_vars: Rc<Vec<Identifier>>,
-  pub body: Rc<Block>,
+  pub body: Rc<Sequence>,
 }
 
 /// Describes a boxing (closure) operation to turn a block into a function.
 #[derive(Debug)]
 pub struct ClosureExpr {
-  pub expr: Rc<Block>,
+  pub expr: Rc<Sequence>,
   pub params: Rc<Vec<Parameter>>,
   pub capture_vars: Rc<Vec<Identifier>>,
 }
@@ -263,7 +263,7 @@ pub struct AnonFunctionCall {
 #[derive(Debug)]
 pub enum MapKeyExpr {
   /// Map key is evaluated from an expression at runtime.
-  Dynamic(Block),
+  Dynamic(Rc<Sequence>),
   /// Map key is evaluated at compile time from an identifier.
   Static(RantString),
 }

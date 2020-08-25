@@ -9,6 +9,8 @@ use crate::convert::*;
 use crate::convert::ToRant;
 use std::mem;
 use lang::PrintFlag;
+use util::clamp;
+use resolver::Reps;
 
 pub(crate) type RantStdResult = Result<(), RuntimeError>;
 
@@ -236,6 +238,25 @@ fn call(vm: &mut VM, (func, args): (RantFunctionRef, Option<Vec<RantValue>>)) ->
   Ok(())
 }
 
+fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
+  vm.resolver_mut().attrs_mut().reps = match reps {
+    RantValue::Integer(n) => Reps::Finite(n.max(0) as usize),
+    RantValue::String(s) => match s.as_str() {
+      "all" => Reps::All,
+      "forever" => Reps::Infinite,
+      _ => return Err(RuntimeError {
+        error_type: RuntimeErrorType::ArgumentError,
+        description: format!("unknown repetition mode: '{}'", s),
+      })
+    },
+    _ => return Err(RuntimeError {
+      error_type: RuntimeErrorType::ArgumentError,
+      description: format!("value of type '{}' cannot be used as repetition value", reps.type_name()),
+    })
+  };
+  Ok(())
+}
+
 fn get(vm: &mut VM, key: String) -> RantStdResult {
   let val = vm.get_local(key.as_str())?;
   vm.cur_frame_mut().write_value(val);
@@ -264,6 +285,9 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
   load_funcs!(
     // General functions
     alt, call, len, get_type as "type", seed,
+
+    // Block attribute functions
+    rep,
 
     // Math functions
     add, sub, mul, div, mul_add as "mul-add", rem as "mod", neg, recip,

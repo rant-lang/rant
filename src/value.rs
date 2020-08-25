@@ -1,4 +1,4 @@
-use crate::{lang::{Block, Parameter}};
+use crate::{lang::{Block, Parameter, Sequence}};
 use crate::runtime::*;
 use crate::runtime::resolver::Selector;
 use crate::{collections::*, util::*, IntoRuntimeResult, RuntimeResult, RuntimeError, RuntimeErrorType, stdlib::RantStdResult};
@@ -319,7 +319,7 @@ pub enum RantFunctionInterface {
   /// Represents a foreign function as a wrapper function accepting a variable number of arguments.
   Foreign(Rc<dyn Fn(&mut VM, Vec<RantValue>) -> RantStdResult>),
   /// Represents a user function as an RST.
-  User(Rc<Block>)
+  User(Rc<Sequence>)
 }
 
 impl Debug for RantFunctionInterface {

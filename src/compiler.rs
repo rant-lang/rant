@@ -102,6 +102,8 @@ pub enum Problem {
   UnexpectedToken(String),
   ExpectedToken(String),
   UnclosedBlock,
+  DynamicKeyBlockMultiElement,
+  FunctionBodyBlockMultiElement,
   UnclosedFunctionCall,
   UnclosedFunctionSignature,
   UnclosedStringLiteral,
@@ -147,6 +149,8 @@ impl Problem {
       Problem::UnclosedVariableAccess =>                          "R-0012",
       Problem::UnclosedList =>                                    "R-0013",
       Problem::UnclosedMap =>                                     "R-0014",
+      Problem::DynamicKeyBlockMultiElement =>                     "R-0015",
+      Problem::FunctionBodyBlockMultiElement =>                   "R-0016",
       
       // Access path errors (0020 - 0029)
       Problem::MissingIdentifier =>                               "R-0020",
@@ -197,6 +201,8 @@ impl Problem {
       Problem::UnclosedVariableAccess => "unclosed variable accessor; expected '>'".to_owned(),
       Problem::UnclosedList => "unclosed list initializer; expected ')'".to_owned(),
       Problem::UnclosedMap => "unclosed map initializer; expected ')'".to_owned(),
+      Problem::DynamicKeyBlockMultiElement => "dynamic key blocks can't have more than one element; if branching is desired, create an inner block".to_owned(),
+      Problem::FunctionBodyBlockMultiElement => "function body blocks can't have more than one element; if branching is desired, create an inner block".to_owned(),
     }
   }
   
@@ -222,6 +228,8 @@ impl Problem {
       Problem::UnclosedVariableAccess => "no matching '>' found".to_owned(),
       Problem::UnclosedList => "no matching ')' found".to_owned(),
       Problem::UnclosedMap => "no matching ')' found".to_owned(),
+      Problem::FunctionBodyBlockMultiElement => "multiple elements not allowed here".to_owned(),
+      Problem::DynamicKeyBlockMultiElement => "multiple elements not allowed here".to_owned(),
       _ => return None
     })
   }
