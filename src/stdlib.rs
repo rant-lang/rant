@@ -10,7 +10,7 @@ use crate::convert::ToRant;
 use std::mem;
 use lang::PrintFlag;
 use util::clamp;
-use resolver::Reps;
+use resolver::{SelectorMode, Reps, Selector};
 
 pub(crate) type RantStdResult = Result<(), RuntimeError>;
 
@@ -257,6 +257,15 @@ fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
   Ok(())
 }
 
+fn mksel(vm: &mut VM, mode: SelectorMode) -> RantStdResult {
+  let selector = Rc::new(RefCell::new(Selector::new(mode)));
+  let special = RantSpecial::Selector(selector);
+  vm.cur_frame_mut().write_value(RantValue::Special(RantSpecialHandle::new(special)));
+  Ok(())
+}
+
+
+
 fn get(vm: &mut VM, key: String) -> RantStdResult {
   let val = vm.get_local(key.as_str())?;
   vm.cur_frame_mut().write_value(val);
@@ -287,7 +296,7 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     alt, call, len, get_type as "type", seed,
 
     // Block attribute functions
-    rep,
+    mksel, rep,
 
     // Math functions
     add, sub, mul, div, mul_add as "mul-add", rem as "mod", neg, recip,

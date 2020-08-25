@@ -201,7 +201,7 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) -> ExitCode {
       exitcode::OK
     },
     Err(err) => {
-      eprintln!("{}: {} ({:?})", "Runtime error".bright_red().bold(), err.description, err.error_type);
+      eprintln!("{}: {}", "Runtime error".bright_red().bold(), err.description);
       if show_stats {
         eprintln!("{} in {:?} (seed = {:016x})", "Crashed".bright_red().bold(), run_time, seed);
       }

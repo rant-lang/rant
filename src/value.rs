@@ -146,7 +146,7 @@ impl Display for RantValueType {
 /// Error produced by a RantValue operator or conversion.
 #[derive(Debug)]
 pub enum ValueError {
-  /// A conversion between two value types failed.
+  /// The requested conversion was not valid.
   InvalidConversion {
     from: &'static str,
     to: &'static str,
@@ -277,6 +277,11 @@ impl Clone for RantSpecialHandle {
 }
 
 impl RantSpecialHandle {
+  #[inline]
+  pub(crate) fn new(special: RantSpecial) -> Self {
+    Self(Rc::new(special))
+  }
+
   #[inline]
   pub(crate) fn as_ptr(&self) -> *const RantSpecial {
     Rc::as_ptr(&self.0)

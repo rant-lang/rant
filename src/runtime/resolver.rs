@@ -1,17 +1,19 @@
 use std::{cell::RefCell, rc::Rc, mem};
-use crate::{random::RantRng, RantValue, lang::{Sequence, Block, PrintFlag}};
+use crate::{random::RantRng, RantValue, lang::{Sequence, Block, PrintFlag}, FromRant, ValueError};
+use smallvec::SmallVec;
 
 pub type SelectorRef = Rc<RefCell<Selector>>;
 
 /// The number of attribute frames you can put on the stack before the runtime goes up in smoke.
 const DEFAULT_MAX_ATTR_FRAMES: usize = 127;
+const BLOCK_STACK_INLINE_COUNT: usize = 4;
 
 /// Manages block execution behavior ("resolution").
 pub struct Resolver {
   rng: Rc<RantRng>,
   base_attrs: AttributeFrame,
   attr_override_stack: Vec<AttributeFrame>,
-  block_stack: Vec<BlockState>,
+  block_stack: SmallVec<[BlockState; BLOCK_STACK_INLINE_COUNT]>,
 }
 
 /// Stores state information for a block that is currently being resolved.
@@ -25,6 +27,7 @@ pub struct BlockState {
 }
 
 impl BlockState {
+  #[inline]
   pub fn next_element(&mut self) -> Option<Rc<Sequence>> {
     if !self.is_done() {
       self.iter_count += 1;
@@ -35,12 +38,12 @@ impl BlockState {
     }
   }
 
-  #[inline]
+  #[inline(always)]
   pub(crate) fn is_done(&self) -> bool {
     !self.attrs.cond_val || (!self.attrs.reps.is_infinite() && self.iter_count >= self.total_reps)
   }
 
-  #[inline]
+  #[inline(always)]
   pub fn flag(&self) -> PrintFlag {
     self.flag
   }
@@ -66,6 +69,7 @@ impl Reps {
     matches!(self, Reps::All)
   }
 
+  #[inline]
   pub fn get_rep_count_for(&self, block: &Block) -> usize {
     match self {
       Reps::Infinite => 0,
@@ -88,6 +92,7 @@ impl Resolver {
 
 impl Resolver {
   /// Adds a new block state to the block stack.
+  #[inline]
   pub fn push_block(&mut self, block: &Block, flag: PrintFlag) {
     let attrs = self.take_attrs();
     let state = BlockState {
@@ -183,16 +188,75 @@ impl Default for AttributeFrame {
 #[derive(Debug)]
 pub struct Selector {
   mode: SelectorMode,
+}
 
+impl Selector {
+  #[inline]
+  pub fn new(mode: SelectorMode) -> Self {
+    Self {
+      mode
+    }
+  }
 }
 
 #[derive(Debug)]
 pub enum SelectorMode {
+  /// Selects the same, random element each time.
+  One,
+  /// Selects each element in a wrapping sequence from left to right.
   Forward,
+  /// Selects each element from left to right, then repeats the right-most element.
+  ForwardClamp,
+  /// Selects each element in a wrapping reverse sequence from right to left.
   Reverse,
+  /// Selects each element from right to left, then repeats the left-most element.
+  ReverseClamp,
+  /// Selects each element once in a random sequence, then reshuffles.
   Deck,
-  CycleDeck,
+  /// Selects each element once in a wrapping random sequence, without reshuffling.
+  DeckLoop,
+  /// Selects each element once in a random sequence, repeating the final element.
+  DeckClamp,
+  /// Selects each element from left to right, switching directions each time an edge element is reached.
   Ping,
+  /// Selects each element from right to left, switching directions each time an edge element is reached.
   Pong,
+  /// Ensures that no one element index is selected twice in a row.
   NoDouble,
+}
+
+impl FromRant for SelectorMode {
+  fn from_rant(val: RantValue) -> Result<Self, ValueError> {
+    match &val {
+      RantValue::String(s) => {
+        Ok(match s.as_str() {
+          "one" =>            SelectorMode::One,
+          "forward" =>        SelectorMode::Forward,
+          "forward-clamp" =>  SelectorMode::ForwardClamp,
+          "reverse" =>        SelectorMode::Reverse,
+          "reverse-clamp" =>  SelectorMode::ReverseClamp,
+          "deck" =>           SelectorMode::Deck,
+          "deck-loop" =>      SelectorMode::DeckLoop,
+          "deck-clamp" =>     SelectorMode::DeckClamp,
+          "ping" =>           SelectorMode::Ping,
+          "pong" =>           SelectorMode::Pong,
+          "no-double" =>      SelectorMode::NoDouble,
+          _ => return Err(ValueError::InvalidConversion {
+            from: val.type_name(),
+            to: "selector mode",
+            message: Some(format!("invalid selector mode: '{}'", s))
+          })
+        })
+      },
+      _ => Err(ValueError::InvalidConversion {
+        from: val.type_name(),
+        to: "selector mode",
+        message: None,
+      })
+    }
+  }
+
+  fn is_rant_optional() -> bool {
+    false
+  }
 }

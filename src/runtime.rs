@@ -2,6 +2,7 @@ use crate::*;
 use crate::lang::*;
 use std::{rc::Rc, cell::RefCell, ops::Deref, error::Error, fmt::Display};
 use resolver::Resolver;
+use smallvec::SmallVec;
 pub use stack::*;
 pub use output::*;
 
@@ -12,12 +13,14 @@ mod stack;
 pub type RuntimeResult<T> = Result<T, RuntimeError>;
 
 pub const MAX_STACK_SIZE: usize = 20000;
+pub(crate) const CALL_STACK_INLINE_COUNT: usize = 4;
+pub(crate) const VALUE_STACK_INLINE_COUNT: usize = 4;
 
 pub struct VM<'rant> {
   rng: Rc<RantRng>,
   engine: &'rant mut Rant,
   program: &'rant RantProgram,
-  val_stack: Vec<RantValue>,
+  val_stack: SmallVec<[RantValue; VALUE_STACK_INLINE_COUNT]>,
   call_stack: CallStack,
   resolver: Resolver
 }
@@ -101,7 +104,7 @@ impl<'rant> VM<'rant> {
     //println!("RST: {:#?}", self.program.root);
 
     // Push the program's root sequence onto the call stack
-    self.push_frame(self.program.root.clone(), true, None)?;
+    self.push_frame_unchecked(self.program.root.clone(), true, None);
     
     // Run whatever is on the top of the call stack
     'from_the_top: 
@@ -766,6 +769,12 @@ impl<'rant> VM<'rant> {
     } else {
       runtime_error!(RuntimeErrorType::StackUnderflow, "call stack has underflowed");
     }
+  }
+
+  #[inline(always)]
+  fn push_frame_unchecked(&mut self, callee: Rc<Sequence>, use_output: bool, locals: Option<RantMap>) {
+    let frame = StackFrame::new(callee, locals.unwrap_or_default(), use_output);
+    self.call_stack.push(frame);
   }
   
   #[inline(always)]

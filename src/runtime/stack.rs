@@ -4,14 +4,14 @@ use crate::{lang::{Sequence, RST}, RantMap, RantValue, Rant};
 use crate::runtime::*;
 use super::{OutputBuffer, output::OutputWriter, Intent};
 
-const STACK_INITIAL_CAPACITY: usize = 16;
+type CallStackVector = SmallVec<[StackFrame; super::CALL_STACK_INLINE_COUNT]>;
 
 /// Thin wrapper around call stack vector
-pub struct CallStack(Vec<StackFrame>);
+pub struct CallStack(CallStackVector);
 
 // Allows direct immutable access to internal stack vector
 impl Deref for CallStack {
-  type Target = Vec<StackFrame>;
+  type Target = CallStackVector;
   fn deref(&self) -> &Self::Target {
     &self.0
   }
@@ -32,7 +32,7 @@ impl Default for CallStack {
 
 impl CallStack {
   pub fn new() -> Self {
-    Self(Vec::with_capacity(STACK_INITIAL_CAPACITY))
+    Self(Default::default())
   }
 
   pub fn set_local(&mut self, context: &Rant, id: &str, val: RantValue) -> RuntimeResult<()> {
@@ -119,6 +119,7 @@ impl StackFrame {
 }
 
 impl StackFrame {
+  #[inline]
   pub fn seq_next(&mut self) -> Option<Rc<RST>> {
     if self.is_done() {
       return None
@@ -148,16 +149,14 @@ impl StackFrame {
 
   /// Pushes an intent to the front of the queue so that it is handled next.
   #[inline]
-  pub fn push_intent_front(&mut self, intent: Intent) -> &mut Self {
-    self.intents.push_front(intent); 
-    self
+  pub fn push_intent_front(&mut self, intent: Intent) {
+    self.intents.push_front(intent);
   }
 
   /// Pushes an intent to the back of the queue so that it is handled last.
   #[inline]
-  pub fn push_intent_back(&mut self, intent: Intent) -> &mut Self {
+  pub fn push_intent_back(&mut self, intent: Intent) {
     self.intents.push_back(intent);
-    self
   }
 }
 
