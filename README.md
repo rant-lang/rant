@@ -96,8 +96,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## Learn Rant
+
+The latest documentation can be found at [docs.rant-lang.org].
+
+Since Rant 4 is early in development, some documentation may be outdated/incomplete, but it is actively updated to ensure that it reflects current features with reasonable accuracy.
+
+
 ## License
 
-Rant is licensed under the GNU Affero General Public License v3. See [LICENSE](./LICENSE) for more details.
+Rant is distributed under the GNU Affero General Public License v3. See [LICENSE](./LICENSE) for more details.
 
 An alternative, commercial license is planned for the future.
