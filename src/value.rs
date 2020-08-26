@@ -97,7 +97,7 @@ impl Default for RantValue {
 }
 
 /// A lightweight representation of a Rant value's type.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum RantValueType {
   /// The `string` type.

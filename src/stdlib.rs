@@ -99,6 +99,71 @@ fn xor(vm: &mut VM, (lhs, rhs): (bool, bool)) -> RantStdResult {
   Ok(())
 }
 
+fn eq(vm: &mut VM, (a, b): (RantValue, RantValue)) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(a == b));
+  Ok(())
+}
+
+fn neq(vm: &mut VM, (a, b): (RantValue, RantValue)) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(a != b));
+  Ok(())
+}
+
+fn lt(vm: &mut VM, (a, b): (RantValue, RantValue)) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(a < b));
+  Ok(())
+}
+
+fn gt(vm: &mut VM, (a, b): (RantValue, RantValue)) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(a > b));
+  Ok(())
+}
+
+fn le(vm: &mut VM, (a, b): (RantValue, RantValue)) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(a <= b));
+  Ok(())
+}
+
+fn ge(vm: &mut VM, (a, b): (RantValue, RantValue)) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(a >= b));
+  Ok(())
+}
+
+fn is_string(vm: &mut VM, value: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(value.get_type() == RantValueType::String));
+  Ok(())
+}
+
+fn is_integer(vm: &mut VM, value: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(value.get_type() == RantValueType::Integer));
+  Ok(())
+}
+
+fn is_float(vm: &mut VM, value: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(value.get_type() == RantValueType::Float));
+  Ok(())
+}
+
+fn is_number(vm: &mut VM, value: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(matches!(value.get_type(), RantValueType::Integer | RantValueType::Float)));
+  Ok(())
+}
+
+fn is_empty(vm: &mut VM, value: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(value.is_empty()));
+  Ok(())
+}
+
+fn is_bool(vm: &mut VM, value: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(value.get_type() == RantValueType::Boolean));
+  Ok(())
+}
+
+fn is_nan(vm: &mut VM, value: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(value.is_nan()));
+  Ok(())
+}
+
 fn len(vm: &mut VM, val: RantValue) -> RantStdResult {
   vm.cur_frame_mut().write_value(RantValue::Integer(val.len() as i64));
   Ok(())
@@ -370,6 +435,12 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
 
     // Boolean functions
     and, not, or, xor,
+
+    // Comparison functions
+    eq, neq, gt, lt, ge, le,
+
+    // Verification functions
+    is_string as "is-string", is_integer as "is-integer", is_float as "is-float", is_number as "is-number", is_bool as "is-bool", is_empty as "is-empty", is_nan as "is-nan",
 
     // Math functions
     add, sub, mul, div, mul_add as "mul-add", rem as "mod", neg, recip,
