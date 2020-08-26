@@ -1,5 +1,6 @@
 ## 4.0.0-alpha.2
 
+* Add support for some block attributes: conditional value, repetitions, separator
 * Added a lot of new stdlib functions
 * Added `special` Rant type to represent opaque internal runtime data.
 * Added `get_global()` and `set_global()` to `Rant`.

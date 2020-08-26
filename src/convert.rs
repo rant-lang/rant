@@ -128,6 +128,24 @@ impl FromRant for RantValue {
   }
 }
 
+impl FromRant for bool {
+  fn from_rant(val: RantValue) -> Result<Self, ValueError> {
+    match val {
+      RantValue::Boolean(b) => Ok(b),
+      RantValue::Integer(n) => Ok(n != 0),
+      other => Err(ValueError::InvalidConversion {
+        from: other.type_name(),
+        to: "bool",
+        message: None,
+      })
+    }
+  }
+
+  fn is_rant_optional() -> bool {
+    false
+  }
+}
+
 impl FromRant for f32 {
   fn from_rant(val: RantValue) -> ValueResult<Self> {
     match val {

@@ -124,8 +124,8 @@ fn dec(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   Ok(())
 }
 
-fn maybe(vm: &mut VM, p: f64) -> RantStdResult {
-  let b = vm.rng().next_bool(p);
+fn maybe(vm: &mut VM, p: Option<f64>) -> RantStdResult {
+  let b = vm.rng().next_bool(p.unwrap_or(0.5));
   vm.cur_frame_mut().write_value(RantValue::Boolean(b));
   Ok(())
 }
@@ -238,6 +238,11 @@ fn call(vm: &mut VM, (func, args): (RantFunctionRef, Option<Vec<RantValue>>)) ->
   Ok(())
 }
 
+fn if_(vm: &mut VM, condition: bool) -> RantStdResult {
+  vm.resolver_mut().attrs_mut().cond_val = condition;
+  Ok(())
+}
+
 fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
   vm.resolver_mut().attrs_mut().reps = match reps {
     RantValue::Integer(n) => Reps::Finite(n.max(0) as usize),
@@ -337,7 +342,7 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     alt, call, len, get_type as "type", seed,
 
     // Block attribute functions
-    mksel, rep, sel, sep,
+    if_ as "if", mksel, rep, sel, sep,
 
     // Block state functions
     step, step_index as "step-index", step_count as "step-count",
