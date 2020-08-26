@@ -1,6 +1,7 @@
 ## 4.0.0-alpha.3
 
 * Fixed bug where printing empties with a non-empty would cause output to be coerced incorrectly to a string
+* Fixed bug where sinked blocks print when they're not supposed to
 
 ## 4.0.0-alpha.2
 

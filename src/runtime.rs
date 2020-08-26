@@ -714,7 +714,7 @@ impl<'rant> VM<'rant> {
             self.cur_frame_mut().push_intent_front(Intent::PrintValue);
           }
           // Push the next element
-          self.push_frame(Rc::clone(&elem_seq), true, Default::default())?;
+          self.push_frame(Rc::clone(&elem_seq), is_printing, Default::default())?;
         },
         resolver::BlockAction::Separator(separator) => {
           match separator {
