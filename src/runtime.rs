@@ -1,7 +1,7 @@
 use crate::*;
 use crate::lang::*;
 use std::{rc::Rc, cell::RefCell, ops::Deref, error::Error, fmt::Display};
-use resolver::Resolver;
+use resolver::{SelectorError, Resolver};
 use smallvec::SmallVec;
 pub use stack::*;
 pub use output::*;
@@ -104,6 +104,7 @@ impl<'rant> VM<'rant> {
     //println!("RST: {:#?}", self.program.root);
 
     // Push the program's root sequence onto the call stack
+    // This doesn't need an overflow check because it will *always* succeed
     self.push_frame_unchecked(self.program.root.clone(), true, None);
     
     // Run whatever is on the top of the call stack
@@ -683,7 +684,7 @@ impl<'rant> VM<'rant> {
     // Check if there's an active block and try to iterate it
     let next_element = if let Some(state) = self.resolver.active_block_mut() {
       // Get the next element
-      if let Some(element) = state.next_element() {
+      if let Some(element) = state.next_element().into_runtime_result()? {
         // Figure out if the block is supposed to print anything
         is_printing = !state.flag().is_sink();
         Some(element)
@@ -874,4 +875,6 @@ pub enum RuntimeErrorType {
   IndexError(IndexError),
   /// Error occurred while keying value
   KeyError(KeyError),
+  /// Error occurred while iterating selector
+  SelectorError(SelectorError),
 }

@@ -260,11 +260,29 @@ fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
 fn mksel(vm: &mut VM, mode: SelectorMode) -> RantStdResult {
   let selector = Rc::new(RefCell::new(Selector::new(mode)));
   let special = RantSpecial::Selector(selector);
-  vm.cur_frame_mut().write_value(RantValue::Special(RantSpecialHandle::new(special)));
+  vm.cur_frame_mut().write_value(RantValue::Special(special));
   Ok(())
 }
 
-
+fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
+  vm.resolver_mut().attrs_mut().selector = match selector {
+    Some(RantValue::Special(RantSpecial::Selector(selector))) => {
+      Some(Rc::clone(&selector))
+    },
+    Some(val) => {
+      return Err(RuntimeError {
+        error_type: RuntimeErrorType::ValueError(ValueError::InvalidConversion {
+          from: val.type_name(),
+          to: "selector",
+          message: None,
+        }),
+        description: "value is not a selector".to_owned()
+      })
+    },
+    None => None,
+  };
+  Ok(())
+}
 
 fn get(vm: &mut VM, key: String) -> RantStdResult {
   let val = vm.get_local(key.as_str())?;
@@ -296,7 +314,7 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     alt, call, len, get_type as "type", seed,
 
     // Block attribute functions
-    mksel, rep,
+    mksel, rep, sel,
 
     // Math functions
     add, sub, mul, div, mul_add as "mul-add", rem as "mod", neg, recip,

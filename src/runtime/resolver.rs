@@ -1,6 +1,7 @@
-use std::{cell::RefCell, rc::Rc, mem};
-use crate::{random::RantRng, RantValue, lang::{Sequence, Block, PrintFlag}, FromRant, ValueError};
+use std::{cell::RefCell, rc::Rc, mem, error::Error, fmt::Display};
+use crate::{random::RantRng, RantValue, lang::{Sequence, Block, PrintFlag}, FromRant, ValueError, util::clamp};
 use smallvec::SmallVec;
+use super::{RuntimeError, IntoRuntimeResult, RuntimeErrorType};
 
 pub type SelectorRef = Rc<RefCell<Selector>>;
 
@@ -28,13 +29,18 @@ pub struct BlockState {
 
 impl BlockState {
   #[inline]
-  pub fn next_element(&mut self) -> Option<Rc<Sequence>> {
+  pub fn next_element(&mut self) -> Result<Option<Rc<Sequence>>, SelectorError> {
     if !self.is_done() {
       self.iter_count += 1;
-      let next_index = self.rng.next_usize(self.elements.len());
-      Some(Rc::clone(&self.elements[next_index]))
+      let next_index = self.attrs.selector.as_ref().map_or_else(
+        // Default block selection behavior
+        || Ok(self.rng.next_usize(self.elements.len())), 
+        // Selector behavior
+        |sel| sel.borrow_mut().select(self.elements.len(), self.rng.as_ref())
+      )?;
+      Ok(Some(Rc::clone(&self.elements[next_index])))
     } else {
-      None
+      Ok(None)
     }
   }
 
@@ -187,20 +193,212 @@ impl Default for AttributeFrame {
 
 #[derive(Debug)]
 pub struct Selector {
+  /// Mode of the selector
   mode: SelectorMode,
+  /// Current iteration of the selector
+  index: usize,
+  /// Element count of the selector
+  count: usize,
+  /// True if the pass is odd (used by ping/pong)
+  parity: bool,
+  /// Jump table used by some selector modes (won't allocate if unused)
+  jump_table: Vec<usize>,
 }
 
 impl Selector {
   #[inline]
   pub fn new(mode: SelectorMode) -> Self {
     Self {
-      mode
+      mode,
+      index: 0,
+      count: 0,
+      parity: false,
+      jump_table: Default::default(),
     }
+  }
+
+  #[inline]
+  pub fn is_initialized(&self) -> bool {
+    self.count > 0
+  }
+
+  #[inline]
+  pub fn init(&mut self, rng: &RantRng, elem_count: usize) -> Result<(), SelectorError> {
+    if elem_count == 0 {
+      return Err(SelectorError::InvalidElementCount(0))
+    }
+
+    self.count = elem_count;
+    
+    match self.mode {
+      SelectorMode::Random | SelectorMode::One => {
+        self.index = rng.next_usize(elem_count);
+      },
+      SelectorMode::Forward => {},
+      SelectorMode::ForwardClamp => {},
+      SelectorMode::Reverse | SelectorMode::ReverseClamp => {
+        self.index = elem_count - 1;
+      },
+      SelectorMode::Deck | SelectorMode::DeckLoop | SelectorMode::DeckClamp => {
+        self.shuffle(rng);
+      },
+      SelectorMode::Ping => {},
+      SelectorMode::Pong => {
+        self.index = elem_count - 1;
+      },
+      SelectorMode::NoDouble => {
+        self.index = rng.next_usize(elem_count);
+      },
+    }
+
+    Ok(())
+  }
+
+  #[inline]
+  fn shuffle(&mut self, rng: &RantRng) {
+    let jump_table = &mut self.jump_table;
+    let n = self.count;
+
+    // Populate the jump table if it isn't already
+    if jump_table.is_empty() {
+      jump_table.reserve(n);
+      jump_table.extend(0..n);
+    }
+
+    // Perform a Fisher-Yates shuffle
+    for i in 0..n {
+      jump_table.swap(i, rng.next_usize(n));
+    }
+  }
+
+  pub fn select(&mut self, elem_count: usize, rng: &RantRng) -> Result<usize, SelectorError> {
+    // Initialize and sanity check
+    if !self.is_initialized() {
+      self.init(rng, elem_count)?;
+    } else if elem_count != self.count {
+      return Err(SelectorError::ElementCountMismatch { 
+        expected: self.count,
+        found: elem_count,
+      })
+    }
+
+    let cur_index = self.index;
+
+    // Iterate the selector
+    match self.mode {
+        SelectorMode::Random => {
+          self.index = rng.next_usize(elem_count);
+        },
+        SelectorMode::One => {},
+        SelectorMode::Forward => {
+          self.index = (cur_index + 1) % elem_count;
+        },
+        SelectorMode::ForwardClamp => {
+          self.index = (cur_index + 1).min(elem_count - 1);
+        },
+        SelectorMode::Reverse => {
+          self.index = if cur_index == 0 {
+            elem_count
+          } else {
+            cur_index
+          } - 1;
+        },
+        SelectorMode::ReverseClamp => {
+          self.index = cur_index.saturating_sub(1);
+        },
+        SelectorMode::Deck => {
+          // Store the return value before reshuffling to avoid accidental early duplicates
+          let jump_index = self.jump_table[cur_index];
+
+          if cur_index >= elem_count - 1 {
+            self.shuffle(rng);
+            self.index = 0;
+          } else {
+            self.index = cur_index + 1;
+          }
+
+          return Ok(jump_index)
+        },
+        SelectorMode::DeckLoop => {
+          self.index = (cur_index + 1) % elem_count;
+          return Ok(self.jump_table[cur_index])
+        },
+        SelectorMode::DeckClamp => {
+          self.index = (cur_index + 1).min(elem_count - 1);
+          return Ok(self.jump_table[cur_index])
+        },
+        SelectorMode::Ping => {
+          let prev_parity = self.parity;
+          if (prev_parity && cur_index == 0) || (!prev_parity && cur_index == elem_count - 1) {
+            self.parity = !prev_parity;
+          }
+
+          if self.parity {
+            self.index = cur_index.saturating_sub(1);
+          } else {
+            self.index = (cur_index + 1) % elem_count;
+          }
+        },
+        SelectorMode::Pong => {
+          let prev_parity = self.parity;
+          if (!prev_parity && cur_index == 0) || (prev_parity && cur_index == elem_count - 1) {
+            self.parity = !prev_parity;
+          }
+
+          if self.parity {
+            self.index = (cur_index + 1) % elem_count;
+          } else {
+            self.index = cur_index.saturating_sub(1);
+          }
+        },
+        SelectorMode::NoDouble => {
+          self.index = (cur_index + 1 + rng.next_usize(elem_count - 1)) % elem_count;
+        },
+    }
+
+    Ok(cur_index)
   }
 }
 
 #[derive(Debug)]
+pub enum SelectorError {
+  ElementCountMismatch { expected: usize, found: usize },
+  InvalidElementCount(usize),
+}
+
+impl Error for SelectorError {
+  fn source(&self) -> Option<&(dyn Error + 'static)> {
+    None
+  }
+
+  fn cause(&self) -> Option<&dyn Error> {
+    self.source()
+  }
+}
+
+impl Display for SelectorError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      SelectorError::ElementCountMismatch { expected, found } => write!(f, "selector expected {} elements, but found {}", expected, found),
+      SelectorError::InvalidElementCount(n) => write!(f, "selector does not support blocks of size {}", n),
+    }
+  }
+}
+
+impl<T> IntoRuntimeResult<T> for Result<T, SelectorError> {
+  fn into_runtime_result(self) -> super::RuntimeResult<T> {
+    self.map_err(|err| RuntimeError {
+      description: err.to_string(),
+      error_type: super::RuntimeErrorType::SelectorError(err),
+    })
+  }
+}
+
+#[derive(Debug)]
+#[repr(u8)]
 pub enum SelectorMode {
+  /// Selects a random element each time.
+  Random,
   /// Selects the same, random element each time.
   One,
   /// Selects each element in a wrapping sequence from left to right.
@@ -230,6 +428,7 @@ impl FromRant for SelectorMode {
     match &val {
       RantValue::String(s) => {
         Ok(match s.as_str() {
+          "random" =>         SelectorMode::Random,
           "one" =>            SelectorMode::One,
           "forward" =>        SelectorMode::Forward,
           "forward-clamp" =>  SelectorMode::ForwardClamp,

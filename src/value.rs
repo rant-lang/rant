@@ -1,6 +1,5 @@
 use crate::{lang::{Block, Parameter, Sequence}};
 use crate::runtime::*;
-use crate::runtime::resolver::Selector;
 use crate::{collections::*, util::*, IntoRuntimeResult, RuntimeResult, RuntimeError, RuntimeErrorType, stdlib::RantStdResult};
 use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div, Rem}, cmp, cell::{Ref, RefCell, RefMut}};
 use std::mem;
@@ -61,7 +60,7 @@ pub enum RantValue {
   /// A Rant value of type `map`. Passed by-reference.
   Map(RantMapRef),
   /// A Rant value of type `special`. Passed by-reference.
-  Special(RantSpecialHandle),
+  Special(RantSpecial),
   /// A Rant unit value of type `empty`. Passed by-value.
   Empty,
 }
@@ -99,6 +98,7 @@ impl Default for RantValue {
 
 /// A lightweight representation of a Rant value's type.
 #[derive(Copy, Clone, Debug)]
+#[repr(u8)]
 pub enum RantValueType {
   /// The `string` type.
   String,
@@ -266,32 +266,19 @@ impl IntoRuntimeResult<()> for ValueKeySetResult {
   }
 }
 
-/// A handle to dynamically typed internal runtime data.
-#[derive(Debug)]
-pub struct RantSpecialHandle(Rc<RantSpecial>);
-
-impl Clone for RantSpecialHandle {
-  fn clone(&self) -> Self {
-    RantSpecialHandle(Rc::clone(&self.0))
-  }
-}
-
-impl RantSpecialHandle {
-  #[inline]
-  pub(crate) fn new(special: RantSpecial) -> Self {
-    Self(Rc::new(special))
-  }
-
-  #[inline]
-  pub(crate) fn as_ptr(&self) -> *const RantSpecial {
-    Rc::as_ptr(&self.0)
-  }
-}
-
 /// Represents "special" values; opaque data structures for various internal runtime uses.
-#[derive(Debug)]
-pub(crate) enum RantSpecial {
+#[derive(Debug, Clone)]
+pub enum RantSpecial {
   Selector(SelectorRef),
+}
+
+impl PartialEq for RantSpecial {
+  fn eq(&self, other: &Self) -> bool {
+    match (self, other) {
+      (RantSpecial::Selector(a), RantSpecial::Selector(b)) => a.as_ptr() == b.as_ptr(),
+      _ => false,
+    }
+  }
 }
 
 /// A function callable from Rant.
@@ -382,7 +369,7 @@ impl PartialEq for RantValue {
       (RantValue::Boolean(a), RantValue::Boolean(b)) => a == b,
       (RantValue::List(a), RantValue::List(b)) => Rc::as_ptr(a) == Rc::as_ptr(b),
       (RantValue::Map(a), RantValue::Map(b)) => Rc::as_ptr(a) == Rc::as_ptr(b),
-      (RantValue::Special(a), RantValue::Special(b)) => a.as_ptr() == b.as_ptr(),
+      (RantValue::Special(a), RantValue::Special(b)) => a == b,
       _ => false
     }
   }
@@ -528,6 +515,7 @@ impl Rem for RantValue {
 
 #[allow(clippy::len_without_is_empty)]
 impl RantValue {
+  #[inline]
   pub fn into_rant_int(self) -> RantValue {
     match self {
       RantValue::Integer(_) => self,
@@ -543,6 +531,7 @@ impl RantValue {
     }
   }
 
+  #[inline]
   pub fn into_rant_float(self) -> RantValue {
     match self {
       RantValue::Float(_) => self,
@@ -558,6 +547,7 @@ impl RantValue {
     }
   }
 
+  #[inline]
   pub fn into_rant_string(self) -> RantValue {
     match self {
       RantValue::String(_) => self,
@@ -565,6 +555,7 @@ impl RantValue {
     }
   }
 
+  #[inline]
   pub fn len(&self) -> usize {
     match self {
       // Length of string is character count
@@ -579,6 +570,7 @@ impl RantValue {
   }
 
   /// Gets the Rant type associated with the value.
+  #[inline]
   pub fn get_type(&self) -> RantValueType {
     match self {
       RantValue::String(_) =>     RantValueType::String,
