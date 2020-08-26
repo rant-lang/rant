@@ -199,6 +199,9 @@ impl StackFrame {
 
   #[inline]
   pub fn write_value(&mut self, val: RantValue) {
+    if val.is_empty() {
+      return
+    }
     if let Some(output) = self.output.as_mut() {
       output.write_buffer(OutputBuffer::Value(val));
     }

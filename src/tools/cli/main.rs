@@ -39,7 +39,7 @@ struct CliArgs {
   quiet: bool,
 
   /// don't emit debug symbols
-  #[argh(switch, short = 'r')]
+  #[argh(switch, short = 'n')]
   no_debug: bool,
 }
 

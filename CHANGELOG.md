@@ -1,3 +1,7 @@
+## 4.0.0-alpha.3
+
+* Fixed bug where printing empties with a non-empty would cause output to be coerced incorrectly to a string
+
 ## 4.0.0-alpha.2
 
 * Add support for some block attributes: conditional value, repetitions, separator

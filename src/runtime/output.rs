@@ -57,7 +57,7 @@ impl OutputWriter {
           OutputBuffer::Value(v) => v,
         }
       },
-      // Multiple buffers are concatenated into a single string, unless are are empty
+      // Multiple buffers are concatenated into a single string, unless they are all empty
       _ => {
         let mut has_any_nonempty = false;
         let mut output = RantString::new();
