@@ -352,7 +352,11 @@ impl Selector {
           }
         },
         SelectorMode::NoDouble => {
-          self.index = (cur_index + 1 + rng.next_usize(elem_count - 1)) % elem_count;
+          self.index = if elem_count > 1 {
+            (cur_index + 1 + rng.next_usize(elem_count - 1)) % elem_count
+          } else {
+            0
+          };
         },
     }
 
