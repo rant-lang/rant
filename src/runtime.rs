@@ -61,7 +61,7 @@ pub enum Intent {
   /// Take the pending output from last frame and print it.
   PrintValue,
   /// Check if the active block is finished and either continue the block or pop the state from the stack
-  CheckBlock { no_print: bool },
+  CheckBlock,
   /// Pop a value off the stack and assign it to an existing variable.
   SetVar { vname: Identifier },
   /// Pop a value off the stack and assign it to a new variable.
@@ -118,8 +118,8 @@ impl<'rant> VM<'rant> {
             let val = self.pop_val()?;
             self.cur_frame_mut().write_value(val);
           },
-          Intent::CheckBlock { no_print } => {
-            self.check_block(no_print)?;
+          Intent::CheckBlock => {
+            self.check_block()?;
           },
           Intent::SetVar { vname } => {
             let val = self.pop_val()?;
@@ -290,7 +290,7 @@ impl<'rant> VM<'rant> {
             continue 'from_the_top;
           },
           RST::Block(block) => {
-            self.push_block(block, false, PrintFlag::None)?;
+            self.push_block(block, PrintFlag::None)?;
             continue 'from_the_top;
           },
           RST::VarDef(vname, val_expr) => {
@@ -678,7 +678,7 @@ impl<'rant> VM<'rant> {
   }
 
   /// Checks for an active block and attempts to iterate it. If a valid element is returned, it is pushed onto the call stack.
-  pub(crate) fn check_block(&mut self, no_print: bool) -> RuntimeResult<()> {
+  pub(crate) fn check_block(&mut self) -> RuntimeResult<()> {
     let mut is_printing = false;
     
     // Check if there's an active block and try to iterate it
@@ -698,28 +698,47 @@ impl<'rant> VM<'rant> {
     };
 
     // Push frame for next block element, if available
-    if let Some(element) = next_element {
-      // Tell the calling frame to check the block status once the element returns
-      self.cur_frame_mut().push_intent_front(Intent::CheckBlock { no_print });
-      // Combine with no_print to determine if we *should* print anything, or just push the result to the stack
-      if is_printing && !no_print {
-        self.cur_frame_mut().push_intent_front(Intent::PrintValue);
+    if let Some(element) = next_element {  
+      // Tell the calling frame to check the block status once the separator returns
+      self.cur_frame_mut().push_intent_front(Intent::CheckBlock);
+
+      match element {
+        resolver::BlockAction::Element(elem_seq) => {
+          // Combine with no_print to determine if we *should* print anything, or just push the result to the stack
+          if is_printing {
+            self.cur_frame_mut().push_intent_front(Intent::PrintValue);
+          }
+          // Push the next element
+          self.push_frame(Rc::clone(&elem_seq), true, Default::default())?;
+        },
+        resolver::BlockAction::Separator(separator) => {
+          match separator {
+            // If the separator is a function, call the function
+            RantValue::Function(sep_func) => {
+              self.push_val(RantValue::Function(sep_func))?;
+              self.cur_frame_mut().push_intent_front(Intent::Call { argc: 0, flag: if is_printing { PrintFlag::Hint } else { PrintFlag::Sink } });
+            },
+            // Print the separator if it's a non-function value
+            val => {
+              self.cur_frame_mut().write_value(val);
+            }
+          }
+        }
       }
-      // Push the next element
-      self.push_frame(Rc::clone(&element), true, Default::default())?;
+      
     }
     
     Ok(())
   }
 
   #[inline(always)]
-  pub(crate) fn push_block(&mut self, block: &Block, override_print: bool, flag: PrintFlag) -> RuntimeResult<()> {
+  pub(crate) fn push_block(&mut self, block: &Block, flag: PrintFlag) -> RuntimeResult<()> {
     // Push a new state onto the block stack
     self.resolver.push_block(block, flag);
 
     // Check the block to make sure it actually does something.
     // If the block has some skip condition, it will automatically remove it, and this method will have no net effect.
-    self.check_block(override_print)?;
+    self.check_block()?;
 
     Ok(())
   }

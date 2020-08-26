@@ -23,36 +23,63 @@ pub struct BlockState {
   flag: PrintFlag,
   rng: Rc<RantRng>,
   attrs: AttributeFrame,
-  iter_count: usize,
-  total_reps: usize,
+  cur_steps: usize,
+  total_steps: usize,
+  prev_step_separated: bool,
 }
 
 impl BlockState {
   #[inline]
-  pub fn next_element(&mut self) -> Result<Option<Rc<Sequence>>, SelectorError> {
+  pub fn next_element(&mut self) -> Result<Option<BlockAction>, SelectorError> {
     if !self.is_done() {
-      self.iter_count += 1;
-      let next_index = self.attrs.selector.as_ref().map_or_else(
-        // Default block selection behavior
-        || Ok(self.rng.next_usize(self.elements.len())), 
-        // Selector behavior
-        |sel| sel.borrow_mut().select(self.elements.len(), self.rng.as_ref())
-      )?;
-      Ok(Some(Rc::clone(&self.elements[next_index])))
+      if self.cur_steps == 0 || self.prev_step_separated {
+        self.prev_step_separated = false;
+        self.cur_steps += 1;
+        let next_index = self.attrs.selector.as_ref().map_or_else(
+          // Default block selection behavior
+          || Ok(self.rng.next_usize(self.elements.len())), 
+          // Selector behavior
+          |sel| sel.borrow_mut().select(self.elements.len(), self.rng.as_ref())
+        )?;
+        Ok(Some(BlockAction::Element(Rc::clone(&self.elements[next_index]))))
+      } else {
+        self.prev_step_separated = true;
+        Ok(Some(BlockAction::Separator(self.attrs.sep.clone())))
+      }
     } else {
       Ok(None)
     }
   }
 
+  #[inline]
+  pub fn step_index(&self) -> usize {
+    self.cur_steps - 1
+  }
+
+  #[inline]
+  pub fn step(&self) -> usize {
+    self.cur_steps
+  }
+
+  #[inline]
+  pub fn step_count(&self) -> usize {
+    self.total_steps
+  }
+
   #[inline(always)]
   pub(crate) fn is_done(&self) -> bool {
-    !self.attrs.cond_val || (!self.attrs.reps.is_infinite() && self.iter_count >= self.total_reps)
+    !self.attrs.cond_val || (!self.attrs.reps.is_infinite() && self.cur_steps >= self.total_steps)
   }
 
   #[inline(always)]
   pub fn flag(&self) -> PrintFlag {
     self.flag
   }
+}
+
+pub enum BlockAction {
+  Element(Rc<Sequence>),
+  Separator(RantValue),
 }
 
 pub enum Reps {
@@ -104,10 +131,11 @@ impl Resolver {
     let state = BlockState {
       elements: Rc::clone(&block.elements),
       flag: PrintFlag::prioritize(block.flag, flag),
-      iter_count: 0,
+      cur_steps: 0,
       rng: Rc::clone(&self.rng),
-      total_reps: attrs.reps.get_rep_count_for(block),
+      total_steps: attrs.reps.get_rep_count_for(block),
       attrs,
+      prev_step_separated: false,
     };
     // Since blocks are associated with call stack frames, there is no need to check the stack size here
     self.block_stack.push(state);
@@ -286,78 +314,78 @@ impl Selector {
 
     // Iterate the selector
     match self.mode {
-        SelectorMode::Random => {
-          self.index = rng.next_usize(elem_count);
-        },
-        SelectorMode::One => {},
-        SelectorMode::Forward => {
-          self.index = (cur_index + 1) % elem_count;
-        },
-        SelectorMode::ForwardClamp => {
-          self.index = (cur_index + 1).min(elem_count - 1);
-        },
-        SelectorMode::Reverse => {
-          self.index = if cur_index == 0 {
-            elem_count
-          } else {
-            cur_index
-          } - 1;
-        },
-        SelectorMode::ReverseClamp => {
+      SelectorMode::Random => {
+        self.index = rng.next_usize(elem_count);
+      },
+      SelectorMode::One => {},
+      SelectorMode::Forward => {
+        self.index = (cur_index + 1) % elem_count;
+      },
+      SelectorMode::ForwardClamp => {
+        self.index = (cur_index + 1).min(elem_count - 1);
+      },
+      SelectorMode::Reverse => {
+        self.index = if cur_index == 0 {
+          elem_count
+        } else {
+          cur_index
+        } - 1;
+      },
+      SelectorMode::ReverseClamp => {
+        self.index = cur_index.saturating_sub(1);
+      },
+      SelectorMode::Deck => {
+        // Store the return value before reshuffling to avoid accidental early duplicates
+        let jump_index = self.jump_table[cur_index];
+
+        if cur_index >= elem_count - 1 {
+          self.shuffle(rng);
+          self.index = 0;
+        } else {
+          self.index = cur_index + 1;
+        }
+
+        return Ok(jump_index)
+      },
+      SelectorMode::DeckLoop => {
+        self.index = (cur_index + 1) % elem_count;
+        return Ok(self.jump_table[cur_index])
+      },
+      SelectorMode::DeckClamp => {
+        self.index = (cur_index + 1).min(elem_count - 1);
+        return Ok(self.jump_table[cur_index])
+      },
+      SelectorMode::Ping => {
+        let prev_parity = self.parity;
+        if (prev_parity && cur_index == 0) || (!prev_parity && cur_index == elem_count - 1) {
+          self.parity = !prev_parity;
+        }
+
+        if self.parity {
           self.index = cur_index.saturating_sub(1);
-        },
-        SelectorMode::Deck => {
-          // Store the return value before reshuffling to avoid accidental early duplicates
-          let jump_index = self.jump_table[cur_index];
-
-          if cur_index >= elem_count - 1 {
-            self.shuffle(rng);
-            self.index = 0;
-          } else {
-            self.index = cur_index + 1;
-          }
-
-          return Ok(jump_index)
-        },
-        SelectorMode::DeckLoop => {
+        } else {
           self.index = (cur_index + 1) % elem_count;
-          return Ok(self.jump_table[cur_index])
-        },
-        SelectorMode::DeckClamp => {
-          self.index = (cur_index + 1).min(elem_count - 1);
-          return Ok(self.jump_table[cur_index])
-        },
-        SelectorMode::Ping => {
-          let prev_parity = self.parity;
-          if (prev_parity && cur_index == 0) || (!prev_parity && cur_index == elem_count - 1) {
-            self.parity = !prev_parity;
-          }
+        }
+      },
+      SelectorMode::Pong => {
+        let prev_parity = self.parity;
+        if (!prev_parity && cur_index == 0) || (prev_parity && cur_index == elem_count - 1) {
+          self.parity = !prev_parity;
+        }
 
-          if self.parity {
-            self.index = cur_index.saturating_sub(1);
-          } else {
-            self.index = (cur_index + 1) % elem_count;
-          }
-        },
-        SelectorMode::Pong => {
-          let prev_parity = self.parity;
-          if (!prev_parity && cur_index == 0) || (prev_parity && cur_index == elem_count - 1) {
-            self.parity = !prev_parity;
-          }
-
-          if self.parity {
-            self.index = (cur_index + 1) % elem_count;
-          } else {
-            self.index = cur_index.saturating_sub(1);
-          }
-        },
-        SelectorMode::NoDouble => {
-          self.index = if elem_count > 1 {
-            (cur_index + 1 + rng.next_usize(elem_count - 1)) % elem_count
-          } else {
-            0
-          };
-        },
+        if self.parity {
+          self.index = (cur_index + 1) % elem_count;
+        } else {
+          self.index = cur_index.saturating_sub(1);
+        }
+      },
+      SelectorMode::NoDouble => {
+        self.index = if elem_count > 1 {
+          (cur_index + 1 + rng.next_usize(elem_count - 1)) % elem_count
+        } else {
+          0
+        };
+      },
     }
 
     Ok(cur_index)

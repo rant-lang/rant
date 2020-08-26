@@ -101,7 +101,7 @@ fn main() {
   
   loop {
     check_ctrl_c!();
-    print!(">> ");
+    print!("{} ", ">>".cyan());
     io::stdout().flush().unwrap();
     let mut input = String::new();
     
@@ -194,7 +194,9 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) -> ExitCode {
   // Display results
   match run_result {
     Ok(output) => {
-      println!("{}", output);
+      if output.len() > 0 {
+        println!("{}", output);
+      }
       if show_stats {
         println!("{} in {:?} (seed = {:016x})", "Executed".bright_green().bold(), run_time, seed);
       }

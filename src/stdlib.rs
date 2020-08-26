@@ -257,6 +257,29 @@ fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
   Ok(())
 }
 
+fn sep(vm: &mut VM, separator: RantValue) -> RantStdResult {
+  vm.resolver_mut().attrs_mut().sep = separator;
+  Ok(())
+}
+
+fn step_index(vm: &mut VM, _: ()) -> RantStdResult {
+  let n = vm.resolver().active_block().map_or(0, |block| block.step_index());
+  vm.cur_frame_mut().write_value(RantValue::Integer(n as i64));
+  Ok(())
+}
+
+fn step(vm: &mut VM, _: ()) -> RantStdResult {
+  let n = vm.resolver().active_block().map_or(0, |block| block.step());
+  vm.cur_frame_mut().write_value(RantValue::Integer(n as i64));
+  Ok(())
+}
+
+fn step_count(vm: &mut VM, _: ()) -> RantStdResult {
+  let n = vm.resolver().active_block().map_or(0, |block| block.step_count());
+  vm.cur_frame_mut().write_value(RantValue::Integer(n as i64));
+  Ok(())
+}
+
 fn mksel(vm: &mut VM, mode: SelectorMode) -> RantStdResult {
   let selector = Rc::new(RefCell::new(Selector::new(mode)));
   let special = RantSpecial::Selector(selector);
@@ -314,7 +337,10 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     alt, call, len, get_type as "type", seed,
 
     // Block attribute functions
-    mksel, rep, sel,
+    mksel, rep, sel, sep,
+
+    // Block state functions
+    step, step_index as "step-index", step_count as "step-count",
 
     // Math functions
     add, sub, mul, div, mul_add as "mul-add", rem as "mod", neg, recip,
