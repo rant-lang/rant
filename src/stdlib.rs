@@ -9,7 +9,6 @@ use crate::convert::*;
 use crate::convert::ToRant;
 use std::mem;
 use lang::PrintFlag;
-use util::clamp;
 use resolver::{SelectorMode, Reps, Selector};
 
 pub(crate) type RantStdResult = Result<(), RuntimeError>;
@@ -75,6 +74,28 @@ fn neg(vm: &mut VM, val: RantValue) -> RantStdResult {
 
 fn recip(vm: &mut VM, val: RantValue) -> RantStdResult {
   vm.cur_frame_mut().write_value((RantValue::Float(1.0) / val).into_runtime_result()?);
+  Ok(())
+}
+
+fn and(vm: &mut VM, (lhs, rhs, extra): (bool, bool, VarArgs<bool>)) -> RantStdResult {
+  let result = (lhs && rhs) && extra.iter().all(|b| *b);
+  vm.cur_frame_mut().write_value(RantValue::Boolean(result));
+  Ok(())
+}
+
+fn or(vm: &mut VM, (lhs, rhs, extra): (bool, bool, VarArgs<bool>)) -> RantStdResult {
+  let result = (lhs || rhs) || extra.iter().any(|b| *b);
+  vm.cur_frame_mut().write_value(RantValue::Boolean(result));
+  Ok(())
+}
+
+fn not(vm: &mut VM, val: bool) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(!val));
+  Ok(())
+}
+
+fn xor(vm: &mut VM, (lhs, rhs): (bool, bool)) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(lhs ^ rhs));
   Ok(())
 }
 
@@ -346,6 +367,9 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
 
     // Block state functions
     step, step_index as "step-index", step_count as "step-count",
+
+    // Boolean functions
+    and, not, or, xor,
 
     // Math functions
     add, sub, mul, div, mul_add as "mul-add", rem as "mod", neg, recip,
