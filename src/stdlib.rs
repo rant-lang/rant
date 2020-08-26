@@ -398,6 +398,21 @@ fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
   Ok(())
 }
 
+fn push_attrs(vm: &mut VM, _: ()) -> RantStdResult {
+  vm.resolver_mut().push_attrs();
+  Ok(())
+}
+
+fn pop_attrs(vm: &mut VM, _: ()) -> RantStdResult {
+  vm.resolver_mut().pop_attrs();
+  Ok(())
+}
+
+fn count_attrs(vm: &mut VM, _: ()) -> RantStdResult {
+  vm.resolver_mut().count_attrs();
+  Ok(())
+}
+
 fn get(vm: &mut VM, key: String) -> RantStdResult {
   let val = vm.get_local(key.as_str())?;
   vm.cur_frame_mut().write_value(val);
@@ -429,6 +444,9 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
 
     // Block attribute functions
     if_ as "if", mksel, rep, sel, sep,
+
+    // Attribute frame stack functions
+    push_attrs as "push-attrs", pop_attrs as "pop-attrs", count_attrs as "count-attrs",
 
     // Block state functions
     step, step_index as "step-index", step_count as "step-count",
