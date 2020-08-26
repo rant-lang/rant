@@ -7,7 +7,7 @@
 
 use crate::value::*;
 use crate::{lang::{Varity, Parameter, Identifier}, RantString, RantMapRef, stdlib::RantStdResult};
-use crate::{RantList, runtime::*};
+use crate::{RantList, runtime::*, RantListRef};
 use cast::*;
 use cast::Error as CastError;
 use std::{rc::Rc, ops::{DerefMut, Deref}, cell::RefCell};
@@ -128,6 +128,16 @@ impl FromRant for RantValue {
   }
 }
 
+impl FromRant for RantEmpty {
+  fn from_rant(_: RantValue) -> Result<Self, ValueError> {
+    Ok(RantEmpty)
+  }
+
+  fn is_rant_optional() -> bool {
+    false
+  }
+}
+
 impl FromRant for bool {
   fn from_rant(val: RantValue) -> Result<Self, ValueError> {
     match val {
@@ -209,6 +219,19 @@ impl FromRant for String {
     Ok(val.to_string())
   }
 
+  fn is_rant_optional() -> bool {
+    false
+  }
+}
+
+impl FromRant for RantListRef {
+  fn from_rant(val: RantValue) -> ValueResult<Self> {
+    if let RantValue::List(list_ref) = val {
+      Ok(list_ref)
+    } else {
+      Err(ValueError::InvalidConversion { from: val.type_name(), to: "list", message: None })
+    }
+  }
   fn is_rant_optional() -> bool {
     false
   }

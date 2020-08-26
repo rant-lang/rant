@@ -422,6 +422,7 @@ impl<T> IntoRuntimeResult<T> for Result<T, SelectorError> {
     self.map_err(|err| RuntimeError {
       description: err.to_string(),
       error_type: super::RuntimeErrorType::SelectorError(err),
+      stack_trace: None,
     })
   }
 }

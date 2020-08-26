@@ -1,6 +1,6 @@
 [package]
 name = "rant"
-version = "4.0.0-alpha.2"
+version = "4.0.0-alpha.3"
 authors = ["Nicholas Fleck <TheBerkin@users.noreply.github.com>"]
 edition = "2018"
 homepage = "https://rant-lang.org"
@@ -11,6 +11,7 @@ keywords = ["rant", "rantlang", "procedural", "text", "generation"]
 categories = ["text-processing", "game-development", "template-engine"]
 description = "The Rant procedural text generation language"
 default-run = "rant"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

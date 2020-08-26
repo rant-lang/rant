@@ -114,7 +114,7 @@ impl Rant {
   /// Compiles a source string using the specified reporter.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile<R: Reporter>(&self, source: &str, reporter: &mut R) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile_string(source, reporter)
+    RantCompiler::compile_string(source, reporter, self.debug_mode)
   }
 
   /// Compiles a source string without reporting problems.
@@ -126,13 +126,13 @@ impl Rant {
   /// If you require this information, use the `compile()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_quiet(&self, source: &str) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile_string(source, &mut ())
+    RantCompiler::compile_string(source, &mut (), self.debug_mode)
   }
   
   /// Compiles a source file using the specified reporter.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_file<P: AsRef<Path>, R: Reporter>(&self, path: P, reporter: &mut R) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile_file(path, reporter)
+    RantCompiler::compile_file(path, reporter, self.debug_mode)
   }
 
   /// Compiles a source file without reporting problems.
@@ -144,7 +144,7 @@ impl Rant {
   /// If you require this information, use the `compile_file()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_file_quiet<P: AsRef<Path>>(&self, path: P) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile_file(path, &mut ())
+    RantCompiler::compile_file(path, &mut (), self.debug_mode)
   }
 
   /// Gets the global variable map of the Rant context.
@@ -180,7 +180,14 @@ impl Rant {
   
   /// Runs the specified Rant program and returns the generated output.
   pub fn run(&mut self, program: &RantProgram) -> RuntimeResult<String> {
-    VM::new(self.rng.clone(), self, program).run()
+    let mut vm = VM::new(self.rng.clone(), self, program);
+    match vm.run() {
+      Ok(output) => Ok(output),
+      Err(mut err) => {
+        err.stack_trace = Some(vm.stack_trace());
+        Err(err)
+      }
+    }
   }
 }
 
@@ -207,7 +214,7 @@ impl Default for RantOptions {
 /// A compiled Rant program.
 #[derive(Debug)]
 pub struct RantProgram {
-  name: Option<String>,
+  name: Option<RantString>,
   root: Rc<Sequence>
 }
 
@@ -223,12 +230,12 @@ impl RantProgram {
   pub fn with_name<S: ToString>(self, name: S) -> Self {
     Self {
       root: self.root,
-      name: Some(name.to_string())
+      name: Some(RantString::from(name.to_string()))
     }
   }
 
   /// Gets the name of the program, if any.
-  pub fn name(&self) -> Option<String> {
-    self.name.clone()
+  pub fn name(&self) -> Option<&str> {
+    self.name.as_ref().map(|s| s.as_str())
   }
 }

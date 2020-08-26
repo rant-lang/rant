@@ -7,7 +7,7 @@ use crate::*;
 use crate::runtime::*;
 use crate::convert::*;
 use crate::convert::ToRant;
-use std::mem;
+use std::{cmp::Ordering, mem, iter::FromIterator};
 use lang::PrintFlag;
 use resolver::{SelectorMode, Reps, Selector};
 
@@ -26,6 +26,10 @@ fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> Rant
     }
     Ok(())
   }
+}
+
+fn nop(vm: &mut VM, _: VarArgs<RantEmpty>) -> RantStdResult {
+  Ok(())
 }
 
 fn seed(vm: &mut VM, _: ()) -> RantStdResult {
@@ -237,6 +241,42 @@ fn join(vm: &mut VM, (sep, list): (RantValue, Vec<RantValue>)) -> RantStdResult 
   Ok(())
 }
 
+fn clear(vm: &mut VM, collection: RantValue) -> RantStdResult {
+  match collection {
+    RantValue::List(list) => list.borrow_mut().clear(),
+    RantValue::Map(map) => map.borrow_mut().clear(),
+    _ => {}, // TODO: Make [clear] panic on non-collection
+  }
+  Ok(())
+}
+
+fn keys(vm: &mut VM, map: RantMapRef) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(map.borrow().raw_keys()))));
+  Ok(())
+}
+
+fn list_push(vm: &mut VM, (list, value): (RantListRef, RantValue)) -> RantStdResult {
+  list.borrow_mut().push(value);
+  Ok(())
+}
+
+fn list_pop(vm: &mut VM, list: RantListRef) -> RantStdResult {
+  let value = list.borrow_mut().pop().unwrap_or(RantValue::Empty);
+  vm.cur_frame_mut().write_value(value);
+  Ok(())
+}
+
+fn list_insert(vm: &mut VM, (list, value, pos): (RantListRef, RantValue, usize)) -> RantStdResult {
+  todo!()
+}
+
+fn sorted(vm: &mut VM, list: RantListRef) -> RantStdResult {
+  let mut list_copy = RantList::from(list.borrow().clone());
+  list_copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list_copy))));
+  Ok(())
+}
+
 fn seg(vm: &mut VM, (s, seg_size): (String, usize)) -> RantStdResult {
   if seg_size > 0 {
     let mut segs = vec![];
@@ -277,6 +317,27 @@ fn split(vm: &mut VM, (s, at): (String, Option<String>)) -> RantStdResult {
   Ok(())
 }
 
+fn lines(vm: &mut VM, s: String) -> RantStdResult {
+  let lines = RantList::from_iter(s.lines().map(|line| RantValue::String(line.to_owned())));
+  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(lines))));
+  Ok(())
+}
+
+fn indent(vm:  &mut VM, (text, indent): (String, String)) -> RantStdResult {
+  let frame = vm.cur_frame_mut();
+  let mut first = true;
+  for line in text.lines() {
+    if first {
+      first = false;
+    } else {
+      frame.write_frag("\r\n");
+    }
+    frame.write_frag(indent.as_str());
+    frame.write_frag(line);
+  }
+  Ok(())
+}
+
 fn proto(vm: &mut VM, map: RantMapRef) -> RantStdResult {
   vm.cur_frame_mut().write_value(map.borrow().proto().map_or(RantValue::Empty, RantValue::Map));
   Ok(())
@@ -284,6 +345,12 @@ fn proto(vm: &mut VM, map: RantMapRef) -> RantStdResult {
 
 fn set_proto(vm: &mut VM, (map, proto): (RantMapRef, Option<RantMapRef>)) -> RantStdResult {
   map.borrow_mut().set_proto(proto);
+  Ok(())
+}
+
+fn has_key(vm: &mut VM, (map, key): (RantMapRef, String)) -> RantStdResult {
+  let result = map.borrow().raw_has_key(key.as_str());
+  vm.cur_frame_mut().write_value(RantValue::Boolean(result));
   Ok(())
 }
 
@@ -338,11 +405,13 @@ fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
       _ => return Err(RuntimeError {
         error_type: RuntimeErrorType::ArgumentError,
         description: format!("unknown repetition mode: '{}'", s),
+        stack_trace: None,
       })
     },
     _ => return Err(RuntimeError {
       error_type: RuntimeErrorType::ArgumentError,
       description: format!("value of type '{}' cannot be used as repetition value", reps.type_name()),
+      stack_trace: None,
     })
   };
   Ok(())
@@ -390,7 +459,8 @@ fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
           to: "selector",
           message: None,
         }),
-        description: "value is not a selector".to_owned()
+        description: "value is not a selector".to_owned(),
+        stack_trace: None,
       })
     },
     None => None,
@@ -440,7 +510,7 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
 
   load_funcs!(
     // General functions
-    alt, call, len, get_type as "type", seed,
+    alt, call, len, get_type as "type", seed, nop,
 
     // Block attribute functions
     if_ as "if", mksel, rep, sel, sep,
@@ -472,11 +542,15 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     // Prototype functions
     proto, set_proto as "set-proto",
 
+    // Collection functions
+    clear, keys, has_key as "has-key",
+
     // List functions
-    pick, join,
+    pick, join, sorted,
+    list_push as "push", list_pop as "pop", // insert, remove, take,
 
     // String functions
-    lower, upper, seg, split,
+    lower, upper, seg, split, lines, indent,
 
     // Dynamic Variable Access functions
     get

@@ -20,7 +20,12 @@ impl RantList {
   pub fn with_capacity(capacity: usize) -> Self {
     Self(Vec::with_capacity(capacity))
   }
+}
 
+impl From<Vec<RantValue>> for RantList {
+  fn from(list: Vec<RantValue>) -> Self {
+    Self(list)
+  }
 }
 
 impl Default for RantList {
@@ -70,18 +75,27 @@ impl RantMap {
     }
   }
 
+  #[inline]
+  pub fn clear(&mut self) {
+    self.map.clear();
+  }
+
+  #[inline]
   pub fn raw_len(&self) -> usize {
     self.map.len()
   }
   
+  #[inline]
   pub fn is_empty(&self) -> bool {
     self.map.is_empty()
   }
 
+  #[inline]
   pub fn proto(&self) -> Option<RantMapRef> {
     self.proto.clone()
   }
 
+  #[inline]
   pub fn set_proto(&mut self, proto: Option<RantMapRef>) {
     self.proto = proto;
   }
@@ -101,6 +115,7 @@ impl RantMap {
     self.map.contains_key(key)
   }
 
+  #[inline]
   pub fn raw_keys(&self) -> RantList {
     RantList::from_iter(self.map.keys().map(|k| RantValue::String(k.to_string())))
   }

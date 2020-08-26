@@ -43,13 +43,15 @@ macro_rules! runtime_error {
   ($err_type:expr) => {
     return Err(RuntimeError {
       error_type: $err_type,
-      description: "".to_owned()
+      description: "".to_owned(),
+      stack_trace: None,
     })
   };
   ($err_type:expr, $desc:expr) => {
     return Err(RuntimeError {
       error_type: $err_type,
-      description: $desc.to_string()
+      description: $desc.to_string(),
+      stack_trace: None,
     })
   };
 }
@@ -275,6 +277,9 @@ impl<'rant> VM<'rant> {
       // Run frame's sequence elements in order
       while let Some(rst) = &self.cur_frame_mut().seq_next() {
         match Rc::deref(rst) {
+          RST::DebugInfoUpdateOuter(info) => {
+            self.cur_frame_mut().set_debug_info(info);
+          },
           RST::Fragment(frag) => self.cur_frame_mut().write_frag(frag),
           RST::Whitespace(ws) => self.cur_frame_mut().write_ws(ws),
           RST::Integer(n) => self.cur_frame_mut().write_value(RantValue::Integer(*n)),
@@ -290,7 +295,7 @@ impl<'rant> VM<'rant> {
             continue 'from_the_top;
           },
           RST::Block(block) => {
-            self.push_block(block, PrintFlag::None)?;
+            self.push_block(block, block.flag)?;
             continue 'from_the_top;
           },
           RST::VarDef(vname, val_expr) => {
@@ -793,7 +798,14 @@ impl<'rant> VM<'rant> {
 
   #[inline(always)]
   fn push_frame_unchecked(&mut self, callee: Rc<Sequence>, use_output: bool, locals: Option<RantMap>) {
-    let frame = StackFrame::new(callee, locals.unwrap_or_default(), use_output);
+    let mut frame = StackFrame::new(callee, locals.unwrap_or_default(), use_output);
+
+    if self.engine.debug_mode {
+      if let Some(name) = self.program.name() {
+        frame.set_debug_info(&DebugInfo::SourceName(RantString::from(name)));
+      }
+    }
+
     self.call_stack.push(frame);
   }
   
@@ -804,7 +816,14 @@ impl<'rant> VM<'rant> {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
     }
     
-    let frame = StackFrame::new(callee, locals.unwrap_or_default(), use_output);
+    let mut frame = StackFrame::new(callee, locals.unwrap_or_default(), use_output);
+
+    if self.engine.debug_mode {
+      if let Some(name) = self.program.name() {
+        frame.set_debug_info(&DebugInfo::SourceName(RantString::from(name)));
+      }
+    }
+
     self.call_stack.push(frame);
     Ok(())
   }
@@ -833,6 +852,14 @@ impl<'rant> VM<'rant> {
   pub fn resolver_mut(&mut self) -> &mut Resolver {
     &mut self.resolver
   }
+
+  pub fn stack_trace(&self) -> String {
+    let mut trace = String::new();
+    for frame in self.call_stack.iter().rev() {
+      trace.push_str(format!("-> {}\n", frame).as_str());
+    }
+    trace
+  }
 }
 
 pub(crate) trait IntoRuntimeResult<T> {
@@ -846,6 +873,8 @@ pub struct RuntimeError {
   pub error_type: RuntimeErrorType,
   /// A description of what went wrong.
   pub description: String,
+  /// A stack trace describing the location of the error.
+  pub stack_trace: Option<String>,
 }
 
 impl Error for RuntimeError {

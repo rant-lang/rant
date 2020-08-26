@@ -58,7 +58,7 @@ In addition to its rock-solid string generation tools, Rant offers a fully-featu
 Rant comes with a CLI tool that includes a REPL. You can install and run it with:
 
 ```sh
-$ cargo install rant
+$ cargo install rant --version=4.0.0-alpha.3 --all-features
 $ rant
 ```
 
@@ -98,7 +98,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Learn Rant
 
-The latest documentation can be found at [docs.rant-lang.org].
+The latest documentation can be found at the official **[docs.rant-lang.org](https://docs.rant-lang.org)**.
 
 Since Rant 4 is early in development, some documentation may be outdated/incomplete, but it is actively updated to ensure that it reflects current features with reasonable accuracy.
 

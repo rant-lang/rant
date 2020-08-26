@@ -61,8 +61,8 @@ pub struct RantCompiler {
 }
 
 impl RantCompiler {
-  pub fn compile_string<R: Reporter>(source: &str, reporter: &mut R) -> CompileResult {
-    let mut parser = RantParser::new(source, reporter);
+  pub fn compile_string<R: Reporter>(source: &str, reporter: &mut R, debug_enabled: bool) -> CompileResult {
+    let mut parser = RantParser::new(source, reporter, debug_enabled);
     let result = parser.parse();
 
     // Return compilation result
@@ -75,12 +75,12 @@ impl RantCompiler {
     }
   }
   
-  pub fn compile_file<P: AsRef<Path>, R: Reporter>(path: P, reporter: &mut R) -> CompileResult {
-    let source_name = path.as_ref().to_string_lossy().to_string();
+  pub fn compile_file<P: AsRef<Path>, R: Reporter>(path: P, reporter: &mut R, debug_enabled: bool) -> CompileResult {
+    let source_name = path.as_ref().canonicalize().unwrap_or_else(|_| path.as_ref().to_path_buf()).to_string_lossy().to_string();
     let file_read_result = fs::read_to_string(path);
     match file_read_result {
       Ok(source) => {
-        Self::compile_string(&source, reporter).map(|pgm| pgm.with_name(&source_name))
+        Self::compile_string(&source, reporter, debug_enabled).map(|pgm| pgm.with_name(&source_name))
       },
       // Something went wrong with reading the file
       Err(err) => {

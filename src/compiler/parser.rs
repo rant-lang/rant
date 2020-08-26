@@ -101,11 +101,12 @@ pub struct RantParser<'source, 'report, R: Reporter> {
   has_errors: bool,
   reader: RantTokenReader<'source>,
   lookup: LineColLookup<'source>,
-  reporter: &'report mut R
+  reporter: &'report mut R,
+  debug_enabled: bool,
 }
 
 impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
-  pub fn new(source: &'source str, reporter: &'report mut R) -> Self {
+  pub fn new(source: &'source str, reporter: &'report mut R, debug_enabled: bool) -> Self {
     let reader = RantTokenReader::new(source);
     let lookup = LineColLookup::new(source);
     Self {
@@ -113,7 +114,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       has_errors: false,
       reader,
       lookup,
-      reporter
+      reporter,
+      debug_enabled,
     }
   }
 }
@@ -152,8 +154,18 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     let mut last_print_flag_span: Option<Range<usize>> = None;
     let mut is_seq_printing = false;
     let mut pending_whitespace = None;
+    let debug = self.debug_enabled;
     
     while let Some((token, span)) = self.reader.next() {
+      macro_rules! inject_debug_info {
+        () => {
+          if debug {
+            let (line, col) = self.lookup.get(span.start);
+            sequence.push(Rc::new(RST::DebugInfoUpdateOuter(DebugInfo::Location { line, col })));
+          }
+        }
+      }
+
       // Macro for prohibiting hints/sinks before certain tokens
       macro_rules! no_flags {
         (on $b:block) => {{
@@ -167,6 +179,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               }, &flag_span)
             }
           }
+          inject_debug_info!();
           sequence.push(Rc::new(elem));
         }};
         ($b:block) => {
@@ -183,9 +196,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       }
       
       macro_rules! seq_add {
-        ($elem:expr) => {
+        ($elem:expr) => {{
+          inject_debug_info!();
           sequence.push(Rc::new($elem));
-        }
+        }}
       }
       
       // Shortcut macro for "unexpected token" error
@@ -273,7 +287,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           whitespace!(ignore prev);
           match mode {
             SequenceParseMode::BlockElement => {
-              return Ok((sequence, SequenceEndType::BlockDelim, is_seq_printing))
+              return Ok((sequence.with_name_str("block element"), SequenceEndType::BlockDelim, is_seq_printing))
             },
             SequenceParseMode::DynamicKey => {
               self.syntax_error(Problem::DynamicKeyBlockMultiElement, &span);
@@ -291,13 +305,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           whitespace!(ignore prev);
           match mode {
             SequenceParseMode::BlockElement => {
-              return Ok((sequence, SequenceEndType::BlockEnd, is_seq_printing))
+              return Ok((sequence.with_name_str("block element"), SequenceEndType::BlockEnd, is_seq_printing))
             },
             SequenceParseMode::FunctionBody => {
-              return Ok((sequence, SequenceEndType::FunctionBodyEnd, true))
+              return Ok((sequence.with_name_str("function body"), SequenceEndType::FunctionBodyEnd, true))
             },
             SequenceParseMode::DynamicKey => {
-              return Ok((sequence, SequenceEndType::DynamicKeyEnd, true))
+              return Ok((sequence.with_name_str("dynamic key"), SequenceEndType::DynamicKeyEnd, true))
             }
             _ => unexpected_token_error!()
           }
@@ -466,7 +480,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Colon can be either fragment or argument separator.
         RantToken::Colon => no_flags!({
           match mode {
-            SequenceParseMode::AnonFunctionExpr => return Ok((sequence, SequenceEndType::AnonFunctionExprToArgs, true)),
+            SequenceParseMode::AnonFunctionExpr => return Ok((sequence.with_name_str("anonymous function expression"), SequenceEndType::AnonFunctionExprToArgs, true)),
             _ => seq_add!(RST::Fragment(RantString::from(":")))
           }
         }),
@@ -475,8 +489,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         RantToken::Semi => no_flags!({
           match mode {
             // If we're inside a function argument, terminate the sequence
-            SequenceParseMode::FunctionArg => return Ok((sequence, SequenceEndType::FunctionArgEndNext, true)),
-            SequenceParseMode::CollectionInit => return Ok((sequence, SequenceEndType::CollectionInitDelim, true)),
+            SequenceParseMode::FunctionArg => return Ok((sequence.with_name_str("argument"), SequenceEndType::FunctionArgEndNext, true)),
+            SequenceParseMode::CollectionInit => return Ok((sequence.with_name_str("collection item"), SequenceEndType::CollectionInitDelim, true)),
             // If we're anywhere else, just print the semicolon like normal text
             _ => seq_add!(RST::Fragment(RantString::from(";")))
           }
@@ -518,7 +532,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
     
     // Return the top-level sequence
-    Ok((sequence, SequenceEndType::ProgramEnd, is_seq_printing))
+    Ok((sequence.with_name_str("program"), SequenceEndType::ProgramEnd, is_seq_printing))
   }
 
   /// Parses a list/map initializer.
@@ -764,7 +778,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Read function body
           // TODO: Handle captured variables in function bodies
           self.reader.skip_ws();          
-          let body = Rc::new(self.parse_func_body()?);
+          let body = Rc::new(self.parse_func_body()?.with_name_str(format!("[{}]", func_id).as_str()));
               
           Ok(RST::FuncDef(FunctionDef {
             id: Rc::new(func_id),
@@ -780,7 +794,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           self.reader.skip_ws();
           // Read function body
           // TODO: Handle captured variables in closure bodies
-          let body = Rc::new(self.parse_func_body()?);
+          let body = Rc::new(self.parse_func_body()?.with_name_str("closure"));
               
           Ok(RST::Closure(ClosureExpr {
             capture_vars: Rc::new(vec![]),
@@ -845,7 +859,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   SequenceEndType::FunctionArgEndNext => continue,
                   SequenceEndType::FunctionArgEndBreak => break,
                   _ => unreachable!()
-                }  
+                }
               }
             },
             _ => {

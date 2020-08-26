@@ -36,7 +36,11 @@ struct CliArgs {
   
   /// only print program output and nothing else
   #[argh(switch, short = 'q')]
-  quiet: bool
+  quiet: bool,
+
+  /// don't emit debug symbols
+  #[argh(switch, short = 'r')]
+  no_debug: bool,
 }
 
 enum ProgramSource {
@@ -80,7 +84,11 @@ fn main() {
   }
   
   let seed = args.seed.unwrap_or_else(|| rand::thread_rng().gen());
-  let mut rant = Rant::with_seed(seed);
+  let mut rant = Rant::with_options(RantOptions {
+    use_stdlib: true,
+    debug_mode: !args.no_debug,
+    seed,
+  });
 
   check_ctrl_c!();
   
@@ -203,7 +211,7 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) -> ExitCode {
       exitcode::OK
     },
     Err(err) => {
-      eprintln!("{}: {}", "Runtime error".bright_red().bold(), err.description);
+      eprintln!("{}: {}\n\nstack trace:\n{}", "Runtime error".bright_red().bold(), err.description, err.stack_trace.unwrap_or("(no trace available)".to_owned()));
       if show_stats {
         eprintln!("{} in {:?} (seed = {:016x})", "Crashed".bright_red().bold(), run_time, seed);
       }

@@ -54,6 +54,7 @@ impl CallStack {
     Err(RuntimeError {
       error_type: RuntimeErrorType::InvalidAccess,
       description: format!("variable '{}' not found", id),
+      stack_trace: None,
     })
   }
 
@@ -73,6 +74,7 @@ impl CallStack {
     Err(RuntimeError {
       error_type: RuntimeErrorType::InvalidAccess,
       description: format!("variable '{}' not found", id),
+      stack_trace: None,
     })
   }
 
@@ -103,6 +105,10 @@ pub struct StackFrame {
   output: Option<OutputWriter>,
   /// Intent queue for the frame
   intents: VecDeque<Intent>,
+  // Line/col for debug info
+  debug_pos: (usize, usize),
+  // Source name for debug info
+  debug_source: Option<RantString>,
 }
 
 impl StackFrame {
@@ -114,6 +120,8 @@ impl StackFrame {
       started: false,
       pc: 0,
       intents: Default::default(),
+      debug_pos: (0, 0),
+      debug_source: None,
     }
   }
 }
@@ -158,6 +166,15 @@ impl StackFrame {
   pub fn push_intent_back(&mut self, intent: Intent) {
     self.intents.push_back(intent);
   }
+
+  #[inline]
+  pub fn set_debug_info(&mut self, info: &DebugInfo) {
+    match info {
+        DebugInfo::Location { line, col } => self.debug_pos = (*line, *col),
+        DebugInfo::SourceName(name) => self.debug_source = Some(name.clone()),
+        DebugInfo::ScopeName(_) => todo!(),
+    }
+  }
 }
 
 impl StackFrame {
@@ -190,5 +207,16 @@ impl StackFrame {
   #[inline]
   pub fn render_output_value(&mut self) -> Option<RantValue> {
     self.output.take().map(|o| o.render_value())
+  }
+}
+
+impl Display for StackFrame {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "[{}:{}:{}] in {}", 
+      self.debug_source.as_ref().map(|src| src.as_str()).unwrap_or("program"), 
+      self.debug_pos.0, 
+      self.debug_pos.1,
+      self.sequence.name().map(|name| name.as_str()).unwrap_or("???"), 
+    )
   }
 }

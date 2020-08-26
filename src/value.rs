@@ -6,6 +6,7 @@ use std::mem;
 use std::error::Error;
 use cast::*;
 use resolver::SelectorRef;
+use cmp::Ordering;
 
 /// Adds a barebones `Error` implementation to the specified type.
 macro_rules! impl_error_default {
@@ -35,6 +36,9 @@ pub type ValueKeySetResult = Result<(), KeyError>;
 
 /// A reference-counting handle to a Rant function.
 pub type RantFunctionRef = Rc<RantFunction>;
+
+/// Rant's "empty" value.
+pub struct RantEmpty;
 
 /// A dynamically-typed Rant value.
 ///
@@ -179,6 +183,7 @@ impl<T> IntoRuntimeResult<T> for Result<T, ValueError> {
     self.map_err(|err| RuntimeError {
       description: err.to_string(),
       error_type: RuntimeErrorType::ValueError(err),
+      stack_trace: None,
     })
   }
 }
@@ -212,6 +217,7 @@ impl IntoRuntimeResult<RantValue> for ValueIndexResult {
     self.map_err(|err| RuntimeError {
       description: err.to_string(),
       error_type: RuntimeErrorType::IndexError(err),
+      stack_trace: None,
     })
   }
 }
@@ -222,6 +228,7 @@ impl IntoRuntimeResult<()> for ValueIndexSetResult {
     self.map_err(|err| RuntimeError {
       description: err.to_string(),
       error_type: RuntimeErrorType::IndexError(err),
+      stack_trace: None,
     })
   }
 }
@@ -252,6 +259,7 @@ impl IntoRuntimeResult<RantValue> for ValueKeyResult {
     self.map_err(|err| RuntimeError {
       description: err.to_string(),
       error_type: RuntimeErrorType::KeyError(err),
+      stack_trace: None,
     })
   }
 }
@@ -262,6 +270,7 @@ impl IntoRuntimeResult<()> for ValueKeySetResult {
     self.map_err(|err| RuntimeError {
       description: err.to_string(),
       error_type: RuntimeErrorType::KeyError(err),
+      stack_trace: None,
     })
   }
 }
@@ -378,7 +387,7 @@ impl PartialEq for RantValue {
 impl Eq for RantValue {}
 
 impl PartialOrd for RantValue {
-  fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     match (self, other) {
       (RantValue::Empty, _) | (_, RantValue::Empty) => None,
       (RantValue::Integer(a), RantValue::Integer(b)) => a.partial_cmp(b),

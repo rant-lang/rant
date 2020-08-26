@@ -65,6 +65,16 @@ pub enum VarAccessComponent {
   Expression(Rc<Sequence>),
 }
 
+impl Display for VarAccessComponent {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      VarAccessComponent::Name(name) => write!(f, "{}", name),
+      VarAccessComponent::Index(i) => write!(f, "{}", i),
+      VarAccessComponent::Expression(expr) => write!(f, "{{{}...}}", expr.name().map(|name| name.as_str()).unwrap_or("")),
+    }
+  }
+}
+
 /// An accessor consisting of a chain of variable names and indices
 #[derive(Debug)]
 pub struct VarAccessPath(Vec<VarAccessComponent>);
@@ -110,34 +120,65 @@ impl DerefMut for VarAccessPath {
   }
 }
 
+impl Display for VarAccessPath {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.iter().map(|part| part.to_string()).collect::<Vec<String>>().join("/"))
+  }
+}
+
 /// A series of Rant program elements.
 #[derive(Debug)]
-pub struct Sequence(Vec<Rc<RST>>);
+pub struct Sequence {
+  elements: Vec<Rc<RST>>,
+  name: Option<RantString>,
+}
 
 impl Sequence {
   pub fn new(seq: Vec<Rc<RST>>) -> Self {
-    Self(seq)
+    Self {
+      elements: seq,
+      name: None,
+    }
   }
   
   pub fn one(rst: RST) -> Self {
-    Self(vec![Rc::new(rst)])
+    Self {
+      elements: vec![Rc::new(rst)],
+      name: None,
+    }
   }
   
   pub fn empty() -> Self {
     Self::new(vec![])
+  }
+
+  #[inline(always)]
+  pub fn with_name(mut self, name: RantString) -> Self {
+    self.name = Some(name);
+    self
+  }
+
+  #[inline(always)]
+  pub fn with_name_str(mut self, name: &str) -> Self {
+    self.name = Some(RantString::from(name));
+    self
+  }
+
+  pub fn name(&self) -> Option<&RantString> {
+    self.name.as_ref()
   }
 }
 
 impl Deref for Sequence {
   type Target = Vec<Rc<RST>>;
   fn deref(&self) -> &Self::Target {
-    &self.0
+    &self.elements
   }
 }
 
 impl DerefMut for Sequence {
   fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.0
+    &mut self.elements
   }
 }
 
