@@ -330,7 +330,7 @@ fn indent(vm:  &mut VM, (text, indent): (String, String)) -> RantStdResult {
     if first {
       first = false;
     } else {
-      frame.write_frag("\r\n");
+      frame.write_frag("\n");
     }
     frame.write_frag(indent.as_str());
     frame.write_frag(line);

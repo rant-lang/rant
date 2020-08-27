@@ -858,6 +858,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 match arg_end {
                   SequenceEndType::FunctionArgEndNext => continue,
                   SequenceEndType::FunctionArgEndBreak => break,
+                  SequenceEndType::ProgramEnd => {
+                    self.syntax_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
+                    return Err(())
+                  }
                   _ => unreachable!()
                 }
               }
