@@ -28,6 +28,12 @@ fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> Rant
   }
 }
 
+fn either(vm: &mut VM, (cond, a, b): (bool, RantValue, RantValue)) -> RantStdResult {
+  let val = if cond { a } else { b };
+  vm.cur_frame_mut().write_value(val);
+  Ok(())
+}
+
 fn nop(vm: &mut VM, _: VarArgs<RantEmpty>) -> RantStdResult {
   Ok(())
 }
@@ -78,6 +84,21 @@ fn neg(vm: &mut VM, val: RantValue) -> RantStdResult {
 
 fn recip(vm: &mut VM, val: RantValue) -> RantStdResult {
   vm.cur_frame_mut().write_value((RantValue::Float(1.0) / val).into_runtime_result()?);
+  Ok(())
+}
+
+fn is_odd(vm: &mut VM, val: i64) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(val % 2 != 0));
+  Ok(())
+}
+
+fn is_even(vm: &mut VM, val: i64) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(val % 2 == 0));
+  Ok(())
+}
+
+fn is_factor(vm: &mut VM, (value, factor): (i64, i64)) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(factor != 0 && value % factor == 0));
   Ok(())
 }
 
@@ -483,6 +504,11 @@ fn count_attrs(vm: &mut VM, _: ()) -> RantStdResult {
   Ok(())
 }
 
+fn reset_attrs(vm: &mut VM, _: ()) -> RantStdResult {
+  vm.resolver_mut().take_attrs();
+  Ok(())
+}
+
 fn get(vm: &mut VM, key: String) -> RantStdResult {
   let val = vm.get_local(key.as_str())?;
   vm.cur_frame_mut().write_value(val);
@@ -510,13 +536,13 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
 
   load_funcs!(
     // General functions
-    alt, call, len, get_type as "type", seed, nop,
+    alt, call, either, len, get_type as "type", seed, nop,
 
     // Block attribute functions
     if_ as "if", mksel, rep, sel, sep,
 
     // Attribute frame stack functions
-    push_attrs as "push-attrs", pop_attrs as "pop-attrs", count_attrs as "count-attrs",
+    push_attrs as "push-attrs", pop_attrs as "pop-attrs", count_attrs as "count-attrs", reset_attrs as "reset-attrs",
 
     // Block state functions
     step, step_index as "step-index", step_count as "step-count",
@@ -528,10 +554,11 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     eq, neq, gt, lt, ge, le,
 
     // Verification functions
-    is_string as "is-string", is_integer as "is-integer", is_float as "is-float", is_number as "is-number", is_bool as "is-bool", is_empty as "is-empty", is_nan as "is-nan",
+    is_string as "is-string", is_integer as "is-integer", is_float as "is-float", 
+    is_number as "is-number", is_bool as "is-bool", is_empty as "is-empty", is_nan as "is-nan",
 
     // Math functions
-    add, sub, mul, div, mul_add as "mul-add", rem as "mod", neg, recip,
+    add, sub, mul, div, mul_add as "mul-add", rem as "mod", neg, recip, is_odd as "is-odd", is_even as "is-even", is_factor as "is-factor",
 
     // Conversion functions
     to_int as "int", to_float as "float", to_string as "string",

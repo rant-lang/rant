@@ -1,7 +1,7 @@
 use crate::*;
 use crate::lang::*;
 use std::{rc::Rc, cell::RefCell, ops::Deref, error::Error, fmt::Display};
-use resolver::{SelectorError, Resolver};
+use resolver::{SelectorError, Resolver, BlockAction};
 use smallvec::SmallVec;
 pub use stack::*;
 pub use output::*;
@@ -26,6 +26,7 @@ pub struct VM<'rant> {
 }
 
 impl<'rant> VM<'rant> {
+  #[inline]
   pub fn new(rng: Rc<RantRng>, engine: &'rant mut Rant, program: &'rant RantProgram) -> Self {
     Self {
       resolver: Resolver::new(&rng),
@@ -103,8 +104,6 @@ impl<'rant> VM<'rant> {
   /// Runs the program.
   #[inline]
   pub fn run(&mut self) -> RuntimeResult<String> {
-    //println!("RST: {:#?}", self.program.root);
-
     // Push the program's root sequence onto the call stack
     // This doesn't need an overflow check because it will *always* succeed
     self.push_frame_unchecked(self.program.root.clone(), true, None);
@@ -703,12 +702,13 @@ impl<'rant> VM<'rant> {
     };
 
     // Push frame for next block element, if available
+    // TODO: Consider moving BlockAction handler into Resolver
     if let Some(element) = next_element {  
       // Tell the calling frame to check the block status once the separator returns
       self.cur_frame_mut().push_intent_front(Intent::CheckBlock);
 
       match element {
-        resolver::BlockAction::Element(elem_seq) => {
+        BlockAction::Element(elem_seq) => {
           // Combine with no_print to determine if we *should* print anything, or just push the result to the stack
           if is_printing {
             self.cur_frame_mut().push_intent_front(Intent::PrintValue);
@@ -716,7 +716,7 @@ impl<'rant> VM<'rant> {
           // Push the next element
           self.push_frame(Rc::clone(&elem_seq), is_printing, Default::default())?;
         },
-        resolver::BlockAction::Separator(separator) => {
+        BlockAction::Separator(separator) => {
           match separator {
             // If the separator is a function, call the function
             RantValue::Function(sep_func) => {
@@ -729,8 +729,7 @@ impl<'rant> VM<'rant> {
             }
           }
         }
-      }
-      
+      }      
     }
     
     Ok(())

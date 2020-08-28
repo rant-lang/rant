@@ -83,27 +83,49 @@ macro_rules! rant_int_conversions {
             $to($val)
           };
         }
-        if let RantValue::Integer(i) = val {
-          let result: Result<$int_type, CastError> = cast_int!($int_type, i);
-          return match result {
-            Ok(i) => Ok(i),
-            Err(err) => Err(rant_cast_error(
-              val.type_name(),
-              stringify!($int_type),
-              err
-            ))
+        macro_rules! cast_float_to_int {
+          (i64, $val:expr) => {
+            Ok($val as i64)
+          };
+          ($to:ident, $val:expr) => {
+            $to($val)
+          };
+        }
+        match val {
+          RantValue::Integer(i) => {
+            let result: Result<$int_type, CastError> = cast_int!($int_type, i);
+            match result {
+              Ok(i) => Ok(i),
+              Err(err) => Err(rant_cast_error(
+                val.type_name(),
+                stringify!($int_type),
+                err
+              ))
+            }
+          },
+          RantValue::Float(f) => {
+            let result: Result<$int_type, CastError> = cast_float_to_int!($int_type, f);
+            match result {
+              Ok(i) => Ok(i),
+              Err(err) => Err(rant_cast_error(
+                val.type_name(),
+                stringify!($int_type),
+                err
+              ))
+            }
+          },
+          _ => {
+            // Other conversion failure
+            let src_type = val.type_name();
+            let dest_type = stringify!{$int_type};
+            
+            Err(ValueError::InvalidConversion {
+              from: src_type,
+              to: dest_type,
+              message: None
+            })
           }
         }
-        
-        // Other conversion failure
-        let src_type = val.type_name();
-        let dest_type = stringify!{$int_type};
-        
-        Err(ValueError::InvalidConversion {
-          from: src_type,
-          to: dest_type,
-          message: None
-        })
       }
 
       fn is_rant_optional() -> bool { false }
