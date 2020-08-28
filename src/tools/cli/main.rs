@@ -62,13 +62,12 @@ fn main() {
     sig_tx.send(()).unwrap();
   }).expect("failed to create signal handler");
 
-  macro_rules! check_ctrl_c {
-    () => {
-      if sig_rx.try_recv().is_ok() {
-        process::exit(exitcode::OK)
-      }
+
+  std::thread::spawn(move || {
+    if sig_rx.recv().is_ok() {
+      process::exit(exitcode::OK)
     }
-  }
+  });
 
   // Read cmdline args
   let args: CliArgs = argh::from_env();
@@ -89,8 +88,6 @@ fn main() {
     debug_mode: !args.no_debug,
     seed,
   });
-
-  check_ctrl_c!();
   
   // Run inline code from cmdline args
   if let Some(code) = &args.run_code {
@@ -108,14 +105,12 @@ fn main() {
   }
   
   loop {
-    check_ctrl_c!();
     print!("{} ", ">>".cyan());
     io::stdout().flush().unwrap();
     let mut input = String::new();
     
     match io::stdin().read_line(&mut input) {
       Ok(_) => {
-        check_ctrl_c!();
         run_rant(&mut rant, ProgramSource::Stdin(input.to_owned()), &args);
       },
       Err(_) => log_error!("failed to read input")
@@ -202,7 +197,7 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) -> ExitCode {
   // Display results
   match run_result {
     Ok(output) => {
-      if output.len() > 0 {
+      if !output.is_empty() {
         println!("{}", output);
       }
       if show_stats {
