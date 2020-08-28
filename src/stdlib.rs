@@ -13,6 +13,9 @@ use resolver::{SelectorMode, Reps, Selector};
 
 pub(crate) type RantStdResult = Result<(), RuntimeError>;
 
+/// `[$alt: a (any); b+ (any)]`
+///
+/// Prints the first argument that isn't an `empty`.
 fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> RantStdResult {
   if !a.is_empty() {
     vm.cur_frame_mut().write_value(a);
@@ -28,16 +31,25 @@ fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> Rant
   }
 }
 
+/// `[$either: cond (bool); a (any); b (any)]`
+///
+/// Prints `a` if `cond` is true, or `b` otherwise.
 fn either(vm: &mut VM, (cond, a, b): (bool, RantValue, RantValue)) -> RantStdResult {
   let val = if cond { a } else { b };
   vm.cur_frame_mut().write_value(val);
   Ok(())
 }
 
+/// `[$nop]`
+///
+/// Does absolutely nothing. Intended for use as a default/placeholder callback.
 fn nop(vm: &mut VM, _: VarArgs<RantEmpty>) -> RantStdResult {
   Ok(())
 }
 
+/// `$[seed]`
+///
+/// Prints the RNG seed currently in use.
 fn seed(vm: &mut VM, _: ()) -> RantStdResult {
   let signed_seed = unsafe {
     mem::transmute::<u64, i64>(vm.rng().seed())
@@ -47,56 +59,89 @@ fn seed(vm: &mut VM, _: ()) -> RantStdResult {
   Ok(())
 }
 
+/// [$add: lhs (any); rhs (any)]
+///
+/// Adds two values.
 fn add(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
   vm.cur_frame_mut().write_value(lhs + rhs);
   Ok(())
 }
 
+/// [$mul: lhs (any); rhs (any)]
+///
+/// Multiplies two values.
 fn mul(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
   vm.cur_frame_mut().write_value(lhs * rhs);
   Ok(())
 }
 
+/// [$mul-add: lhs (any); mhs (any); rhs (any)]
+///
+/// Multiplies two values, then adds a third value to the result.
 fn mul_add(vm: &mut VM, (lhs, mhs, rhs): (RantValue, RantValue, RantValue)) -> RantStdResult {
   vm.cur_frame_mut().write_value(lhs * mhs + rhs);
   Ok(())
 }
 
+/// [$sub: lhs (any); rhs (any)]
+///
+/// Subtracts one value from another.
 fn sub(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
   vm.cur_frame_mut().write_value(lhs - rhs);
   Ok(())
 }
 
+/// [$div: lhs (any); rhs (any)]
+///
+/// Divides one number by another.
 fn div(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
   vm.cur_frame_mut().write_value((lhs / rhs).into_runtime_result()?);
   Ok(())
 }
 
-fn rem(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
+/// [$mod: lhs (any); rhs (any)]
+///
+/// Gets the modulus of two values.
+fn mod_(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
   vm.cur_frame_mut().write_value((lhs % rhs).into_runtime_result()?);
   Ok(())
 }
 
+/// [$neg: val (any)]
+///
+/// Negates a value.
 fn neg(vm: &mut VM, val: RantValue) -> RantStdResult {
   vm.cur_frame_mut().write_value(-val);
   Ok(())
 }
 
+/// [$recip: val (any)]
+///
+/// Gets the reciproval of a value.
 fn recip(vm: &mut VM, val: RantValue) -> RantStdResult {
   vm.cur_frame_mut().write_value((RantValue::Float(1.0) / val).into_runtime_result()?);
   Ok(())
 }
 
+/// [$is-odd: val (integer)]
+///
+/// Returns true if `val` is odd.
 fn is_odd(vm: &mut VM, val: i64) -> RantStdResult {
   vm.cur_frame_mut().write_value(RantValue::Boolean(val % 2 != 0));
   Ok(())
 }
 
+/// [$is-even: val (integer)]
+///
+/// Returns true if `val` is even.
 fn is_even(vm: &mut VM, val: i64) -> RantStdResult {
   vm.cur_frame_mut().write_value(RantValue::Boolean(val % 2 == 0));
   Ok(())
 }
 
+/// [$is-factor: value (integer); factor (integer)]
+///
+/// Returns true if `value` is divisible by `factor`.
 fn is_factor(vm: &mut VM, (value, factor): (i64, i64)) -> RantStdResult {
   vm.cur_frame_mut().write_value(RantValue::Boolean(factor != 0 && value % factor == 0));
   Ok(())
@@ -558,7 +603,7 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     is_number as "is-number", is_bool as "is-bool", is_empty as "is-empty", is_nan as "is-nan",
 
     // Math functions
-    add, sub, mul, div, mul_add as "mul-add", rem as "mod", neg, recip, is_odd as "is-odd", is_even as "is-even", is_factor as "is-factor",
+    add, sub, mul, div, mul_add as "mul-add", mod_ as "mod", neg, recip, is_odd as "is-odd", is_even as "is-even", is_factor as "is-factor",
 
     // Conversion functions
     to_int as "int", to_float as "float", to_string as "string",

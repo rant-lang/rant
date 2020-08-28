@@ -104,6 +104,17 @@ impl<'rant> VM<'rant> {
   /// Runs the program.
   #[inline]
   pub fn run(&mut self) -> RuntimeResult<String> {
+    let mut result = self.run_inner();
+    // On error, generate stack trace
+    if let Err(err) = result.as_mut() {
+      err.stack_trace = Some(self.stack_trace());
+    }
+    result
+  }
+
+  
+  #[inline]
+  fn run_inner(&mut self) -> RuntimeResult<String> {
     // Push the program's root sequence onto the call stack
     // This doesn't need an overflow check because it will *always* succeed
     self.push_frame_unchecked(self.program.root.clone(), true, None);

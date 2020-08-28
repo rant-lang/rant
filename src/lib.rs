@@ -181,13 +181,7 @@ impl Rant {
   /// Runs the specified Rant program and returns the generated output.
   pub fn run(&mut self, program: &RantProgram) -> RuntimeResult<String> {
     let mut vm = VM::new(self.rng.clone(), self, program);
-    match vm.run() {
-      Ok(output) => Ok(output),
-      Err(mut err) => {
-        err.stack_trace = Some(vm.stack_trace());
-        Err(err)
-      }
-    }
+    vm.run()
   }
 }
 
