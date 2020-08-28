@@ -421,7 +421,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Whitespace (only if sequence isn't empty)
         RantToken::Whitespace => no_flags!({
           // Don't set is_printing here; whitespace tokens always appear with other printing tokens
-          if !sequence.is_empty() {
+          if is_seq_printing {
             let ws = self.reader.last_token_string();
             whitespace!(queue ws);
           }

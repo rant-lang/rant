@@ -1,5 +1,6 @@
 # 4.0.0-alpha.3
 
+* Fixed compiler bug where non-printing whitespace was sometimes printed
 * Fixed bug where printing empties with a non-empty would cause output to be coerced incorrectly to a string
 * Fixed bug where sinked blocks print when they're not supposed to
 

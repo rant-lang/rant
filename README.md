@@ -15,18 +15,19 @@
 
 ***
 
-Rant is a language for procedural text generation.
-It is designed to help you write more dynamic and expressive templates, dialogue, stories, names, test data, and much more.
+**Rant** is a high-level language for templating and procedural text generation.
+Write more expressive and dynamic templates, dialogue, stories, names, test data, and much more.
 
 ## Introducing Rant 4.0
 
-Rant 4.0 is a complete redesign and reimplementation of the Rant language and runtime. The result is a completely redefined and superior text generation experience designed around the needs of everyone-- from writers and programmers, to anybody else!
+Rant 4.0 is a complete remake of the Rant language and runtime. It delivers a superior text generation experience designed around the needs of everyone-- from writers and programmers, to anybody else!
 
 ### Rant is intuitive
 
-Rant is basically the opposite of Regex: Instead of matching a string to a pattern, you provide the pattern and a matching string comes out!
+Rant is basically the opposite of Regex: 
+Instead of matching a string to a pattern, you generate a string from a pattern!
 
-Rant makes it easy to express your desired output as a set of branching possibilities.
+It's easy to express your desired output as a set of branching possibilities.
 For example, consider a simple regex that matches on three strings:
 
 ```regex
@@ -41,15 +42,15 @@ The Rant equivalent to generate any matching string is quite similar:
 
 ### Rant is concise
 
-Common operations have shorter syntax. This means you can apply Rant to your most common use cases with minimal code. 
+Rant's standard library provides convenient utilities for many common use cases, cutting down on the amount of boilerplate you need to write. 
 
-For more complex generation, Rant makes templating tasks far more painless than in conventional programming languages with its powerful set of synchronization, branching, and generation tools.
+Even for more complex generation tasks, Rant has your back. With its powerful set of synchronization, branching, and generation tools, you can get results with far less code than conventional programming languages.
 
 ### Rant is flexible
 
 Rant does more than generate random strings: its behavior is infinitely configurable for a wide range of use cases ranging from natural language generation to simple code templating. What you do with it is up to you!
 
-In addition to its rock-solid string generation tools, Rant offers a fully-featured variable system including common primitives like numbers and booleans as well as collection types. And with Rant's extensive formatting tools, you can fine-tune how anything prints.
+Need to work with structured data rather than just strings? No problem. Rant offers a fully-featured object model including common primitives like numbers and booleans as well as collection types like maps and lists.
 
 ## Getting started
 
@@ -68,16 +69,17 @@ Add Rant to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rant = "*" # Actual version may vary
+rant = "*"
 ```
 
 You can run a Rant program with just a few lines of code:
 
 ```rust
 use rant::Rant;
+use std::error::Error;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-  // Create a default Rant context and load the standard library
+fn main() -> Result<(), Box<dyn Error>> {
+  // Create a default Rant context
   let mut rant = Rant::new();
 
   // Compile a simple program
@@ -88,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   [greet:world]
   "#)?;
 
-  // Run the program and fetch the result string
+  // Run the program and print the output
   let output = rant.run(&program)?;
   println!("{}", output);
 
