@@ -18,9 +18,9 @@
 **Rant** is a high-level language for templating and procedural text generation.
 Write more expressive and dynamic templates, dialogue, stories, names, test data, and much more.
 
-## Introducing Rant 4.0
+## Introducing Rant 4
 
-Rant 4.0 is a complete remake of the Rant language and runtime. It delivers a superior text generation experience designed around the needs of everyone-- from writers and programmers, to anybody else!
+Rant 4 is a complete remake of the Rant language and runtime. It delivers a superior text generation experience designed around the needs of everyone-- from writers and programmers, to anybody else!
 
 ### Rant is intuitive
 

@@ -458,7 +458,17 @@ fn call(vm: &mut VM, (func, args): (RantFunctionRef, Option<Vec<RantValue>>)) ->
 }
 
 fn if_(vm: &mut VM, condition: bool) -> RantStdResult {
-  vm.resolver_mut().attrs_mut().cond_val = condition;
+  vm.resolver_mut().attrs_mut().make_if(condition);
+  Ok(())
+}
+
+fn else_if(vm: &mut VM, condition: bool) -> RantStdResult {
+  vm.resolver_mut().attrs_mut().make_else_if(condition);
+  Ok(())
+}
+
+fn else_(vm: &mut VM, _: ()) -> RantStdResult {
+  vm.resolver_mut().attrs_mut().make_else();
   Ok(())
 }
 
@@ -484,7 +494,7 @@ fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
 }
 
 fn sep(vm: &mut VM, separator: RantValue) -> RantStdResult {
-  vm.resolver_mut().attrs_mut().sep = separator;
+  vm.resolver_mut().attrs_mut().separator = separator;
   Ok(())
 }
 
@@ -584,7 +594,7 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     alt, call, either, len, get_type as "type", seed, nop,
 
     // Block attribute functions
-    if_ as "if", mksel, rep, sel, sep,
+    if_ as "if", else_if as "else-if", else_ as "else", mksel, rep, sel, sep,
 
     // Attribute frame stack functions
     push_attrs as "push-attrs", pop_attrs as "pop-attrs", count_attrs as "count-attrs", reset_attrs as "reset-attrs",

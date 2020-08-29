@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc, mem, error::Error, fmt::Display};
-use crate::{random::RantRng, RantValue, lang::{Sequence, Block, PrintFlag}, FromRant, ValueError, util::clamp};
+use crate::{random::RantRng, RantValue, lang::{Sequence, Block, PrintFlag}, FromRant, ValueError};
 use smallvec::SmallVec;
-use super::{RuntimeError, IntoRuntimeResult, RuntimeErrorType};
+use super::{RuntimeError, IntoRuntimeResult};
 
 pub type SelectorRef = Rc<RefCell<Selector>>;
 
@@ -44,7 +44,7 @@ impl BlockState {
         Ok(Some(BlockAction::Element(Rc::clone(&self.elements[next_index]))))
       } else {
         self.prev_step_separated = true;
-        Ok(Some(BlockAction::Separator(self.attrs.sep.clone())))
+        Ok(Some(BlockAction::Separator(self.attrs.separator.clone())))
       }
     } else {
       Ok(None)
@@ -66,9 +66,13 @@ impl BlockState {
     self.total_steps
   }
 
+  /// Indicates whether the block has finished and should return.
   #[inline(always)]
   pub(crate) fn is_done(&self) -> bool {
-    !self.attrs.cond_val || (!self.attrs.reps.is_infinite() && self.cur_steps >= self.total_steps)
+    // Conditional value has evaluated to false
+    !self.attrs.condval.unwrap_or(true) 
+    // Finite repetitions are exhausted
+    || (!self.attrs.reps.is_infinite() && self.cur_steps >= self.total_steps)
   }
 
   #[inline(always)]
@@ -160,11 +164,24 @@ impl Resolver {
   }
 
   /// Takes the topmost attribute frame for use elsewhere and replaces it with a default one.
+  #[inline]
   pub fn take_attrs(&mut self) -> AttributeFrame {
     if self.attr_override_stack.is_empty() {
-      mem::take(&mut self.base_attrs)
+      let next_attr = AttributeFrame::propagate(&self.base_attrs);
+      mem::replace(&mut self.base_attrs, next_attr)
     } else {
-      mem::take(&mut self.attr_override_stack.last_mut().unwrap())
+      let last_attr = self.attr_override_stack.last_mut().unwrap();
+      let next_attr = AttributeFrame::propagate(last_attr);
+      mem::replace(last_attr, next_attr)
+    }
+  }
+
+  #[inline]
+  pub fn reset_attrs(&mut self) {
+    if self.attr_override_stack.is_empty() {
+      mem::take(&mut self.base_attrs);
+    } else {
+      mem::take(self.attr_override_stack.last_mut().unwrap());
     }
   }
 
@@ -202,18 +219,63 @@ impl Resolver {
 
 /// A full set of block attributes.
 pub struct AttributeFrame {
-  pub cond_val: bool,
+  /// Conditional value returned from last [if]-like call
+  pub condval: Option<bool>,
+  /// Conditional value used by previous block
+  pub prev_condval: Option<bool>,
+  /// Indicates if the next attribute frame should receive the current condval
+  pub no_propagate_condval: bool,
+  /// Repetition value
   pub reps: Reps,
-  pub sep: RantValue,
+  /// Separator value
+  pub separator: RantValue,
+  /// Active selector
   pub selector: Option<SelectorRef>,
+}
+
+impl AttributeFrame {
+  /// Creates a new frame, propagating the condval of the specified frame if able.
+  pub fn propagate(frame: &AttributeFrame) -> Self {
+    Self {
+      prev_condval: if frame.no_propagate_condval { None } else { frame.condval },
+      .. Default::default()
+    }
+  }
+
+  #[inline]
+  pub fn make_if(&mut self, cond_val: bool) {
+    self.condval = Some(cond_val);
+    // Propagate if false
+    self.no_propagate_condval = cond_val;
+  }
+
+  #[inline]
+  pub fn make_else(&mut self) {
+    self.condval = Some(self.prev_condval.map(|b| !b).unwrap_or(false));
+    // Do not propagate condvals for else-clauses
+    self.no_propagate_condval = true;
+  }
+
+  #[inline]
+  pub fn make_else_if(&mut self, cond_val: bool) {
+    // Check if there's a condval propagated from a previous block
+    let has_propagated_condval = self.prev_condval.is_none();
+    // Previous condval must be false and current condval true for clause to run
+    // If there is no previous condval, add false non-propagating condval
+    self.condval = Some(self.prev_condval.map(|b| !b && cond_val).unwrap_or(false));
+    // Only propagate condval if it is false
+    self.no_propagate_condval = cond_val || has_propagated_condval;
+  }
 }
 
 impl Default for AttributeFrame {
   fn default() -> Self {
     Self {
-      cond_val: true,
+      condval: None,
+      prev_condval: None,
+      no_propagate_condval: false,
       reps: Reps::Finite(1),
-      sep: RantValue::Empty,
+      separator: RantValue::Empty,
       selector: None,
     }
   }
