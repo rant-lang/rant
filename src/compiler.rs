@@ -56,8 +56,8 @@ impl Reporter for Vec<CompilerMessage> {
   }
 }
 
+// TODO: Seriously consider replacing this struct with just a set of functions unless configuration is needed
 pub struct RantCompiler {
-  // TODO: Add compiler options
 }
 
 impl RantCompiler {
