@@ -1,3 +1,11 @@
+# 4.0.0-alpha.4
+
+* Changed `Rant::run()` to return a `RantValue` and added `Rant::run_into_string()` to explicitly return a `String` output
+* Added new stdlib functions:
+  * `[insert]`
+  * `[remove]`
+  * `[take]`
+
 # 4.0.0-alpha.3
 
 * Added initial support for optional debug symbols. Enable them via `debug_mode` option in `RantOptions`.

@@ -63,10 +63,9 @@ pub struct RantCompiler {
 impl RantCompiler {
   pub fn compile_string<R: Reporter>(source: &str, reporter: &mut R, debug_enabled: bool) -> CompileResult {
     let mut parser = RantParser::new(source, reporter, debug_enabled);
-    let result = parser.parse();
 
     // Return compilation result
-    match result {
+    match parser.parse() {
       Ok(rst) => Ok(RantProgram::new(match rst {
         RST::Sequence(seq) => seq,
         other => Rc::new(Sequence::new(vec![Rc::new(other)]))

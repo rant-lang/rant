@@ -13,10 +13,12 @@ pub type RantListRef = Rc<RefCell<RantList>>;
 pub struct RantList(Vec<RantValue>);
 
 impl RantList {
+  /// Creates an empty RantList.
   pub fn new() -> Self {
     Self(Vec::with_capacity(DEFAULT_LIST_CAPACITY))
   }
 
+  /// Creates an empty RantList with the specified initial capacity.
   pub fn with_capacity(capacity: usize) -> Self {
     Self(Vec::with_capacity(capacity))
   }
@@ -54,6 +56,15 @@ impl FromIterator<RantValue> for RantList {
       list.push(item);
     }
     list
+  }
+}
+
+impl IntoIterator for RantList {
+  type Item = RantValue;
+  type IntoIter = std::vec::IntoIter<Self::Item>;
+
+  fn into_iter(self) -> Self::IntoIter {
+    self.0.into_iter()
   }
 }
 
@@ -103,6 +114,16 @@ impl RantMap {
   #[inline]
   pub fn raw_set(&mut self, key: &str, val: RantValue) {
     self.map.insert(RantString::from(key), val);
+  }
+
+  #[inline]
+  pub fn raw_remove(&mut self, key: &str) {
+    self.map.remove(key);
+  }
+
+  #[inline]
+  pub fn raw_take(&mut self, key: &str) -> Option<RantValue> {
+    self.map.remove(key)
   }
 
   #[inline]

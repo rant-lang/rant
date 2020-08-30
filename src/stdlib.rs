@@ -13,6 +13,23 @@ use resolver::{SelectorMode, Reps, Selector};
 
 pub(crate) type RantStdResult = Result<(), RuntimeError>;
 
+macro_rules! runtime_error {
+  ($err_type:expr, $msg:literal) => {
+    return Err(RuntimeError {
+      error_type: $err_type,
+      description: $msg.to_owned(),
+      stack_trace: None,
+    })
+  };
+  ($err_type:expr, $msg_fmt:literal, $($msg_fmt_args:expr),+) => {
+    return Err(RuntimeError {
+      error_type: $err_type,
+      description: format!($msg_fmt, $($msg_fmt_args),+),
+      stack_trace: None,
+    })
+  };
+}
+
 /// `[$alt: a (any); b+ (any)]`
 ///
 /// Prints the first argument that isn't an `empty`.
@@ -319,7 +336,9 @@ fn clear(vm: &mut VM, collection: RantValue) -> RantStdResult {
   match collection {
     RantValue::List(list) => list.borrow_mut().clear(),
     RantValue::Map(map) => map.borrow_mut().clear(),
-    _ => {}, // TODO: Make [clear] panic on non-collection
+    _ => {
+      runtime_error!(RuntimeErrorType::ArgumentError, "value passed to [clear] must be a collection type");
+    }
   }
   Ok(())
 }
@@ -340,8 +359,98 @@ fn list_pop(vm: &mut VM, list: RantListRef) -> RantStdResult {
   Ok(())
 }
 
-fn list_insert(vm: &mut VM, (list, value, pos): (RantListRef, RantValue, usize)) -> RantStdResult {
-  todo!()
+fn insert(vm: &mut VM, (collection, value, pos): (RantValue, RantValue, RantValue)) -> RantStdResult {
+  match (collection, pos) {
+    // Insert into list by index
+    (RantValue::List(list), RantValue::Integer(index)) => {
+      let mut list = list.borrow_mut();
+      // Bounds check
+      if index < 0 || index as usize > list.len() {
+        runtime_error!(RuntimeErrorType::IndexError(IndexError::OutOfRange), "index is out of range of list size");
+      }
+      let index = index as usize;
+      list.insert(index, value);
+    },
+    // Error on non-index list access
+    (RantValue::List(_), non_index) => {
+      runtime_error!(RuntimeErrorType::ArgumentError, "cannot insert into list by '{}' index", non_index.type_name());
+    },
+    // Insert into map by key
+    (RantValue::Map(map), key_val) => {
+      let mut map = map.borrow_mut();
+      let key = key_val.to_string();
+      // TODO: Replace with prototype key-set function
+      map.raw_set(key.as_str(), value);
+    },
+    _ => {
+      runtime_error!(RuntimeErrorType::ArgumentError, "cannot insert into a non-collection");
+    }
+  }
+  Ok(())
+}
+
+fn remove(vm: &mut VM, (collection, pos): (RantValue, RantValue)) -> RantStdResult {
+  match (collection, pos) {
+    // Remove from list by index
+    (RantValue::List(list), RantValue::Integer(index)) => {
+      let mut list = list.borrow_mut();
+      // Bounds check
+      if index < 0 || index as usize >= list.len() {
+        runtime_error!(RuntimeErrorType::IndexError(IndexError::OutOfRange), "index is out of range of list size");
+      }
+      let index = index as usize;
+      list.remove(index);
+    },
+    // Error on non-index list access
+    (RantValue::List(_), non_index) => {
+      runtime_error!(RuntimeErrorType::ArgumentError, "cannot remove from list by '{}' index", non_index.type_name());
+    },
+    // Remove from into map by key
+    (RantValue::Map(map), key_val) => {
+      let mut map = map.borrow_mut();
+      let key = key_val.to_string();
+      // TODO: Replace with prototype key-remove function
+      map.raw_remove(key.as_str());
+    },
+    _ => {
+      runtime_error!(RuntimeErrorType::ArgumentError, "cannot remove from a non-collection");
+    }
+  }
+  Ok(())
+}
+
+fn take(vm: &mut VM, (collection, pos): (RantValue, RantValue)) -> RantStdResult {
+  match (collection, pos) {
+    // Take from list by index
+    (RantValue::List(list), RantValue::Integer(index)) => {
+      let mut list = list.borrow_mut();
+      // Bounds check
+      if index < 0 || index as usize >= list.len() {
+        runtime_error!(RuntimeErrorType::IndexError(IndexError::OutOfRange), "index is out of range of list size");
+      }
+      let index = index as usize;
+      list.remove(index);
+    },
+    // Error on non-index list access
+    (RantValue::List(_), non_index) => {
+      runtime_error!(RuntimeErrorType::ArgumentError, "cannot take from list by '{}' index", non_index.type_name());
+    },
+    // Remove from into map by key
+    (RantValue::Map(map), key_val) => {
+      let mut map = map.borrow_mut();
+      let key = key_val.to_string();
+      // TODO: Replace with prototype key-remove function
+      if let Some(val) = map.raw_take(key.as_str()) {
+        vm.cur_frame_mut().write_value(val);
+      } else {
+        runtime_error!(RuntimeErrorType::KeyError(KeyError::KeyNotFound(key.to_owned())), "tried to take non-existent key: '{}'", key);
+      }
+    },
+    _ => {
+      runtime_error!(RuntimeErrorType::ArgumentError, "cannot take from a non-collection");
+    }
+  }
+  Ok(())
 }
 
 fn sorted(vm: &mut VM, list: RantListRef) -> RantStdResult {
@@ -662,11 +771,11 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     proto, set_proto as "set-proto",
 
     // Collection functions
-    clear, keys, has_key as "has-key",
+    clear, keys, has_key as "has-key", insert, remove, take,
 
     // List functions
     pick, join, sorted, shuffle,
-    list_push as "push", list_pop as "pop", // insert, remove, take,
+    list_push as "push", list_pop as "pop",
 
     // String functions
     lower, upper, seg, split, lines, indent,
