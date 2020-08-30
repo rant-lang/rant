@@ -59,11 +59,13 @@ pub enum RantValue {
   Boolean(bool),
   /// A Rant value of type `function`. Passed by-reference.
   Function(RantFunctionRef),
+  /// A rant value of type `block`. Passed by-reference.
+  Block(Rc<Block>),
   /// A Rant value of type `list`. Passed by-reference.
   List(RantListRef),
   /// A Rant value of type `map`. Passed by-reference.
   Map(RantMapRef),
-  /// A Rant value of type `special`. Passed by-reference.
+  /// A Rant value of type `special`. Passed by-value.
   Special(RantSpecial),
   /// A Rant unit value of type `empty`. Passed by-value.
   Empty,
@@ -93,6 +95,183 @@ impl RantValue {
   }
 }
 
+#[allow(clippy::len_without_is_empty)]
+impl RantValue {
+  #[inline]
+  pub fn into_rant_int(self) -> RantValue {
+    match self {
+      RantValue::Integer(_) => self,
+      RantValue::Float(n) => RantValue::Integer(n as i64),
+      RantValue::String(s) => {
+        match s.parse() {
+          Ok(n) => RantValue::Integer(n),
+          Err(_) => RantValue::Empty,
+        }
+      },
+      RantValue::Boolean(b) => RantValue::Integer(bi64(b)),
+      _ => RantValue::Empty
+    }
+  }
+
+  #[inline]
+  pub fn into_rant_float(self) -> RantValue {
+    match self {
+      RantValue::Float(_) => self,
+      RantValue::Integer(n) => RantValue::Float(n as f64),
+      RantValue::String(s) => {
+        match s.parse() {
+          Ok(n) => RantValue::Float(n),
+          Err(_) => RantValue::Empty,
+        }
+      },
+      RantValue::Boolean(b) => RantValue::Float(bf64(b)),
+      _ => RantValue::Empty
+    }
+  }
+
+  #[inline]
+  pub fn into_rant_string(self) -> RantValue {
+    match self {
+      RantValue::String(_) => self,
+      _ => RantValue::String(self.to_string())
+    }
+  }
+
+  #[inline]
+  pub fn len(&self) -> usize {
+    match self {
+      // Length of string is character count
+      RantValue::String(s) => s.chars().count(),
+      // Length of block is element count
+      RantValue::Block(b) => b.elements.len(),
+      // Length of list is element count
+      RantValue::List(lst) => lst.borrow().len(),
+      // Length of map is element count
+      RantValue::Map(map) => map.borrow().raw_len(),
+      // Treat everything else as length 1, since all other value types are primitives
+      _ => 1
+    }
+  }
+
+  /// Returns a shallow copy of the value.
+  #[inline]
+  pub fn shallow_copy(&self) -> Self {
+    match self {
+      RantValue::List(list) => RantValue::List(Rc::new(RefCell::new(list.borrow().clone()))),
+      RantValue::Map(map) => RantValue::Map(Rc::new(RefCell::new(map.borrow().clone()))),
+      RantValue::Special(special) => RantValue::Special(special.clone()),
+      _ => self.clone(),
+    }
+  }
+
+  /// Gets the Rant type associated with the value.
+  #[inline]
+  pub fn get_type(&self) -> RantValueType {
+    match self {
+      RantValue::String(_) =>     RantValueType::String,
+      RantValue::Float(_) =>      RantValueType::Float,
+      RantValue::Integer(_) =>    RantValueType::Integer,
+      RantValue::Boolean(_) =>    RantValueType::Boolean,
+      RantValue::Function(_) =>   RantValueType::Function,
+      RantValue::List(_) =>       RantValueType::List,
+      RantValue::Block(_) =>      RantValueType::Block,
+      RantValue::Map(_) =>        RantValueType::Map,
+      RantValue::Special(_) =>    RantValueType::Special,
+      RantValue::Empty =>         RantValueType::Empty,
+    }
+  }
+  
+  /// Gets the type name of the value.
+  #[inline]
+  pub fn type_name(&self) -> &'static str {
+    self.get_type().name()
+  }
+
+  /// Attempts to get a value by index.
+  pub fn index_get(&self, index: i64) -> ValueIndexResult {
+    if index < 0 {
+      return Err(IndexError::OutOfRange)
+    }
+    let index = index as usize;
+
+    match self {
+      RantValue::String(s) => {
+        if index < s.len() {
+          Ok(RantValue::String(s[index..index + 1].to_owned()))
+        } else {
+          Err(IndexError::OutOfRange)
+        }
+      },
+      RantValue::List(list) => {
+        let list = list.borrow();
+        if index < list.len() {
+          Ok(list[index].clone())
+        } else {
+          Err(IndexError::OutOfRange)
+        }
+      },
+      _ => Err(IndexError::CannotIndexType(self.get_type()))
+    }
+  }
+
+  /// Attempts to set a value by index.
+  pub fn index_set(&mut self, index: i64, val: RantValue) -> ValueIndexSetResult {
+    if index < 0 {
+      return Err(IndexError::OutOfRange)
+    }
+
+    let index = index as usize;
+
+    match self {
+      RantValue::List(list) => {
+        let mut list = list.borrow_mut();
+
+        if index < list.len() {
+          list[index] = val;
+          Ok(())
+        } else {
+          Err(IndexError::OutOfRange)
+        }
+      },
+      RantValue::Map(map) => {
+        let mut map = map.borrow_mut();
+        map.raw_set(index.to_string().as_str(), val);
+        Ok(())
+      },
+      _ => Err(IndexError::CannotSetIndexOnType(self.get_type()))
+    }
+  }
+
+  /// Attempts to get a value by key.
+  pub fn key_get(&self, key: &str) -> ValueKeyResult {
+    match self {
+      RantValue::Map(map) => {
+        let map = map.borrow();
+        // TODO: Use prototype getter here
+        if let Some(val) = map.raw_get(key) {
+          Ok(val.clone())
+        } else {
+          Err(KeyError::KeyNotFound(key.to_owned()))
+        }
+      },
+      _ => Err(KeyError::CannotKeyType(self.get_type()))
+    }
+  }
+
+  /// Attempts to set a value by key.
+  pub fn key_set(&mut self, key: &str, val: RantValue) -> ValueKeySetResult {
+    match self {
+      RantValue::Map(map) => {
+        let mut map = map.borrow_mut();
+        // TODO: use prototype setter here
+        map.raw_set(key, val);
+        Ok(())
+      },
+      _ => Err(KeyError::CannotKeyType(self.get_type()))
+    }
+  }
+}
+
 impl Default for RantValue {
   /// Gets the default RantValue (`empty`).
   fn default() -> Self {
@@ -114,6 +293,8 @@ pub enum RantValueType {
   Boolean,
   /// The `function` type.
   Function,
+  /// The `block` type.
+  Block,
   /// The `list` type.
   List,
   /// The `map` type.
@@ -133,6 +314,7 @@ impl RantValueType {
       RantValueType::Integer =>     "integer",
       RantValueType::Boolean =>     "bool",
       RantValueType::Function =>    "function",
+      RantValueType::Block =>       "block",
       RantValueType::List =>        "list",
       RantValueType::Map =>         "map",
       RantValueType::Special =>     "special",
@@ -342,6 +524,7 @@ impl Debug for RantValue {
       RantValue::Integer(n) => write!(f, "{}", n),
       RantValue::Boolean(b) => write!(f, "{}", bstr(*b)),
       RantValue::Function(func) => write!(f, "[function({:?})]", func.body),
+      RantValue::Block(block) => write!(f, "[block({})]", block.elements.len()),
       RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
       RantValue::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
       RantValue::Special(special) => write!(f, "[special({:?})]", special),
@@ -358,6 +541,7 @@ impl Display for RantValue {
       RantValue::Float(n) => write!(f, "{}", n),
       RantValue::Boolean(b) => write!(f, "{}", bstr(*b)),
       RantValue::Function(func) => write!(f, "[function({:?})]", func.body),
+      RantValue::Block(block) => write!(f, "[block({})]", block.elements.len()),
       RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
       RantValue::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
       RantValue::Special(_) => write!(f, "[special]"),
@@ -519,168 +703,5 @@ impl Rem for RantValue {
       (RantValue::Integer(a), RantValue::Boolean(b)) => RantValue::Integer(a % bi64(b)),
       _ => RantValue::nan()
     })
-  }
-}
-
-#[allow(clippy::len_without_is_empty)]
-impl RantValue {
-  #[inline]
-  pub fn into_rant_int(self) -> RantValue {
-    match self {
-      RantValue::Integer(_) => self,
-      RantValue::Float(n) => RantValue::Integer(n as i64),
-      RantValue::String(s) => {
-        match s.parse() {
-          Ok(n) => RantValue::Integer(n),
-          Err(_) => RantValue::Empty,
-        }
-      },
-      RantValue::Boolean(b) => RantValue::Integer(bi64(b)),
-      _ => RantValue::Empty
-    }
-  }
-
-  #[inline]
-  pub fn into_rant_float(self) -> RantValue {
-    match self {
-      RantValue::Float(_) => self,
-      RantValue::Integer(n) => RantValue::Float(n as f64),
-      RantValue::String(s) => {
-        match s.parse() {
-          Ok(n) => RantValue::Float(n),
-          Err(_) => RantValue::Empty,
-        }
-      },
-      RantValue::Boolean(b) => RantValue::Float(bf64(b)),
-      _ => RantValue::Empty
-    }
-  }
-
-  #[inline]
-  pub fn into_rant_string(self) -> RantValue {
-    match self {
-      RantValue::String(_) => self,
-      _ => RantValue::String(self.to_string())
-    }
-  }
-
-  #[inline]
-  pub fn len(&self) -> usize {
-    match self {
-      // Length of string is character count
-      RantValue::String(s) => s.chars().count(),
-      // Length of list is element count
-      RantValue::List(lst) => lst.borrow().len(),
-      // Length of map is element count
-      RantValue::Map(map) => map.borrow().raw_len(),
-      // Treat everything else as length 1, since all other value types are primitives
-      _ => 1
-    }
-  }
-
-  /// Gets the Rant type associated with the value.
-  #[inline]
-  pub fn get_type(&self) -> RantValueType {
-    match self {
-      RantValue::String(_) =>     RantValueType::String,
-      RantValue::Float(_) =>      RantValueType::Float,
-      RantValue::Integer(_) =>    RantValueType::Integer,
-      RantValue::Boolean(_) =>    RantValueType::Boolean,
-      RantValue::Function(_) =>   RantValueType::Function,
-      RantValue::List(_) =>       RantValueType::List,
-      RantValue::Map(_) =>        RantValueType::Map,
-      RantValue::Special(_) =>    RantValueType::Special,
-      RantValue::Empty =>         RantValueType::Empty,
-    }
-  }
-  
-  /// Gets the type name of the value.
-  #[inline]
-  pub fn type_name(&self) -> &'static str {
-    self.get_type().name()
-  }
-
-  /// Attempts to get a value by index.
-  pub fn index_get(&self, index: i64) -> ValueIndexResult {
-    if index < 0 {
-      return Err(IndexError::OutOfRange)
-    }
-    let index = index as usize;
-
-    match self {
-      RantValue::String(s) => {
-        if index < s.len() {
-          Ok(RantValue::String(s[index..index + 1].to_owned()))
-        } else {
-          Err(IndexError::OutOfRange)
-        }
-      },
-      RantValue::List(list) => {
-        let list = list.borrow();
-        if index < list.len() {
-          Ok(list[index].clone())
-        } else {
-          Err(IndexError::OutOfRange)
-        }
-      },
-      _ => Err(IndexError::CannotIndexType(self.get_type()))
-    }
-  }
-
-  /// Attempts to set a value by index.
-  pub fn index_set(&mut self, index: i64, val: RantValue) -> ValueIndexSetResult {
-    if index < 0 {
-      return Err(IndexError::OutOfRange)
-    }
-
-    let index = index as usize;
-
-    match self {
-      RantValue::List(list) => {
-        let mut list = list.borrow_mut();
-
-        if index < list.len() {
-          list[index] = val;
-          Ok(())
-        } else {
-          Err(IndexError::OutOfRange)
-        }
-      },
-      RantValue::Map(map) => {
-        let mut map = map.borrow_mut();
-        map.raw_set(index.to_string().as_str(), val);
-        Ok(())
-      },
-      _ => Err(IndexError::CannotSetIndexOnType(self.get_type()))
-    }
-  }
-
-  /// Attempts to get a value by key.
-  pub fn key_get(&self, key: &str) -> ValueKeyResult {
-    match self {
-      RantValue::Map(map) => {
-        let map = map.borrow();
-        // TODO: Use prototype getter here
-        if let Some(val) = map.raw_get(key) {
-          Ok(val.clone())
-        } else {
-          Err(KeyError::KeyNotFound(key.to_owned()))
-        }
-      },
-      _ => Err(KeyError::CannotKeyType(self.get_type()))
-    }
-  }
-
-  /// Attempts to set a value by key.
-  pub fn key_set(&mut self, key: &str, val: RantValue) -> ValueKeySetResult {
-    match self {
-      RantValue::Map(map) => {
-        let mut map = map.borrow_mut();
-        // TODO: use prototype setter here
-        map.raw_set(key, val);
-        Ok(())
-      },
-      _ => Err(KeyError::CannotKeyType(self.get_type()))
-    }
   }
 }

@@ -9,7 +9,7 @@ pub type RantMapRef = Rc<RefCell<RantMap>>;
 pub type RantListRef = Rc<RefCell<RantList>>;
 
 /// Represents Rant's `list` type, which stores an ordered collection of values.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RantList(Vec<RantValue>);
 
 impl RantList {
@@ -59,7 +59,7 @@ impl FromIterator<RantValue> for RantList {
 
 /// Represents Rant's `map` type, which stores a collection of key-value pairs.
 /// Map keys are always strings.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RantMap {
   /// The physical contents of the map
   map: FnvHashMap<RantString, RantValue>,

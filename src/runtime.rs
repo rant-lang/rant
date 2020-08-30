@@ -296,6 +296,7 @@ impl<'rant> VM<'rant> {
           RST::Float(n) => self.cur_frame_mut().write_value(RantValue::Float(*n)),
           RST::EmptyVal => self.cur_frame_mut().write_value(RantValue::Empty),
           RST::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
+          RST::BlockValue(block) => self.cur_frame_mut().write_value(RantValue::Block(Rc::clone(block))),
           RST::ListInit(elements) => {
             self.cur_frame_mut().push_intent_front(Intent::BuildList { init: Rc::clone(elements), index: 0, list: RantList::new() });
             continue 'from_the_top;

@@ -209,7 +209,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         };
       }
       
-      // TODO: Queued whitespace should not carry between lines
       macro_rules! whitespace {
         (allow) => {
           if let Some(ws) = pending_whitespace.take() {
@@ -251,6 +250,35 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           last_print_flag_span = Some(span.clone());
           continue
         }),
+
+        // Defer operator
+        RantToken::Star => {
+          self.reader.skip_ws();
+          let block = self.parse_block(true, next_print_flag)?;
+
+          // Decide what to do with surrounding whitespace
+          match next_print_flag {                        
+            // If hinted, allow pending whitespace
+            PrintFlag::Hint => {
+              whitespace!(allow);
+              is_seq_printing = true;
+            },
+            
+            // If sinked, hold pending whitespace and do nothing
+            PrintFlag::Sink => {},
+            
+            // If no flag, take a hint
+            PrintFlag::None => {
+              // Inherit hints from inner blocks
+              if let Block { flag: PrintFlag::Hint, ..} = block {
+                whitespace!(allow);
+                is_seq_printing = true;
+              }
+            }
+          }
+
+          seq_add!(RST::BlockValue(Rc::new(block)));
+        },
         
         // Block start
         RantToken::LeftBrace => {
@@ -402,7 +430,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
 
         // These symbols are only used in special contexts and can be safely printed
-        RantToken::Bang | RantToken::Question | RantToken::Slash | RantToken::Star | RantToken::Plus | RantToken::Dollar
+        RantToken::Bang | RantToken::Question | RantToken::Slash | RantToken::Plus | RantToken::Dollar | RantToken::Equals
         => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
@@ -501,12 +529,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           self.syntax_error(Problem::UnclosedStringLiteral, &span); 
           return Err(())
         },
-        
-        // Treat unsupported sequence tokens as errors
-        _ => {
-          unexpected_token_error!();
-        }
-        
+        _ => unexpected_token_error!(),
       }
       
       // Clear flag

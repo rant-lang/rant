@@ -40,6 +40,14 @@ fn either(vm: &mut VM, (cond, a, b): (bool, RantValue, RantValue)) -> RantStdRes
   Ok(())
 }
 
+/// `[$copy: val (any)]`
+///
+/// Returns a copy of a value.
+fn copy(vm: &mut VM, val: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write_value(val.shallow_copy());
+  Ok(())
+}
+
 /// `[$nop]`
 ///
 /// Does absolutely nothing. Intended for use as a default/placeholder callback.
@@ -343,6 +351,16 @@ fn sorted(vm: &mut VM, list: RantListRef) -> RantStdResult {
   Ok(())
 }
 
+fn shuffle(vm: &mut VM, list: RantListRef) -> RantStdResult {
+  let mut list = list.borrow_mut();
+  let n = list.len();
+  let rng = vm.rng();
+  for i in 0..n {
+    list.swap(i, rng.next_usize(n));
+  }
+  Ok(())
+}
+
 fn seg(vm: &mut VM, (s, seg_size): (String, usize)) -> RantStdResult {
   if seg_size > 0 {
     let mut segs = vec![];
@@ -472,6 +490,25 @@ fn else_(vm: &mut VM, _: ()) -> RantStdResult {
   Ok(())
 }
 
+fn resolve(vm: &mut VM, value: RantValue) -> RantStdResult {
+  if let RantValue::Block(block) = value {
+    vm.push_block(block.as_ref(), block.flag)?;
+    Ok(())
+  } else {
+    Err(RuntimeError {
+      error_type: RuntimeErrorType::ValueError(
+        ValueError::InvalidConversion {
+          from: value.type_name(),
+          to: "block",
+          message: None,
+        }
+      ),
+      description: "value must be a block".to_owned(),
+      stack_trace: None,
+    })
+  }
+}
+
 fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
   vm.resolver_mut().attrs_mut().reps = match reps {
     RantValue::Integer(n) => Reps::Finite(n.max(0) as usize),
@@ -591,7 +628,7 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
 
   load_funcs!(
     // General functions
-    alt, call, either, len, get_type as "type", seed, nop,
+    alt, call, either, len, get_type as "type", seed, nop, resolve,
 
     // Block attribute functions
     if_ as "if", else_if as "else-if", else_ as "else", mksel, rep, sel, sep,
@@ -619,7 +656,7 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     to_int as "int", to_float as "float", to_string as "string",
 
     // Generator functions
-    dec, hex, maybe, num as "n", numf as "nf",
+    dec, hex, maybe, num, numf,
 
     // Prototype functions
     proto, set_proto as "set-proto",
@@ -628,7 +665,7 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     clear, keys, has_key as "has-key",
 
     // List functions
-    pick, join, sorted,
+    pick, join, sorted, shuffle,
     list_push as "push", list_pop as "pop", // insert, remove, take,
 
     // String functions

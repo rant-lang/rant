@@ -318,6 +318,8 @@ pub enum RST {
   Sequence(Rc<Sequence>),
   /// Rant block containing zero or more sequences
   Block(Block),
+  /// Block as value
+  BlockValue(Rc<Block>),
   /// List initializer
   ListInit(Rc<Vec<Rc<Sequence>>>),
   /// Map initializer

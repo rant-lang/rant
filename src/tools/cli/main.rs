@@ -33,10 +33,10 @@ struct CliArgs {
   /// run this file and exit
   #[argh(option, short = 'i')]
   in_file: Option<String>,
-  
-  /// only print program output and nothing else
-  #[argh(switch, short = 'q')]
-  quiet: bool,
+
+  /// enable benchmarking of compile and run times
+  #[argh(switch, short = 'b')]
+  bench_mode: bool,
 
   /// don't emit debug symbols
   #[argh(switch, short = 'n')]
@@ -77,7 +77,7 @@ fn main() {
     return
   }
   
-  if !args.quiet && args.run_code.is_none() && args.in_file.is_none() {
+  if args.run_code.is_none() && args.in_file.is_none() {
     println!("Rant {} ({})", BUILD_VERSION, embedded_triple::get());
     println!("Run this tool with --help for available options.");
   }
@@ -119,7 +119,7 @@ fn main() {
 }
 
 fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) -> ExitCode {
-  let show_stats = !args.quiet;
+  let show_stats = args.bench_mode;
   let start_time = Instant::now();
   let mut problems: Vec<CompilerMessage> = vec![];
 
