@@ -178,10 +178,16 @@ impl Rant {
     self.rng = Rc::new(RantRng::new(seed));
   }
   
-  /// Runs the specified Rant program and returns the generated output.
-  pub fn run(&mut self, program: &RantProgram) -> RuntimeResult<String> {
+  /// Runs the specified Rant program and returns the generated output value.
+  pub fn run(&mut self, program: &RantProgram) -> RuntimeResult<RantValue> {
     let mut vm = VM::new(self.rng.clone(), self, program);
     vm.run()
+  }
+
+  /// Runs the specified Rant program and returns the generated output as a string.
+  pub fn run_into_string(&mut self, program: &RantProgram) -> RuntimeResult<String> {
+    let mut vm = VM::new(self.rng.clone(), self, program);
+    Ok(vm.run()?.to_string())
   }
 }
 

@@ -102,8 +102,7 @@ pub enum SetterValueSource {
 
 impl<'rant> VM<'rant> {
   /// Runs the program.
-  #[inline]
-  pub fn run(&mut self) -> RuntimeResult<String> {
+  pub fn run(&mut self) -> RuntimeResult<RantValue> {
     let mut result = self.run_inner();
     // On error, generate stack trace
     if let Err(err) = result.as_mut() {
@@ -114,7 +113,7 @@ impl<'rant> VM<'rant> {
 
   
   #[inline]
-  fn run_inner(&mut self) -> RuntimeResult<String> {
+  fn run_inner(&mut self) -> RuntimeResult<RantValue> {
     // Push the program's root sequence onto the call stack
     // This doesn't need an overflow check because it will *always* succeed
     self.push_frame_unchecked(self.program.root.clone(), true, None);
@@ -481,7 +480,7 @@ impl<'rant> VM<'rant> {
     }
     
     // Once stack is empty, program is done-- return last frame's output as a string
-    Ok(self.pop_val().unwrap_or_default().to_string())
+    Ok(self.pop_val().unwrap_or_default())
   }
 
   #[inline]

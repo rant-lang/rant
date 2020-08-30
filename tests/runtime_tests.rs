@@ -13,7 +13,7 @@ macro_rules! run_rant {
   ($src:literal) => {{
     let mut r = Rant::new();
     let pgm = r.compile_quiet($src).expect("compile failed");
-    r.run(&pgm).as_ref().map(|o| o.as_str())
+    r.run_into_string(&pgm).as_ref().map(|o| o.as_str())
   }}
 }
 

@@ -191,7 +191,7 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) -> ExitCode {
   let seed = args.seed.unwrap_or_else(|| rand::thread_rng().gen());
   ctx.set_seed(seed);
   let start_time = Instant::now();
-  let run_result = ctx.run(&program);
+  let run_result = ctx.run_into_string(&program);
   let run_time = start_time.elapsed();
   
   // Display results
@@ -206,7 +206,7 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) -> ExitCode {
       exitcode::OK
     },
     Err(err) => {
-      eprintln!("{}: {}\n\nstack trace:\n{}", "Runtime error".bright_red().bold(), err.description, err.stack_trace.unwrap_or("(no trace available)".to_owned()));
+      eprintln!("{}: {}\n\nstack trace:\n{}", "Runtime error".bright_red().bold(), err.description, err.stack_trace.unwrap_or_else(|| "(no trace available)".to_owned()));
       if show_stats {
         eprintln!("{} in {:?} (seed = {:016x})", "Crashed".bright_red().bold(), run_time, seed);
       }
