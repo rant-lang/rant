@@ -345,7 +345,7 @@ fn list_insert(vm: &mut VM, (list, value, pos): (RantListRef, RantValue, usize))
 }
 
 fn sorted(vm: &mut VM, list: RantListRef) -> RantStdResult {
-  let mut list_copy = RantList::from(list.borrow().clone());
+  let mut list_copy = list.borrow().clone();
   list_copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
   vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list_copy))));
   Ok(())
@@ -597,7 +597,7 @@ fn count_attrs(vm: &mut VM, _: ()) -> RantStdResult {
 }
 
 fn reset_attrs(vm: &mut VM, _: ()) -> RantStdResult {
-  vm.resolver_mut().take_attrs();
+  vm.resolver_mut().reset_attrs();
   Ok(())
 }
 

@@ -1,8 +1,33 @@
 # 4.0.0-alpha.3
 
-* Fixed compiler bug where non-printing whitespace was sometimes printed
-* Fixed bug where printing empties with a non-empty would cause output to be coerced incorrectly to a string
-* Fixed bug where sinked blocks print when they're not supposed to
+* Added initial support for optional debug symbols. Enable them via `debug_mode` option in `RantOptions`.
+* Added (very basic) stack traces. They may be buggy still.
+* Added the `block` type.
+* Added new stdlib functions:
+  * `[and]`, `[or]`, `[not]`, `[xor]`
+  * `[clear]`
+  * `[copy]`
+  * `[either]`
+  * `[eq]`, `[neq]`, `[gt]`, `[lt]`, `[ge]`, `[le]`
+  * `[has-key]`
+  * `[if]`, `[else-if]`, `[else]`
+  * `[indent]`
+  * `[is-odd]`, `[is-even]`, `[is-factor]`
+  * `[is-string]`, `[is-number]`, `[is-integer]`, `[is-float]`, `[is-bool]`, `[is-empty]`, `[is-nan]`
+  * `[keys]`
+  * `[lines]`
+  * `[nop]`
+  * `[push]`, `[pop]`
+  * `[reset-attrs]`
+  * `[resolve]`
+  * `[shuffle]`
+  * `[sorted]`
+* Renamed `[n]` to `[num]`
+* Renamed `[nf]` to `[numf]`
+* Fixed compiler bug where non-printing whitespace was sometimes printed.
+* Fixed bug where printing empties with a non-empty would cause output to be coerced incorrectly to a string.
+* Fixed bug where sinked blocks print when they're not supposed to.
+* CLI benchmarks are now hidden by default; enable with `--bench-mode` / `-b`.
 
 # 4.0.0-alpha.2
 

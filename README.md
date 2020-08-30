@@ -98,7 +98,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 ```
 
-## Learn Rant
+## Documentation
 
 The latest documentation can be found at the official **[docs.rant-lang.org](https://docs.rant-lang.org)**.
 
