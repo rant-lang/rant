@@ -42,13 +42,14 @@ impl<'rant> VM<'rant> {
 
 /// Returns a runtime error from the current execution context with the specified error type and optional description.
 macro_rules! runtime_error {
-  ($err_type:expr) => {
+  ($err_type:expr) => {{
+    let e = $err_type;
     return Err(RuntimeError {
-      error_type: $err_type,
-      description: "".to_owned(),
+      description: e.to_string(),
+      error_type: e,
       stack_trace: None,
     })
-  };
+  }};
   ($err_type:expr, $desc:expr) => {
     return Err(RuntimeError {
       error_type: $err_type,
@@ -946,4 +947,23 @@ pub enum RuntimeErrorType {
   KeyError(KeyError),
   /// Error occurred while iterating selector
   SelectorError(SelectorError),
+}
+
+impl Display for RuntimeErrorType {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      RuntimeErrorType::GeneralError => write!(f, ""),
+      RuntimeErrorType::StackOverflow => write!(f, "stack overflow"),
+      RuntimeErrorType::StackUnderflow => write!(f, "stack underflow"),
+      RuntimeErrorType::InvalidAccess => write!(f, "invalid variable access"),
+      RuntimeErrorType::ExternalError => write!(f, "external error"),
+      RuntimeErrorType::ArgumentMismatch => write!(f, "argument mismatch"),
+      RuntimeErrorType::ArgumentError => write!(f, "argument error"),
+      RuntimeErrorType::CannotInvokeValue => write!(f, "value not invokable"),
+      RuntimeErrorType::ValueError(err) => write!(f, "{}", err),
+      RuntimeErrorType::IndexError(err) => write!(f, "{}", err),
+      RuntimeErrorType::KeyError(err) => write!(f, "{}", err),
+      RuntimeErrorType::SelectorError(err) => write!(f, "{}", err),
+    }
+  }
 }
