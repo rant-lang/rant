@@ -49,6 +49,9 @@ fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> Rant
   }
 }
 
+/// `[$whitespace-fmt: mode? (string); custom-value? (any)]`
+///
+/// Gets or sets the whitespace normalization mode for the current scope.
 fn whitespace_fmt(vm: &mut VM, (mode, custom): (Option<String>, Option<RantValue>)) -> RantStdResult {
   if let Some(mode) = mode.as_deref() {
     let mode = match mode {
@@ -113,7 +116,7 @@ fn seed(vm: &mut VM, _: ()) -> RantStdResult {
   Ok(())
 }
 
-/// [$add: lhs (any); rhs (any)]
+/// `[$add: lhs (any); rhs (any)]`
 ///
 /// Adds two values.
 fn add(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
@@ -121,7 +124,7 @@ fn add(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
   Ok(())
 }
 
-/// [$mul: lhs (any); rhs (any)]
+/// `[$mul: lhs (any); rhs (any)]`
 ///
 /// Multiplies two values.
 fn mul(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
@@ -129,7 +132,7 @@ fn mul(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
   Ok(())
 }
 
-/// [$mul-add: lhs (any); mhs (any); rhs (any)]
+/// `[$mul-add: lhs (any); mhs (any); rhs (any)]`
 ///
 /// Multiplies two values, then adds a third value to the result.
 fn mul_add(vm: &mut VM, (lhs, mhs, rhs): (RantValue, RantValue, RantValue)) -> RantStdResult {
@@ -137,7 +140,7 @@ fn mul_add(vm: &mut VM, (lhs, mhs, rhs): (RantValue, RantValue, RantValue)) -> R
   Ok(())
 }
 
-/// [$sub: lhs (any); rhs (any)]
+/// `[$sub: lhs (any); rhs (any)]`
 ///
 /// Subtracts one value from another.
 fn sub(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
@@ -145,7 +148,7 @@ fn sub(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
   Ok(())
 }
 
-/// [$div: lhs (any); rhs (any)]
+/// `[$div: lhs (any); rhs (any)]`
 ///
 /// Divides one number by another.
 fn div(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
@@ -153,7 +156,7 @@ fn div(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
   Ok(())
 }
 
-/// [$mod: lhs (any); rhs (any)]
+/// `[$mod: lhs (any); rhs (any)]`
 ///
 /// Gets the modulus of two values.
 fn mod_(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
@@ -161,7 +164,7 @@ fn mod_(vm: &mut VM, (lhs, rhs): (RantValue, RantValue)) -> RantStdResult {
   Ok(())
 }
 
-/// [$neg: val (any)]
+/// `[$neg: val (any)]`
 ///
 /// Negates a value.
 fn neg(vm: &mut VM, val: RantValue) -> RantStdResult {
@@ -169,7 +172,7 @@ fn neg(vm: &mut VM, val: RantValue) -> RantStdResult {
   Ok(())
 }
 
-/// [$recip: val (any)]
+/// `[$recip: val (any)]`
 ///
 /// Gets the reciproval of a value.
 fn recip(vm: &mut VM, val: RantValue) -> RantStdResult {
@@ -177,7 +180,7 @@ fn recip(vm: &mut VM, val: RantValue) -> RantStdResult {
   Ok(())
 }
 
-/// [$is-odd: val (integer)]
+/// `[$is-odd: val (integer)]`
 ///
 /// Returns true if `val` is odd.
 fn is_odd(vm: &mut VM, val: i64) -> RantStdResult {
@@ -185,7 +188,7 @@ fn is_odd(vm: &mut VM, val: i64) -> RantStdResult {
   Ok(())
 }
 
-/// [$is-even: val (integer)]
+/// `[$is-even: val (integer)]`
 ///
 /// Returns true if `val` is even.
 fn is_even(vm: &mut VM, val: i64) -> RantStdResult {
@@ -193,7 +196,7 @@ fn is_even(vm: &mut VM, val: i64) -> RantStdResult {
   Ok(())
 }
 
-/// [$is-factor: value (integer); factor (integer)]
+/// `[$is-factor: value (integer); factor (integer)]`
 ///
 /// Returns true if `value` is divisible by `factor`.
 fn is_factor(vm: &mut VM, (value, factor): (i64, i64)) -> RantStdResult {
@@ -201,23 +204,35 @@ fn is_factor(vm: &mut VM, (value, factor): (i64, i64)) -> RantStdResult {
   Ok(())
 }
 
+/// `[$and: lhs (bool); rhs (bool); extra* (bool)]`
+///
+/// Returns the logical AND of the operands.
 fn and(vm: &mut VM, (lhs, rhs, extra): (bool, bool, VarArgs<bool>)) -> RantStdResult {
   let result = (lhs && rhs) && extra.iter().all(|b| *b);
   vm.cur_frame_mut().write_value(RantValue::Boolean(result));
   Ok(())
 }
 
+/// `[$or: lhs (bool); rhs (bool); extra* (bool)]`
+///
+/// Returns the logical OR of the operands.
 fn or(vm: &mut VM, (lhs, rhs, extra): (bool, bool, VarArgs<bool>)) -> RantStdResult {
   let result = (lhs || rhs) || extra.iter().any(|b| *b);
   vm.cur_frame_mut().write_value(RantValue::Boolean(result));
   Ok(())
 }
 
+/// `[$not: val (bool)]`
+///
+/// Gets the inverse of the operand.
 fn not(vm: &mut VM, val: bool) -> RantStdResult {
   vm.cur_frame_mut().write_value(RantValue::Boolean(!val));
   Ok(())
 }
 
+/// `$xor: lhs (bool); rhs (bool)]`
+///
+/// Retirms the logical XOR of the operands.
 fn xor(vm: &mut VM, (lhs, rhs): (bool, bool)) -> RantStdResult {
   vm.cur_frame_mut().write_value(RantValue::Boolean(lhs ^ rhs));
   Ok(())
@@ -310,7 +325,7 @@ fn numf(vm: &mut VM, (a, b): (f64, f64)) -> RantStdResult {
   Ok(())
 }
 
-fn hex(vm: &mut VM, count: Option<usize>) -> RantStdResult {
+fn digh(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   let count = count.unwrap_or(1);
   let mut s = String::with_capacity(count);
   let rng = vm.rng();
@@ -322,12 +337,24 @@ fn hex(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   Ok(())
 }
 
-fn dec(vm: &mut VM, count: Option<usize>) -> RantStdResult {
+fn dig(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   let count = count.unwrap_or(1);
   let mut s = String::with_capacity(count);
   let rng = vm.rng();
   for _ in 0..count {
     let ch = (&b"0123456789")[rng.next_usize(10)] as char;
+    s.push(ch);
+  }
+  vm.cur_frame_mut().write_frag(s.as_str());
+  Ok(())
+}
+
+fn dignz(vm: &mut VM, count: Option<usize>) -> RantStdResult {
+  let count = count.unwrap_or(1);
+  let mut s = String::with_capacity(count);
+  let rng = vm.rng();
+  for _ in 0..count {
+    let ch = (&b"123456789")[rng.next_usize(9)] as char;
     s.push(ch);
   }
   vm.cur_frame_mut().write_frag(s.as_str());
@@ -797,7 +824,7 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     to_int as "int", to_float as "float", to_string as "string",
 
     // Generator functions
-    dec, hex, maybe, num, numf,
+    dig, digh, dignz, maybe, num, numf,
 
     // Prototype functions
     proto, set_proto as "set-proto",

@@ -7,6 +7,10 @@
   * `[remove]`
   * `[take]`
   * `[whitespace-fmt]`
+  * `[dignz]`
+* Renamed stdlib functions:
+  * `[dec]` -> `[dig]`
+  * `[hex]` -> `[digh]`
 
 # 4.0.0-alpha.3
 
