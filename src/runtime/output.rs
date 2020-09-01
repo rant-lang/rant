@@ -1,26 +1,42 @@
 use crate::{RantValue, RantString};
+use super::format::{WhitespaceNormalizationMode, OutputFormat};
+use std::rc::Rc;
 
 const INITIAL_CHAIN_CAPACITY: usize = 64;
 
 /// Writes a stream of buffers that can be passed to a parent buffer or rendered to a string.
 pub struct OutputWriter {
   buffers: Vec<OutputBuffer>,
-  frag_buffer: Option<RantString>
+  frag_buffer: Option<RantString>,
+  format: Rc<OutputFormat>,
 }
 
 impl OutputWriter {
-  pub fn new() -> Self {
+  pub fn new(prev_output: Option<&Self>) -> Self {
     Self {
       buffers: Vec::with_capacity(INITIAL_CHAIN_CAPACITY),
-      frag_buffer: None
+      frag_buffer: None,
+      format: prev_output.map(|o| Rc::clone(&o.format)).unwrap_or_default(),
     }
   }
+
+  #[inline]
+  pub fn format(&self) -> &OutputFormat {
+    &self.format
+  }
+
+  #[inline]
+  pub fn format_mut(&mut self) -> &mut OutputFormat {
+    Rc::make_mut(&mut self.format)
+  }
   
+  #[inline]
   pub fn write_buffer(&mut self, value: OutputBuffer) {
     self.flush_frag_buffer();
     self.buffers.push(value);
   }
   
+  #[inline]
   pub fn write_frag(&mut self, value: &str) {
     // Consecutive string writes are buffered in a "frag buffer", which reduces the total number of buffer elements in the output
     if let Some(frag_buffer) = self.frag_buffer.as_mut() {
@@ -30,11 +46,23 @@ impl OutputWriter {
     }
   }
   
+  #[inline]
   pub fn write_ws(&mut self, value: &str) {
-    self.write_frag(" ");
-    // TODO: Whitespace formatting
+    match &self.format.ws_norm_mode {
+      WhitespaceNormalizationMode::Default => {
+        self.write_frag(" ");
+      },
+      WhitespaceNormalizationMode::IgnoreAll => {},
+      WhitespaceNormalizationMode::Verbatim => {
+        self.write_frag(value);
+      },
+      WhitespaceNormalizationMode::Custom(val) => {
+        self.write_frag(val.to_string().as_str())
+      },
+    }
   }
   
+  #[inline]
   fn flush_frag_buffer(&mut self) {
     if let Some(frag_buffer) = self.frag_buffer.take() {
       self.buffers.push(OutputBuffer::String(frag_buffer));
@@ -43,6 +71,7 @@ impl OutputWriter {
 }
 
 impl OutputWriter {
+  #[inline]
   pub fn render_value(mut self) -> RantValue {
     self.flush_frag_buffer();
     
@@ -80,7 +109,7 @@ impl OutputWriter {
 
 impl Default for OutputWriter {
   fn default() -> Self {
-    OutputWriter::new()
+    OutputWriter::new(Default::default())
   }
 }
 
@@ -93,6 +122,7 @@ pub enum OutputBuffer {
 
 impl<'a> OutputBuffer {
   /// Consumes the buffer and returns its contents rendered as a single `String`.
+  #[inline]
   pub(crate) fn render(self) -> RantString {
     match self {
       OutputBuffer::String(s) => s,

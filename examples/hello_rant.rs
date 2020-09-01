@@ -1,6 +1,7 @@
 use rant::Rant;
+use std::error::Error;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
   // Create a default Rant context and load the standard library
   let mut rant = Rant::new();
 

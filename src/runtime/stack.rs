@@ -112,11 +112,11 @@ pub struct StackFrame {
 }
 
 impl StackFrame {
-  pub fn new(sequence: Rc<Sequence>, locals: RantMap, has_output: bool) -> Self {
+  pub fn new(sequence: Rc<Sequence>, locals: RantMap, has_output: bool, prev_output: Option<&OutputWriter>) -> Self {
     Self {
       sequence,
       locals,
-      output: if has_output { Some(Default::default()) } else { None },
+      output: if has_output { Some(OutputWriter::new(prev_output)) } else { None },
       started: false,
       pc: 0,
       intents: Default::default(),
@@ -149,6 +149,11 @@ impl StackFrame {
     self.pc
   }
 
+  #[inline]
+  pub fn output(&self) -> Option<&OutputWriter> {
+    self.output.as_ref()
+  }
+
   /// Takes the next intent to be handled.
   #[inline]
   pub fn take_intent(&mut self) -> Option<Intent> {
@@ -165,6 +170,18 @@ impl StackFrame {
   #[inline]
   pub fn push_intent_back(&mut self, intent: Intent) {
     self.intents.push_back(intent);
+  }
+
+  #[inline]
+  pub fn use_output_mut<F: FnOnce(&mut OutputWriter)>(&mut self, func: F) {
+    if let Some(output) = self.output.as_mut() {
+      func(output);
+    }
+  }
+
+  #[inline]
+  pub fn use_output<'a, F: FnOnce(&'a OutputWriter) -> R, R>(&'a self, func: F) -> Option<R> {
+    self.output.as_ref().map(|output| func(output))
   }
 
   #[inline]

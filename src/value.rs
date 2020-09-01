@@ -1,7 +1,7 @@
 use crate::{lang::{Block, Parameter, Sequence}};
 use crate::runtime::*;
 use crate::{collections::*, util::*, IntoRuntimeResult, RuntimeResult, RuntimeError, RuntimeErrorType, stdlib::RantStdResult};
-use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div, Rem}, cmp, cell::{Ref, RefCell, RefMut}};
+use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div, Rem}, cmp, cell::RefCell};
 use std::mem;
 use std::error::Error;
 use cast::*;
@@ -467,7 +467,6 @@ impl PartialEq for RantSpecial {
   fn eq(&self, other: &Self) -> bool {
     match (self, other) {
       (RantSpecial::Selector(a), RantSpecial::Selector(b)) => a.as_ptr() == b.as_ptr(),
-      _ => false,
     }
   }
 }

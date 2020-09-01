@@ -10,6 +10,7 @@ use crate::convert::ToRant;
 use std::{cmp::Ordering, mem, iter::FromIterator};
 use lang::PrintFlag;
 use resolver::{SelectorMode, Reps, Selector};
+use format::WhitespaceNormalizationMode;
 
 pub(crate) type RantStdResult = Result<(), RuntimeError>;
 
@@ -46,6 +47,34 @@ fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> Rant
     }
     Ok(())
   }
+}
+
+fn whitespace_fmt(vm: &mut VM, (mode, custom): (Option<String>, Option<RantValue>)) -> RantStdResult {
+  if let Some(mode) = mode.as_deref() {
+    let mode = match mode {
+      "default" =>    WhitespaceNormalizationMode::Default,
+      "ignore-all" => WhitespaceNormalizationMode::IgnoreAll,
+      "verbatim" =>   WhitespaceNormalizationMode::Verbatim,
+      "custom" =>     WhitespaceNormalizationMode::Custom(custom.unwrap_or(RantValue::Empty)),
+      bad_mode => runtime_error!(RuntimeErrorType::ArgumentError, "invalid whitespace normalization mode: '{}'", bad_mode),
+    };
+    vm.cur_frame_mut().use_output_mut(move |output| output.format_mut().ws_norm_mode = mode);
+  } else {
+    let mode = vm.cur_frame().use_output(|output| output.format().ws_norm_mode.clone()).unwrap_or_default();
+    let frame = vm.cur_frame_mut();
+    match mode {
+      WhitespaceNormalizationMode::Custom(custom_val) => {
+        frame.write_value(custom_val);
+      },
+      other => frame.write_frag(match other {
+        WhitespaceNormalizationMode::Default =>   "default",
+        WhitespaceNormalizationMode::IgnoreAll => "ignore-all",
+        WhitespaceNormalizationMode::Verbatim =>  "verbatim",
+        WhitespaceNormalizationMode::Custom(_) => unreachable!(),
+      })
+    }
+  }
+  Ok(())
 }
 
 /// `[$either: cond (bool); a (any); b (any)]`
@@ -738,6 +767,9 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
   load_funcs!(
     // General functions
     alt, call, either, len, get_type as "type", seed, nop, resolve,
+
+    // Formatting functions
+    whitespace_fmt as "whitespace-fmt",
 
     // Block attribute functions
     if_ as "if", else_if as "else-if", else_ as "else", mksel, rep, sel, sep,

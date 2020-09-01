@@ -9,6 +9,7 @@ pub use output::*;
 pub(crate) mod resolver;
 mod output;
 mod stack;
+pub(crate) mod format;
 
 pub type RuntimeResult<T> = Result<T, RuntimeError>;
 
@@ -808,7 +809,12 @@ impl<'rant> VM<'rant> {
 
   #[inline(always)]
   fn push_frame_unchecked(&mut self, callee: Rc<Sequence>, use_output: bool, locals: Option<RantMap>) {
-    let mut frame = StackFrame::new(callee, locals.unwrap_or_default(), use_output);
+    let mut frame = StackFrame::new(
+      callee, 
+      locals.unwrap_or_default(), 
+      use_output, 
+      self.call_stack.last().map(|last| last.output()).flatten()
+    );
 
     if self.engine.debug_mode {
       if let Some(name) = self.program.name() {
@@ -826,7 +832,12 @@ impl<'rant> VM<'rant> {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
     }
     
-    let mut frame = StackFrame::new(callee, locals.unwrap_or_default(), use_output);
+    let mut frame = StackFrame::new(
+      callee, 
+      locals.unwrap_or_default(), 
+      use_output,
+      self.call_stack.last().map(|last| last.output()).flatten()
+    );
 
     if self.engine.debug_mode {
       if let Some(name) = self.program.name() {
