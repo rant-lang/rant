@@ -3,6 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/rant)](https://crates.io/crates/rant)
 [![Crates.io](https://img.shields.io/crates/d/rant)](https://crates.io/crates/rant)
 [![Docs.rs](https://docs.rs/rant/badge.svg)](https://docs.rs/rant)
+[![Discord](https://img.shields.io/discord/332251452334669834?color=6C8BD5&label=discord&logo=discord&logoColor=%23fff)](https://discord.gg/5n7bnAD)
 
 ***
 ### IMPORTANT:
@@ -15,17 +16,17 @@
 
 ***
 
-**Rant** is a high-level language for templating and procedural text generation.
+**Rant** is a high-level language for templating and procedural generation.
 Write more expressive and dynamic templates, dialogue, stories, names, test data, and much more.
 
 ## Introducing Rant 4
 
-Rant 4 is a complete remake of the Rant language and runtime. It delivers a superior text generation experience designed around the needs of everyone-- from writers and programmers, to anybody else!
+Rant 4 is a complete remake of the Rant language and runtime. It delivers a vastly improved user experience designed around the needs of everyone-- from writers and programmers, to anybody else!
 
 ### Rant is intuitive
 
 Rant is basically the opposite of Regex: 
-Instead of matching a string to a pattern, you generate a string from a pattern!
+Instead of matching an input to a pattern, you generate a matching output from a pattern!
 
 It's easy to express your desired output as a set of branching possibilities.
 For example, consider a simple regex that matches on three strings:
@@ -48,7 +49,7 @@ Even for more complex generation tasks, Rant has your back. With its powerful se
 
 ### Rant is flexible
 
-Rant does more than generate random strings: its behavior is infinitely configurable for a wide range of use cases ranging from natural language generation to simple code templating. What you do with it is up to you!
+Rant does more than randomization: its behavior is infinitely configurable for a wide range of use cases ranging from natural language generation to simple code templating. What you do with it is up to you!
 
 Need to work with structured data rather than just strings? No problem. Rant offers a fully-featured object model including common primitives like numbers and booleans as well as collection types like maps and lists.
 
@@ -59,7 +60,7 @@ Need to work with structured data rather than just strings? No problem. Rant off
 Rant comes with a CLI tool that includes a REPL. You can install and run it with:
 
 ```sh
-$ cargo install rant --version=4.0.0-alpha.3 --all-features
+$ cargo install rant --version=4.0.0-alpha.4 --all-features
 $ rant
 ```
 
