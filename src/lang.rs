@@ -54,9 +54,9 @@ impl Display for Identifier {
   }
 }
 
-/// Component in a variable accessor chain
+/// Component in an accessor path.
 #[derive(Debug)]
-pub enum VarAccessComponent {
+pub enum AccessPathComponent {
   /// Name of variable or map item
   Name(Identifier),
   /// List index
@@ -65,62 +65,99 @@ pub enum VarAccessComponent {
   Expression(Rc<Sequence>),
 }
 
-impl Display for VarAccessComponent {
+impl Display for AccessPathComponent {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      VarAccessComponent::Name(name) => write!(f, "{}", name),
-      VarAccessComponent::Index(i) => write!(f, "{}", i),
-      VarAccessComponent::Expression(expr) => write!(f, "{{{}...}}", expr.name().map(|name| name.as_str()).unwrap_or("")),
+      AccessPathComponent::Name(name) => write!(f, "{}", name),
+      AccessPathComponent::Index(i) => write!(f, "{}", i),
+      AccessPathComponent::Expression(expr) => write!(f, "{{{}...}}", expr.name().map(|name| name.as_str()).unwrap_or("")),
     }
   }
 }
 
-/// An accessor consisting of a chain of variable names and indices
-#[derive(Debug)]
-pub struct VarAccessPath(Vec<VarAccessComponent>);
+/// Types of access paths.
+#[derive(Debug, Copy, Clone)]
+pub enum AccessPathKind {
+  /// Path points to a variable in the current scope.
+  Local,
+  /// Path points explicitly to a global variable.
+  ExplicitGlobal,
+  /// Path points explicitly to a variable that is at most _n_ scopes above the current scope.
+  Descope(usize),
+}
 
-impl VarAccessPath {
-  pub fn new(parts: Vec<VarAccessComponent>) -> Self {
-    Self(parts)
+impl AccessPathKind {
+  /// Gets the number of explicit descopes required by this path. If the path is explicitly global, returns 0.
+  pub fn descope_count(&self) -> usize {
+    match self {
+      AccessPathKind::Local | AccessPathKind::ExplicitGlobal => 0,
+      AccessPathKind::Descope(n) => *n
+    }
+  }
+}
+
+/// Describes the location of a value.
+#[derive(Debug)]
+pub struct AccessPath {
+  path: Vec<AccessPathComponent>,
+  kind: AccessPathKind,
+}
+
+impl AccessPath {
+  #[inline]
+  pub fn new(path: Vec<AccessPathComponent>, kind: AccessPathKind) -> Self {
+    Self {
+      path,
+      kind
+    }
+  }
+
+  #[inline]
+  pub fn is_explicit_global(&self) -> bool {
+    matches!(self.kind, AccessPathKind::ExplicitGlobal)
+  }
+
+  #[inline]
+  pub fn kind(&self) -> AccessPathKind {
+    self.kind
   }
 
   /// Returns a list of dynamic keys used by the path in order.
+  #[inline]
   pub fn dynamic_keys(&self) -> Vec<Rc<Sequence>> {
     self.iter().filter_map(|c| {
       match c {
-        VarAccessComponent::Expression(expr) => Some(Rc::clone(expr)),
+        AccessPathComponent::Expression(expr) => Some(Rc::clone(expr)),
         _ => None
       }
     }).collect()
   }
 
   /// If the path statically accesses a variable, returns the name of the variable accessed; otherwise, returns `None`.
+  #[inline]
   pub fn capture_var_name(&self) -> Option<Identifier> {
-    if self.len() > 0 {
-      match &self[0] {
-        VarAccessComponent::Name(id) => Some(id.clone()),
-        _ => None,
-      }
+    if let Some(AccessPathComponent::Name(id)) = self.first() {
+      Some(id.clone())
     } else {
       None
     }
   }
 }
 
-impl Deref for VarAccessPath {
-  type Target = Vec<VarAccessComponent>;
+impl Deref for AccessPath {
+  type Target = Vec<AccessPathComponent>;
   fn deref(&self) -> &Self::Target {
-    &self.0
+    &self.path
   }
 }
 
-impl DerefMut for VarAccessPath {
+impl DerefMut for AccessPath {
   fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.0   
+    &mut self.path
   }
 }
 
-impl Display for VarAccessPath {
+impl Display for AccessPath {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}", self.iter().map(|part| part.to_string()).collect::<Vec<String>>().join("/"))
   }
@@ -271,14 +308,14 @@ impl Parameter {
 #[derive(Debug)]
 pub struct FunctionCall {
   pub flag: PrintFlag,
-  pub id: Rc<VarAccessPath>,
+  pub id: Rc<AccessPath>,
   pub arguments: Rc<Vec<Rc<Sequence>>>,
 }
 
 /// Describes a function definition.
 #[derive(Debug)]
 pub struct FunctionDef {
-  pub id: Rc<VarAccessPath>,
+  pub id: Rc<AccessPath>,
   pub params: Rc<Vec<Parameter>>,
   pub capture_vars: Rc<Vec<Identifier>>,
   pub body: Rc<Sequence>,
@@ -333,11 +370,11 @@ pub enum RST {
   /// Function definition
   FuncDef(FunctionDef),
   /// Variable definition
-  VarDef(Identifier, Option<Rc<Sequence>>),
+  VarDef(Identifier, AccessPathKind, Option<Rc<Sequence>>),
   /// Value getter
-  VarGet(Rc<VarAccessPath>),
+  VarGet(Rc<AccessPath>),
   /// Value setter
-  VarSet(Rc<VarAccessPath>, Rc<Sequence>),
+  VarSet(Rc<AccessPath>, Rc<Sequence>),
   /// Fragment
   Fragment(RantString),
   /// Whitespace

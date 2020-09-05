@@ -1,6 +1,7 @@
 # 4.0.0-alpha.4
 
-* Changed `Rant::run()` to return a `RantValue` and added `Rant::run_into_string()` to explicitly return a `String` output
+* Added descope and explicit global modifiers to accessors
+* Added implicit local variable scope to program root
 * Added support for whitespace normalization via `[whitespace-fmt]`.
 * Added new stdlib functions:
   * `[insert]`
@@ -11,6 +12,7 @@
 * Renamed stdlib functions:
   * `[dec]` -> `[dig]`
   * `[hex]` -> `[digh]`
+* Changed `Rant::run()` to return a `RantValue` and added `Rant::run_into_string()` to explicitly return a `String` output
 
 # 4.0.0-alpha.3
 

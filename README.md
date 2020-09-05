@@ -1,7 +1,6 @@
 # Rant
 
 [![Crates.io](https://img.shields.io/crates/v/rant)](https://crates.io/crates/rant)
-[![Crates.io](https://img.shields.io/crates/d/rant)](https://crates.io/crates/rant)
 [![Docs.rs](https://docs.rs/rant/badge.svg)](https://docs.rs/rant)
 [![Discord](https://img.shields.io/discord/332251452334669834?color=6C8BD5&label=discord&logo=discord&logoColor=%23fff)](https://discord.gg/5n7bnAD)
 

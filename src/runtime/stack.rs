@@ -35,14 +35,21 @@ impl CallStack {
     Self(Default::default())
   }
 
-  pub fn set_local(&mut self, context: &Rant, id: &str, val: RantValue) -> RuntimeResult<()> {
-    // Check locals
-    for frame in self.iter_mut().rev() {
-      if frame.locals.raw_has_key(id) {
-        frame.locals.raw_set(id, val);
-        return Ok(())
-      }
-    }
+  #[inline]
+  pub fn set_local(&mut self, context: &Rant, id: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
+    match access {
+      AccessPathKind::Local | AccessPathKind::Descope(_) => {
+        // Check locals
+        for frame in self.iter_mut().rev().skip(access.descope_count()) {
+          if frame.locals.raw_has_key(id) {
+            frame.locals.raw_set(id, val);
+            return Ok(())
+          }
+        }
+      },
+      // Skip locals completely if it's a global accessor
+      AccessPathKind::ExplicitGlobal => {}
+    }    
 
     // Check globals
     let mut globals = context.globals.borrow_mut();
@@ -58,13 +65,19 @@ impl CallStack {
     })
   }
 
-  pub fn get_local(&self, context: &Rant, id: &str) -> RuntimeResult<RantValue> {
-    // Check locals
-    for frame in self.iter().rev() {
-      if let Some(val) = frame.locals.raw_get(id) {
-        return Ok(val.clone())
-      }
-    }
+  #[inline]
+  pub fn get_local(&self, context: &Rant, id: &str, access: AccessPathKind) -> RuntimeResult<RantValue> {
+    match access {
+      AccessPathKind::Local | AccessPathKind::Descope(_) => {
+        // Check locals
+        for frame in self.iter().rev().skip(access.descope_count()) {
+          if let Some(val) = frame.locals.raw_get(id) {
+            return Ok(val.clone())
+          }
+        }
+      },
+      AccessPathKind::ExplicitGlobal => {}
+    }    
 
     // Check globals
     if let Some(val) = context.globals.borrow().raw_get(id) {
@@ -78,15 +91,25 @@ impl CallStack {
     })
   }
 
-  pub fn def_local(&mut self, context: &Rant, id: &str, val: RantValue) -> RuntimeResult<()> {
-    if self.len() > 1 {
-      if let Some(frame) = self.last_mut() {
-        frame.locals.raw_set(id, val);
-        return Ok(())
-      }
-    }
+  #[inline]
+  pub fn def_local(&mut self, context: &Rant, id: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
+    match access {
+      AccessPathKind::Local => {
+        if let Some(frame) = self.last_mut() {
+          frame.locals.raw_set(id, val);
+          return Ok(())
+        }
+      },
+      AccessPathKind::Descope(descope_count) => {
+        if let Some(frame) = self.iter_mut().rev().nth(descope_count) {
+          frame.locals.raw_set(id, val);
+          return Ok(())
+        }
+      },
+      AccessPathKind::ExplicitGlobal => {}
+    }    
 
-    // If there's only one frame on the stack, it means we're in the global scope of the program.
+    
     context.globals.borrow_mut().raw_set(id, val);
     Ok(())
   }

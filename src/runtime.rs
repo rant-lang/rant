@@ -68,17 +68,17 @@ pub enum Intent {
   /// Check if the active block is finished and either continue the block or pop the state from the stack
   CheckBlock,
   /// Pop a value off the stack and assign it to an existing variable.
-  SetVar { vname: Identifier },
+  SetVar { vname: Identifier, access_kind: AccessPathKind, },
   /// Pop a value off the stack and assign it to a new variable.
-  DefVar { vname: Identifier },
+  DefVar { vname: Identifier, access_kind: AccessPathKind, },
   /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `GetValue`.
-  BuildDynamicGetter { path: Rc<VarAccessPath>, dynamic_key_count: usize, pending_exprs: Vec<Rc<Sequence>>, override_print: bool },
+  BuildDynamicGetter { path: Rc<AccessPath>, dynamic_key_count: usize, pending_exprs: Vec<Rc<Sequence>>, override_print: bool },
   /// Pop `dynamic_key_count` values off the stack and use them for expression fields in a getter.
-  GetValue { path: Rc<VarAccessPath>, dynamic_key_count: usize, override_print: bool },
+  GetValue { path: Rc<AccessPath>, dynamic_key_count: usize, override_print: bool },
   /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `SetValue`.
-  BuildDynamicSetter { path: Rc<VarAccessPath>, auto_def: bool, expr_count: usize, pending_exprs: Vec<Rc<Sequence>>, val_source: SetterValueSource },
+  BuildDynamicSetter { path: Rc<AccessPath>, auto_def: bool, expr_count: usize, pending_exprs: Vec<Rc<Sequence>>, val_source: SetterValueSource },
   /// Pop `expr_count` values off the stack and use them for expression fields in a setter.
-  SetValue { path: Rc<VarAccessPath>, auto_def: bool, expr_count: usize },
+  SetValue { path: Rc<AccessPath>, auto_def: bool, expr_count: usize },
   /// Evaluate `arg_exprs` in order, then pop the argument values off the stack, pop a function off the stack, and pass the arguments to the function.
   Invoke { arg_exprs: Rc<Vec<Rc<Sequence>>>, eval_count: usize, flag: PrintFlag },
   /// Pop `argc` args off the stack, then pop a function off the stack and call it with the args.
@@ -134,13 +134,13 @@ impl<'rant> VM<'rant> {
           Intent::CheckBlock => {
             self.check_block()?;
           },
-          Intent::SetVar { vname } => {
+          Intent::SetVar { vname, access_kind } => {
             let val = self.pop_val()?;
-            self.set_local(vname.as_str(), val)?;
+            self.set_var(vname.as_str(), access_kind, val)?;
           },
-          Intent::DefVar { vname } => {
+          Intent::DefVar { vname, access_kind } => {
             let val = self.pop_val()?;
-            self.def_local(vname.as_str(), val)?;
+            self.def_var(vname.as_str(), access_kind, val)?;
           },
           Intent::BuildDynamicGetter { path, dynamic_key_count, mut pending_exprs, override_print } => {
             if let Some(key_expr) = pending_exprs.pop() {
@@ -310,15 +310,15 @@ impl<'rant> VM<'rant> {
             self.push_block(block, block.flag)?;
             continue 'from_the_top;
           },
-          RST::VarDef(vname, val_expr) => {
+          RST::VarDef(vname, access_kind, val_expr) => {
             if let Some(val_expr) = val_expr {
               // If a value is present, it needs to be evaluated first
-              self.cur_frame_mut().push_intent_front(Intent::DefVar { vname: vname.clone() });
+              self.cur_frame_mut().push_intent_front(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind });
               self.push_frame(Rc::clone(val_expr), true, None)?;
               continue 'from_the_top;
             } else {
               // If there's no assignment, just set it to <>
-              self.def_local(vname.as_str(), RantValue::Empty)?;
+              self.def_var(vname.as_str(), *access_kind, RantValue::Empty)?;
             }
           },
           RST::VarGet(path) => {
@@ -539,7 +539,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline]
-  fn set_value(&mut self, path: Rc<VarAccessPath>, auto_def: bool, dynamic_key_count: usize) -> RuntimeResult<()> {
+  fn set_value(&mut self, path: Rc<AccessPath>, auto_def: bool, dynamic_key_count: usize) -> RuntimeResult<()> {
     // The setter value should be at the top of the value stack, so pop that first
     let setter_value = self.pop_val()?;
 
@@ -549,15 +549,16 @@ impl<'rant> VM<'rant> {
       dynamic_keys.push(self.pop_val()?);
     }
 
+    let access_kind = path.kind();
     let mut path_iter = path.iter();
     let mut dynamic_keys = dynamic_keys.drain(..).rev();
          
     // The setter key is the location on the setter target that will be written to.
     let mut setter_key = match path_iter.next() {
-      Some(VarAccessComponent::Name(vname)) => {
+      Some(AccessPathComponent::Name(vname)) => {
         SetterKey::KeyRef(vname.as_str())
       },
-      Some(VarAccessComponent::Expression(_)) => {
+      Some(AccessPathComponent::Expression(_)) => {
         let key = RantString::from(dynamic_keys.next().unwrap().to_string());
         SetterKey::KeyString(key)
       },
@@ -571,8 +572,8 @@ impl<'rant> VM<'rant> {
     for accessor in path_iter {
       // Update setter target by keying off setter_key
       setter_target = match (&setter_target, &setter_key) {
-        (None, SetterKey::KeyRef(key)) => Some(self.get_local(key)?),
-        (None, SetterKey::KeyString(key)) => Some(self.get_local(key.as_str())?),
+        (None, SetterKey::KeyRef(key)) => Some(self.get_var(key, access_kind)?),
+        (None, SetterKey::KeyString(key)) => Some(self.get_var(key.as_str(), access_kind)?),
         (Some(val), SetterKey::Index(index)) => Some(val.index_get(*index).into_runtime_result()?),
         (Some(val), SetterKey::KeyRef(key)) => Some(val.key_get(key).into_runtime_result()?),
         (Some(val), SetterKey::KeyString(key)) => Some(val.key_get(key.as_str()).into_runtime_result()?),
@@ -581,11 +582,11 @@ impl<'rant> VM<'rant> {
 
       setter_key = match accessor {
         // Static key
-        VarAccessComponent::Name(key) => SetterKey::KeyRef(key.as_str()),
+        AccessPathComponent::Name(key) => SetterKey::KeyRef(key.as_str()),
         // Index
-        VarAccessComponent::Index(index) => SetterKey::Index(*index),
+        AccessPathComponent::Index(index) => SetterKey::Index(*index),
         // Dynamic key
-        VarAccessComponent::Expression(_) => {
+        AccessPathComponent::Expression(_) => {
           match dynamic_keys.next().unwrap() {
             RantValue::Integer(index) => {
               SetterKey::Index(index)
@@ -603,16 +604,16 @@ impl<'rant> VM<'rant> {
     match (&mut setter_target, &setter_key) {
       (None, SetterKey::KeyRef(vname)) => {
         if auto_def {
-          self.def_local(vname, setter_value)?;
+          self.def_var(vname, access_kind, setter_value)?;
         } else {
-          self.set_local(vname, setter_value)?;
+          self.set_var(vname, access_kind, setter_value)?;
         }
       },
       (None, SetterKey::KeyString(vname)) => {
         if auto_def {
-          self.def_local(vname.as_str(), setter_value)?
+          self.def_var(vname.as_str(), access_kind, setter_value)?
         } else {
-          self.set_local(vname.as_str(), setter_value)?
+          self.set_var(vname.as_str(), access_kind, setter_value)?
         }
       },
       (Some(target), SetterKey::Index(index)) => target.index_set(*index, setter_value).into_runtime_result()?,
@@ -625,7 +626,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline]
-  fn get_value(&mut self, path: Rc<VarAccessPath>, dynamic_key_count: usize, override_print: bool) -> RuntimeResult<()> {
+  fn get_value(&mut self, path: Rc<AccessPath>, dynamic_key_count: usize, override_print: bool) -> RuntimeResult<()> {
     // Gather evaluated dynamic keys from stack
     let mut dynamic_keys = vec![];
     for _ in 0..dynamic_key_count {
@@ -637,12 +638,12 @@ impl<'rant> VM<'rant> {
 
     // Get the root variable
     let mut getter_value = match path_iter.next() {
-        Some(VarAccessComponent::Name(vname)) => {
-          self.get_local(vname.as_str())?
+        Some(AccessPathComponent::Name(vname)) => {
+          self.get_var(vname.as_str(), path.kind())?
         },
-        Some(VarAccessComponent::Expression(_)) => {
+        Some(AccessPathComponent::Expression(_)) => {
           let key = dynamic_keys.next().unwrap().to_string();
-          self.get_local(key.as_str())?
+          self.get_var(key.as_str(), path.kind())?
         },
         _ => unreachable!()
     };
@@ -651,21 +652,21 @@ impl<'rant> VM<'rant> {
     for accessor in path_iter {
       match accessor {
         // Static key
-        VarAccessComponent::Name(key) => {
+        AccessPathComponent::Name(key) => {
           getter_value = match getter_value.key_get(key.as_str()) {
             Ok(val) => val,
             Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
           };
         },
         // Index
-        VarAccessComponent::Index(index) => {
+        AccessPathComponent::Index(index) => {
           getter_value = match getter_value.index_get(*index) {
             Ok(val) => val,
             Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
           }
         },
         // Dynamic key
-        VarAccessComponent::Expression(_) => {
+        AccessPathComponent::Expression(_) => {
           let key = dynamic_keys.next().unwrap();
           match key {
             RantValue::Integer(index) => {
@@ -761,18 +762,18 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  pub(crate) fn set_local(&mut self, key: &str, val: RantValue) -> RuntimeResult<()> {
-    self.call_stack.set_local(self.engine, key, val)
+  pub(crate) fn set_var(&mut self, varname: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
+    self.call_stack.set_local(self.engine, varname, access, val)
   }
 
   #[inline(always)]
-  pub(crate) fn get_local(&self, key: &str) -> RuntimeResult<RantValue> {
-    self.call_stack.get_local(self.engine, key)
+  pub(crate) fn get_var(&self, varname: &str, access: AccessPathKind, ) -> RuntimeResult<RantValue> {
+    self.call_stack.get_local(self.engine, varname, access)
   }
 
   #[inline(always)]
-  pub(crate) fn def_local(&mut self, key: &str, val: RantValue) -> RuntimeResult<()> {
-    self.call_stack.def_local(self.engine, key, val)
+  pub(crate) fn def_var(&mut self, varname: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
+    self.call_stack.def_local(self.engine, varname, access, val)
   }
   
   #[inline(always)]

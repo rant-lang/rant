@@ -767,7 +767,7 @@ fn reset_attrs(vm: &mut VM, _: ()) -> RantStdResult {
 }
 
 fn get(vm: &mut VM, key: String) -> RantStdResult {
-  let val = vm.get_local(key.as_str())?;
+  let val = vm.get_var(key.as_str(), lang::AccessPathKind::Local)?;
   vm.cur_frame_mut().write_value(val);
   Ok(())
 }

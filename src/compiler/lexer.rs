@@ -63,6 +63,9 @@ pub enum RantToken {
   
   #[token("/")]
   Slash,
+
+  #[token("^")]
+  Caret,
   
   #[token("$")]
   Dollar,

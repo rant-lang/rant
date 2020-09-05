@@ -795,7 +795,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Function definition
         RantToken::Dollar => {
           // Name of variable function will be stored in
-          let func_id = self.parse_accessor()?;
+          let func_id = self.parse_access_path()?;
           // Function params
           let params = self.parse_func_params(&start_span)?;
           // Read function body
@@ -867,7 +867,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         Ok(RST::AnonFuncCall(afcall))
       } else {
         // Named function call
-        let func_name = self.parse_accessor()?;
+        let func_name = self.parse_access_path()?;
         if let Some((token, _)) = self.reader.next_solid() {
           match token {
             RantToken::RightBracket => {
@@ -912,11 +912,43 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
   }
   
+  #[inline]
+  fn parse_access_kind(&mut self) -> AccessPathKind {    
+    if let Some((token, _span)) = self.reader.take_where(
+      |t| matches!(t, Some((RantToken::Slash, _)) | Some((RantToken::Caret, _))
+    )) {
+      match token {
+        // Accessor is explicit global
+        RantToken::Slash => {
+          AccessPathKind::ExplicitGlobal
+        },
+        // Accessor is for parent scope (descope operator)
+        RantToken::Caret => {
+          let mut descope_count = 1;
+          loop {
+            if !self.reader.eat_where(|t| matches!(t, Some((RantToken::Caret, _)))) {
+              break AccessPathKind::Descope(descope_count)
+            }
+            descope_count += 1;
+          }
+        },
+        _ => unreachable!()
+      }
+    } else {
+      AccessPathKind::Local
+    }
+  }
+
   // TODO: Anonymous getters/setters
   /// Parses an accessor.
-  fn parse_accessor(&mut self) -> ParseResult<VarAccessPath> {
+  fn parse_access_path(&mut self) -> ParseResult<AccessPath> {
+    self.reader.skip_ws();
     let mut idparts = vec![];
     let preceding_span = self.reader.last_token_span();
+
+    // Check for global/descope specifiers
+    let access_kind = self.parse_access_kind();
+
     let first_part = self.reader.next_solid();
     
     // Parse the first part of the path
@@ -925,7 +957,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       Some((RantToken::Fragment, span)) => {
         let varname = Identifier::new(self.reader.last_token_string());
         if is_valid_ident(varname.as_str()) {
-          idparts.push(VarAccessComponent::Name(varname));
+          idparts.push(AccessPathComponent::Name(varname));
         } else {
           self.syntax_error(Problem::InvalidIdentifier(varname.to_string()), &span);
         }
@@ -933,7 +965,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       // An expression can also be used to provide the variable
       Some((RantToken::LeftBrace, _)) => {
         let dynamic_key_expr = self.parse_dynamic_key(false)?;
-        idparts.push(VarAccessComponent::Expression(Rc::new(dynamic_key_expr)));
+        idparts.push(AccessPathComponent::Expression(Rc::new(dynamic_key_expr)));
       },
       Some((RantToken::Integer(_), span)) => {
         self.syntax_error(Problem::LocalPathStartsWithIndex, &span);
@@ -961,19 +993,19 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           Some((RantToken::Fragment, span)) => {
             let varname = Identifier::new(self.reader.last_token_string());
             if is_valid_ident(varname.as_str()) {
-              idparts.push(VarAccessComponent::Name(varname));
+              idparts.push(AccessPathComponent::Name(varname));
             } else {
               self.syntax_error(Problem::InvalidIdentifier(varname.to_string()), &span);
             }
           },
           // Index
           Some((RantToken::Integer(index), _)) => {
-            idparts.push(VarAccessComponent::Index(index));
+            idparts.push(AccessPathComponent::Index(index));
           },
           // Dynamic key
           Some((RantToken::LeftBrace, _)) => {
             let dynamic_key_expr = self.parse_dynamic_key(false)?;
-            idparts.push(VarAccessComponent::Expression(Rc::new(dynamic_key_expr)));
+            idparts.push(AccessPathComponent::Expression(Rc::new(dynamic_key_expr)));
           },
           Some((.., span)) => {
             // error
@@ -985,7 +1017,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }
         }
       } else {
-        return Ok(VarAccessPath::new(idparts))
+        return Ok(AccessPath::new(idparts, access_kind))
       }
     }
   }
@@ -1112,6 +1144,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     
     // Check if it's a definition. If not, it's a getter or setter
     if is_def {
+      // Check for accessor modifiers
+      let access_kind = self.parse_access_kind();
+      self.reader.skip_ws();
       // Read name of variable we're defining
       let var_name = self.parse_ident()?;
 
@@ -1119,13 +1154,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         match token {
           // Empty definition
           RantToken::RightAngle => {
-            Ok(RST::VarDef(var_name, None))
+            Ok(RST::VarDef(var_name, access_kind, None))
           },
           // Definition and assignment
           RantToken::Equals => {
             self.reader.skip_ws();
             let (var_assign_expr, ..) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
-            Ok(RST::VarDef(var_name, Some(Rc::new(var_assign_expr))))
+            Ok(RST::VarDef(var_name, access_kind, Some(Rc::new(var_assign_expr))))
           },
           // Ran into something we don't support
           _ => {
@@ -1139,7 +1174,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       }
     } else {
       // Read the path to what we're accessing
-      let var_path = self.parse_accessor()?;
+      let var_path = self.parse_access_path()?;
 
       if let Some((token, _)) = self.reader.next_solid() {
         match token {
