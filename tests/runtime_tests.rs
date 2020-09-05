@@ -101,3 +101,33 @@ fn func_with_variadic_plus() {
 fn func_with_optional_param() {
   assert_matches!(run_rant!(r#"[$arg-or-foo:arg?]{[alt:<arg>;foo]} [arg-or-foo]\n[arg-or-foo:bar]"#), Ok("foo\nbar"));
 }
+
+#[test]
+fn shadowed_global() {
+  assert_matches!(run_rant!(r#"<$/test=foo><$test=bar><test>"#), Ok("bar"))
+}
+
+#[test]
+fn shadowed_local() {
+  assert_matches!(run_rant!(r#"<$test=foo>{<$test=bar><test>}"#), Ok("bar"))
+}
+
+#[test]
+fn override_shadowed_global_with_explicit_global() {
+  assert_matches!(run_rant!(r#"<$/example=foo><$example=bar></example>"#), Ok("foo"));
+}
+
+#[test]
+fn override_shadowed_global_with_descope() {
+  assert_matches!(run_rant!(r#"<$/example=foo><$example=bar><^example>"#), Ok("foo"));
+}
+
+#[test]
+fn override_shadowed_local_with_descope() {
+  assert_matches!(run_rant!(r#"<$test=foo>{<$test=bar><^test>}"#), Ok("foo"))
+}
+
+#[test]
+fn override_shadowed_locals_with_multi_descope() {
+  assert_matches!(run_rant!(r#"<$test=foo>{<$test=bar>{<$test=baz><^^test> <^test> <test>}}"#), Ok("foo bar baz"))
+}
