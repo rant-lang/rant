@@ -1,13 +1,20 @@
-# Rant
+<p align="center">
+<img src="https://i.imgur.com/5IV9vwx.png" alt="Rant Logo" height="225px" width="225px"></img>
+</p>
 
 [![Crates.io](https://img.shields.io/crates/v/rant)](https://crates.io/crates/rant)
 [![Docs.rs](https://docs.rs/rant/badge.svg)](https://docs.rs/rant)
 [![Discord](https://img.shields.io/discord/332251452334669834?color=6C8BD5&label=discord&logo=discord&logoColor=%23fff)](https://discord.gg/5n7bnAD)
 
+
+
+**Rant** is a high-level language for templating and procedural generation.
+Write more expressive and dynamic templates, dialogue, stories, names, test data, and much more.
+
 ***
 ### IMPORTANT:
 
-**This project is in early alpha, and there are a lot of broken/missing features.**
+**This project is in early alpha. Expect to see broken/missing features.**
 
 **While I encourage you to try it out and give feedback, please do not use in production environments until a stable version is released.**
 
@@ -15,17 +22,14 @@
 
 ***
 
-**Rant** is a high-level language for templating and procedural generation.
-Write more expressive and dynamic templates, dialogue, stories, names, test data, and much more.
-
 ## Introducing Rant 4
 
 Rant 4 is a complete remake of the Rant language and runtime. It delivers a vastly improved user experience designed around the needs of everyone-- from writers and programmers, to anybody else!
 
-### Rant is intuitive
+### Intuitive syntax
 
 Rant is basically the opposite of Regex: 
-Instead of matching an input to a pattern, you generate a matching output from a pattern!
+just as a regular expression compares inputs to a pattern, Rant generates matching outputs from a pattern!
 
 It's easy to express your desired output as a set of branching possibilities.
 For example, consider a simple regex that matches on three strings:
@@ -40,13 +44,13 @@ The Rant equivalent to generate any matching string is quite similar:
 {foo|bar|baz} # Resolves randomly to "foo", "bar", or "baz"
 ```
 
-### Rant is concise
+### Concise operations
 
-Rant's standard library provides convenient utilities for many common use cases, cutting down on the amount of boilerplate you need to write. 
+Rant's standard library provides built-in utilities for many common use cases, cutting down on the amount of boilerplate you need to write.
 
 Even for more complex generation tasks, Rant has your back. With its powerful set of synchronization, branching, and generation tools, you can get results with far less code than conventional programming languages.
 
-### Rant is flexible
+### Flexible applications
 
 Rant does more than randomization: its behavior is infinitely configurable for a wide range of use cases ranging from natural language generation to simple code templating. What you do with it is up to you!
 
