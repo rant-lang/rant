@@ -1,5 +1,6 @@
 # 4.0.0-alpha.4
 
+* Changed: Runtime now uses `quickscope` crate for variable access
 * Added descope and explicit global modifiers to accessors
 * Added implicit local variable scope to program root
 * Added support for whitespace normalization via `[whitespace-fmt]`.
@@ -13,6 +14,8 @@
   * `[dec]` -> `[dig]`
   * `[hex]` -> `[digh]`
 * Changed `Rant::run()` to return a `RantValue` and added `Rant::run_into_string()` to explicitly return a `String` output
+* Removed `_GLOBALS` from stdlib
+* Updated `smartstring` to version 0.2.4
 
 # 4.0.0-alpha.3
 

@@ -1,28 +1,33 @@
 use std::{rc::Rc, ops::{DerefMut, Deref}};
 use std::{collections::VecDeque};
+use fnv::{FnvBuildHasher};
+use quickscope::ScopeMap;
 use crate::{lang::{Sequence, RST}, RantMap, RantValue, Rant};
 use crate::runtime::*;
 use super::{OutputBuffer, output::OutputWriter, Intent};
 
 type CallStackVector = SmallVec<[StackFrame; super::CALL_STACK_INLINE_COUNT]>;
 
-/// Thin wrapper around call stack vector
-pub struct CallStack(CallStackVector);
-
-// Allows direct immutable access to internal stack vector
-impl Deref for CallStack {
-  type Target = CallStackVector;
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
+/// Represents a call stack and its associated locals.
+pub struct CallStack {
+  frames: CallStackVector,
+  locals: ScopeMap<RantString, RantValue, FnvBuildHasher>,
 }
 
-// Allows direct mutable access to internal stack vector
-impl DerefMut for CallStack {
-  fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.0
-  }
-}
+// // Allows direct immutable access to internal stack vector
+// impl Deref for CallStack {
+//   type Target = CallStackVector;
+//   fn deref(&self) -> &Self::Target {
+//     &self.frames
+//   }
+// }
+
+// // Allows direct mutable access to internal stack vector
+// impl DerefMut for CallStack {
+//   fn deref_mut(&mut self) -> &mut Self::Target {
+//     &mut self.frames
+//   }
+// }
 
 impl Default for CallStack {
   fn default() -> Self {
@@ -32,24 +37,73 @@ impl Default for CallStack {
 
 impl CallStack {
   pub fn new() -> Self {
-    Self(Default::default())
+    Self {
+      frames: Default::default(),
+      locals: Default::default(),
+    }
+  }
+
+  #[inline]
+  pub fn is_empty(&self) -> bool {
+    self.frames.is_empty()
+  }
+
+  #[inline]
+  pub fn len(&self) -> usize {
+    self.frames.len()
+  }
+
+  #[inline]
+  pub fn pop_frame(&mut self) -> Option<StackFrame> {
+    if let Some(frame) = self.frames.pop() {
+      self.locals.pop_layer();
+      return Some(frame)
+    }
+    None
+  }
+
+  #[inline]
+  pub fn push_frame(&mut self, frame: StackFrame) {
+    self.locals.push_layer();
+    self.frames.push(frame);
+  }
+
+  #[inline]
+  pub fn top_mut(&mut self) -> Option<&mut StackFrame> {
+    self.frames.last_mut()
+  }
+
+  #[inline]
+  pub fn top(&self) -> Option<&StackFrame> {
+    self.frames.last()
+  }
+
+  pub fn gen_stack_trace(&self) -> String {
+    let mut trace = String::new();
+    for frame in self.frames.iter().rev() {
+      trace.push_str(format!("-> {}\n", frame).as_str());
+    }
+    trace
   }
 
   #[inline]
   pub fn set_local(&mut self, context: &Rant, id: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
     match access {
-      AccessPathKind::Local | AccessPathKind::Descope(_) => {
-        // Check locals
-        for frame in self.iter_mut().rev().skip(access.descope_count()) {
-          if frame.locals.raw_has_key(id) {
-            frame.locals.raw_set(id, val);
-            return Ok(())
-          }
+      AccessPathKind::Local => {
+        if let Some(var) = self.locals.get_mut(id) {
+          *var = val;
+          return Ok(())
+        }
+      },
+      AccessPathKind::Descope(n) => {
+        if let Some(var) = self.locals.get_parent_mut(id, n) {
+          *var = val;
+          return Ok(())
         }
       },
       // Skip locals completely if it's a global accessor
       AccessPathKind::ExplicitGlobal => {}
-    }    
+    }
 
     // Check globals
     let mut globals = context.globals.borrow_mut();
@@ -68,15 +122,17 @@ impl CallStack {
   #[inline]
   pub fn get_local(&self, context: &Rant, id: &str, access: AccessPathKind) -> RuntimeResult<RantValue> {
     match access {
-      AccessPathKind::Local | AccessPathKind::Descope(_) => {
-        // Check locals
-        for frame in self.iter().rev().skip(access.descope_count()) {
-          if let Some(val) = frame.locals.raw_get(id) {
-            return Ok(val.clone())
-          }
+      AccessPathKind::Local => {
+        if let Some(val) = self.locals.get(id) {
+          return Ok(val.clone())
         }
       },
-      AccessPathKind::ExplicitGlobal => {}
+      AccessPathKind::Descope(n) => {
+        if let Some(val) = self.locals.get_parent(id, n) {
+          return Ok(val.clone())
+        }
+      },
+      AccessPathKind::ExplicitGlobal => {},
     }    
 
     // Check globals
@@ -95,20 +151,15 @@ impl CallStack {
   pub fn def_local(&mut self, context: &Rant, id: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
     match access {
       AccessPathKind::Local => {
-        if let Some(frame) = self.last_mut() {
-          frame.locals.raw_set(id, val);
-          return Ok(())
-        }
+        self.locals.define(RantString::from(id), val);
+        return Ok(())
       },
       AccessPathKind::Descope(descope_count) => {
-        if let Some(frame) = self.iter_mut().rev().nth(descope_count) {
-          frame.locals.raw_set(id, val);
-          return Ok(())
-        }
+        self.locals.define_parent(RantString::from(id), val, descope_count);
+        return Ok(())
       },
       AccessPathKind::ExplicitGlobal => {}
-    }    
-
+    }
     
     context.globals.borrow_mut().raw_set(id, val);
     Ok(())
@@ -116,8 +167,6 @@ impl CallStack {
 }
 
 pub struct StackFrame {
-  /// Variables local to stack frame
-  locals: RantMap,
   /// Node sequence being executed by the frame
   sequence: Rc<Sequence>,
   /// Program Counter (as index in sequence) for the current frame
@@ -135,10 +184,9 @@ pub struct StackFrame {
 }
 
 impl StackFrame {
-  pub fn new(sequence: Rc<Sequence>, locals: RantMap, has_output: bool, prev_output: Option<&OutputWriter>) -> Self {
+  pub fn new(sequence: Rc<Sequence>, has_output: bool, prev_output: Option<&OutputWriter>) -> Self {
     Self {
       sequence,
-      locals,
       output: if has_output { Some(OutputWriter::new(prev_output)) } else { None },
       started: false,
       pc: 0,

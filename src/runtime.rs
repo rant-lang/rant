@@ -108,7 +108,7 @@ impl<'rant> VM<'rant> {
     let mut result = self.run_inner();
     // On error, generate stack trace
     if let Err(err) = result.as_mut() {
-      err.stack_trace = Some(self.stack_trace());
+      err.stack_trace = Some(self.call_stack.gen_stack_trace());
     }
     result
   }
@@ -118,7 +118,7 @@ impl<'rant> VM<'rant> {
   fn run_inner(&mut self) -> RuntimeResult<RantValue> {
     // Push the program's root sequence onto the call stack
     // This doesn't need an overflow check because it will *always* succeed
-    self.push_frame_unchecked(self.program.root.clone(), true, None);
+    self.push_frame_unchecked(self.program.root.clone(), true);
     
     // Run whatever is on the top of the call stack
     'from_the_top: 
@@ -150,7 +150,7 @@ impl<'rant> VM<'rant> {
               } else {
                 self.cur_frame_mut().push_intent_front(Intent::BuildDynamicGetter { path, dynamic_key_count, pending_exprs, override_print });
               }
-              self.push_frame(Rc::clone(&key_expr), true, None)?;
+              self.push_frame(Rc::clone(&key_expr), true)?;
             } else {
               self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print });
             }
@@ -164,7 +164,7 @@ impl<'rant> VM<'rant> {
             if eval_count < arg_exprs.len() {
               let arg_expr = Rc::clone(arg_exprs.get(arg_exprs.len() - eval_count - 1).unwrap());
               self.cur_frame_mut().push_intent_front(Intent::Invoke { arg_exprs, eval_count: eval_count + 1, flag });
-              self.push_frame(arg_expr, true, None)?;
+              self.push_frame(arg_expr, true)?;
               continue 'from_the_top;
             } else {
               // Pop the evaluated args off the stack
@@ -211,10 +211,10 @@ impl<'rant> VM<'rant> {
               if pending_exprs.is_empty() {
                 // Set value once this frame is active again
                 self.cur_frame_mut().push_intent_front(Intent::SetValue { path, auto_def, expr_count });
-                self.push_frame(Rc::clone(&key_expr), true, None)?;
+                self.push_frame(Rc::clone(&key_expr), true)?;
               } else {
                 self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, auto_def, expr_count, pending_exprs, val_source });
-                self.push_frame(Rc::clone(&key_expr), true, None)?;
+                self.push_frame(Rc::clone(&key_expr), true)?;
                 continue 'from_the_top;
               }
               
@@ -225,7 +225,7 @@ impl<'rant> VM<'rant> {
             // Prepare setter value
             match val_source {
               SetterValueSource::FromExpression(expr) => {
-                self.push_frame(Rc::clone(&expr), true, None)?;
+                self.push_frame(Rc::clone(&expr), true)?;
               }
               SetterValueSource::FromValue(val) => {
                 self.push_val(val)?;
@@ -249,7 +249,7 @@ impl<'rant> VM<'rant> {
               // Continue list creation
               self.cur_frame_mut().push_intent_front(Intent::BuildList { init: Rc::clone(&init), index: index + 1, list });
               let val_expr = &init[index];
-              self.push_frame(Rc::clone(val_expr), true, None)?;
+              self.push_frame(Rc::clone(val_expr), true)?;
               continue 'from_the_top;
             }
           },
@@ -275,10 +275,10 @@ impl<'rant> VM<'rant> {
               let (key_expr, val_expr) = &init[pair_index];
               if let MapKeyExpr::Dynamic(key_expr) = key_expr {
                 // Push dynamic key expression onto call stack
-                self.push_frame(Rc::clone(&key_expr), true, None)?;
+                self.push_frame(Rc::clone(&key_expr), true)?;
               }
               // Push value expression onto call stack
-              self.push_frame(Rc::clone(val_expr), true, None)?;
+              self.push_frame(Rc::clone(val_expr), true)?;
               continue 'from_the_top;
             }
           },
@@ -314,7 +314,7 @@ impl<'rant> VM<'rant> {
             if let Some(val_expr) = val_expr {
               // If a value is present, it needs to be evaluated first
               self.cur_frame_mut().push_intent_front(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind });
-              self.push_frame(Rc::clone(val_expr), true, None)?;
+              self.push_frame(Rc::clone(val_expr), true)?;
               continue 'from_the_top;
             } else {
               // If there's no assignment, just set it to <>
@@ -350,7 +350,7 @@ impl<'rant> VM<'rant> {
             if exprs.is_empty() {
               // Setter is static, so run it directly
               self.cur_frame_mut().push_intent_front(Intent::SetValue { path: Rc::clone(&path), auto_def: false, expr_count: 0 });
-              self.push_frame(Rc::clone(&val_expr), true, None)?;
+              self.push_frame(Rc::clone(&val_expr), true)?;
             } else {
               // Build dynamic keys before running setter
               self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter {
@@ -429,7 +429,7 @@ impl<'rant> VM<'rant> {
             });
 
             // Push function expression onto stack
-            self.push_frame(Rc::clone(expr), true, None)?;
+            self.push_frame(Rc::clone(expr), true)?;
 
             continue 'from_the_top;
           },
@@ -518,21 +518,27 @@ impl<'rant> VM<'rant> {
         // TODO: Honor sinks on native function calls
         foreign_func(self, args)?;
       },
-      RantFunctionInterface::User(user_func) => {
-        // Convert the args into a locals map
-        let mut func_locals = RantMap::new();
-        let mut args = args.drain(..);
-        for param in func.params.iter() {
-          func_locals.raw_set(param.name.as_str(), args.next().unwrap_or(RantValue::Empty));
-        }
+      RantFunctionInterface::User(user_func) => {        
         let is_printing = !flag.is_sink();
 
         // Tell frame to print output if it's available
         if is_printing {
           self.cur_frame_mut().push_intent_front(Intent::PrintValue);
         }
+
         // Push the function onto the call stack
-        self.push_frame(Rc::clone(user_func), is_printing, Some(func_locals))?;
+        self.push_frame(Rc::clone(user_func), is_printing)?;
+
+        // Pass the args to the function scope
+        let mut args = args.drain(..);
+        for param in func.params.iter() {
+          self.call_stack.def_local(
+            self.engine, 
+            param.name.as_str(), 
+            AccessPathKind::Local, 
+            args.next().unwrap_or(RantValue::Empty)
+          )?;
+        }
       },
     }
     Ok(())
@@ -728,7 +734,7 @@ impl<'rant> VM<'rant> {
             self.cur_frame_mut().push_intent_front(Intent::PrintValue);
           }
           // Push the next element
-          self.push_frame(Rc::clone(&elem_seq), is_printing, Default::default())?;
+          self.push_frame(Rc::clone(&elem_seq), is_printing)?;
         },
         BlockAction::Separator(separator) => {
           match separator {
@@ -802,7 +808,7 @@ impl<'rant> VM<'rant> {
 
   #[inline(always)]
   pub(crate) fn pop_frame(&mut self) -> RuntimeResult<StackFrame> {
-    if let Some(frame) = self.call_stack.pop() {
+    if let Some(frame) = self.call_stack.pop_frame() {
       Ok(frame)
     } else {
       runtime_error!(RuntimeErrorType::StackUnderflow, "call stack has underflowed");
@@ -810,12 +816,11 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  fn push_frame_unchecked(&mut self, callee: Rc<Sequence>, use_output: bool, locals: Option<RantMap>) {
+  fn push_frame_unchecked(&mut self, callee: Rc<Sequence>, use_output: bool) {
     let mut frame = StackFrame::new(
       callee, 
-      locals.unwrap_or_default(), 
       use_output, 
-      self.call_stack.last().map(|last| last.output()).flatten()
+      self.call_stack.top().map(|last| last.output()).flatten()
     );
 
     if self.engine.debug_mode {
@@ -824,21 +829,20 @@ impl<'rant> VM<'rant> {
       }
     }
 
-    self.call_stack.push(frame);
+    self.call_stack.push_frame(frame);
   }
   
   #[inline(always)]
-  pub(crate) fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool, locals: Option<RantMap>) -> RuntimeResult<()> {
+  pub(crate) fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool) -> RuntimeResult<()> {
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
     }
     
     let mut frame = StackFrame::new(
-      callee, 
-      locals.unwrap_or_default(), 
+      callee,
       use_output,
-      self.call_stack.last().map(|last| last.output()).flatten()
+      self.call_stack.top().map(|last| last.output()).flatten()
     );
 
     if self.engine.debug_mode {
@@ -847,18 +851,18 @@ impl<'rant> VM<'rant> {
       }
     }
 
-    self.call_stack.push(frame);
+    self.call_stack.push_frame(frame);
     Ok(())
   }
 
   #[inline(always)]
   pub fn cur_frame_mut(&mut self) -> &mut StackFrame {
-    self.call_stack.last_mut().unwrap()
+    self.call_stack.top_mut().unwrap()
   }
 
   #[inline(always)]
   pub fn cur_frame(&self) -> &StackFrame {
-    self.call_stack.last().unwrap()
+    self.call_stack.top().unwrap()
   }
 
   #[inline(always)]
@@ -874,14 +878,6 @@ impl<'rant> VM<'rant> {
   #[inline(always)]
   pub fn resolver_mut(&mut self) -> &mut Resolver {
     &mut self.resolver
-  }
-
-  pub fn stack_trace(&self) -> String {
-    let mut trace = String::new();
-    for frame in self.call_stack.iter().rev() {
-      trace.push_str(format!("-> {}\n", frame).as_str());
-    }
-    trace
   }
 }
 

@@ -83,8 +83,8 @@ impl Rant {
     };
     if options.use_stdlib {
       rant.load_stdlib();
+      rant.set_default_globals();
     }
-    rant.set_default_globals();
     rant
   }
 
@@ -97,9 +97,7 @@ impl Rant {
   fn set_default_globals(&mut self) {
     let mut globals = self.globals.borrow_mut();
     // Add standard variables
-    // TODO: Make these read-only
     globals.raw_set("RANT_VERSION", RantValue::String(RANT_VERSION.to_owned()));
-    globals.raw_set("_GLOBALS", RantValue::Map(Rc::clone(&self.globals)));
   }
 }
 
