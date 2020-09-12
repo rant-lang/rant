@@ -5,6 +5,7 @@ use std::{rc::Rc, ops::Range, collections::HashSet};
 use crate::{RantString, lang::*};
 use line_col::LineColLookup;
 
+
 type ParseResult<T> = Result<T, ()>;
 
 enum SequenceParseMode {
@@ -913,7 +914,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
   
   #[inline]
-  fn parse_access_kind(&mut self) -> AccessPathKind {    
+  fn parse_access_path_kind(&mut self) -> AccessPathKind {    
     if let Some((token, _span)) = self.reader.take_where(
       |t| matches!(t, Some((RantToken::Slash, _)) | Some((RantToken::Caret, _))
     )) {
@@ -941,13 +942,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
   // TODO: Anonymous getters/setters
   /// Parses an accessor.
+  #[inline]
   fn parse_access_path(&mut self) -> ParseResult<AccessPath> {
     self.reader.skip_ws();
     let mut idparts = vec![];
     let preceding_span = self.reader.last_token_span();
 
     // Check for global/descope specifiers
-    let access_kind = self.parse_access_kind();
+    let access_kind = self.parse_access_path_kind();
 
     let first_part = self.reader.next_solid();
     
@@ -1145,7 +1147,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     // Check if it's a definition. If not, it's a getter or setter
     if is_def {
       // Check for accessor modifiers
-      let access_kind = self.parse_access_kind();
+      let access_kind = self.parse_access_path_kind();
       self.reader.skip_ws();
       // Read name of variable we're defining
       let var_name = self.parse_ident()?;

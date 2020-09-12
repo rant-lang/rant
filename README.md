@@ -11,8 +11,7 @@
 **Rant** is a high-level language for templating and procedural generation.
 Write more expressive and dynamic templates, dialogue, stories, names, test data, and much more.
 
-***
-### IMPORTANT:
+## WARNING:
 
 **This project is in early alpha. Expect to see broken/missing features.**
 
