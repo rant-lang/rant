@@ -1,3 +1,8 @@
+# 4.0.0-alpha.5
+
+* Added support for multi-part accessors
+* Upgraded `quickscope` to 0.1.2
+
 # 4.0.0-alpha.4
 
 * Changed: Runtime now uses `quickscope` crate for variable access
@@ -15,7 +20,7 @@
   * `[dec]` -> `[dig]`
   * `[hex]` -> `[digh]`
 * Removed `_GLOBALS` from stdlib
-* Updated `smartstring` to version 0.2.4
+* Upgraded `smartstring` to version 0.2.4
 
 # 4.0.0-alpha.3
 

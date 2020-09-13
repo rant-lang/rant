@@ -9,7 +9,9 @@
 
 
 **Rant** is a high-level language for templating and procedural generation.
-Write more expressive and dynamic templates, dialogue, stories, names, test data, and much more.
+Easily create dynamic templates, dialogue, stories, names, test data, and much more.
+
+***
 
 ## WARNING:
 
@@ -27,17 +29,16 @@ Rant 4 is a complete remake of the Rant language and runtime. It delivers a vast
 
 ### Intuitive syntax
 
-Rant is basically the opposite of Regex: 
+Think of Rant as the opposite of Regex: 
 just as a regular expression compares inputs to a pattern, Rant generates matching outputs from a pattern!
 
-It's easy to express your desired output as a set of branching possibilities.
-For example, consider a simple regex that matches on three strings:
+Consider this regex:
 
 ```regex
 (foo|bar|baz)
 ```
 
-The Rant equivalent to generate any matching string is quite similar:
+The Rant equivalent is nearly identical:
 
 ```rant
 {foo|bar|baz} # Resolves randomly to "foo", "bar", or "baz"

@@ -1,6 +1,6 @@
 [package]
 name = "rant"
-version = "4.0.0-alpha.4"
+version = "4.0.0-alpha.5"
 authors = ["Nicholas Fleck <TheBerkin@users.noreply.github.com>"]
 edition = "2018"
 homepage = "https://rant-lang.org"
@@ -34,7 +34,7 @@ cast = "0.2.3"
 fnv = "1.0.7"
 line-col = "0.2.1"
 logos = "0.11.4"
-quickscope = "0.1.1"
+quickscope = "0.1.2"
 rand = "0.7.3"
 rand_xoshiro = "0.4.0"
 smallvec = "1.4.2"

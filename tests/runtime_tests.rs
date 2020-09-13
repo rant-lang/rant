@@ -131,3 +131,23 @@ fn override_shadowed_local_with_descope() {
 fn override_shadowed_locals_with_multi_descope() {
   assert_matches!(run_rant!(r#"<$test=foo>{<$test=bar>{<$test=baz><^^test> <^test> <test>}}"#), Ok("foo bar baz"))
 }
+
+#[test]
+fn multi_accessor_empty_defs() {
+  assert_matches!(run_rant!(r#"<$foo; $bar> '[type:<foo>] '[type:<bar>]"#), Ok("empty empty"));
+}
+
+#[test]
+fn multi_accessor_defs() {
+  assert_matches!(run_rant!(r#"<$foo=8; $bar=2; $baz=[sub:<foo>;<bar>]; baz>"#), Ok("6"));
+}
+
+#[test]
+fn multi_accessor_reassign() {
+  assert_matches!(run_rant!(r#"<$foo=bar; foo=baz; foo>"#), Ok("baz"));
+}
+
+#[test]
+fn multi_accessor_delim_term() {
+  assert_matches!(run_rant!(r#"<$foo=8; $bar=2; $baz=[add:<foo>;<bar>]; baz;>"#), Ok("10"));
+}
