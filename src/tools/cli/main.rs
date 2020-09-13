@@ -87,6 +87,7 @@ fn main() {
     use_stdlib: true,
     debug_mode: !args.no_debug,
     seed,
+    .. Default::default()
   });
   
   // Run inline code from cmdline args
