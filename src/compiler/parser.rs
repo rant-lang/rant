@@ -81,17 +81,6 @@ enum SequenceEndType {
   CollectionInitDelim,
 }
 
-/// Checks if an identifier (variable name, arg name, static map key) is valid
-fn is_valid_ident(name: &str) -> bool {
-  if name.is_empty() { return false }
-  let mut has_non_digit = false;
-  let is_valid_chars = name.chars().all(|c| {
-    has_non_digit |= !c.is_ascii_digit();
-    c.is_alphanumeric() || matches!(c, '_' | '-')
-  });
-  has_non_digit && is_valid_chars
-}
-
 /// Makes a range that encompasses both input ranges.
 #[inline]
 fn super_range(a: &Range<usize>, b: &Range<usize>) -> Range<usize> {
@@ -125,13 +114,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
 impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   /// Top-level parsing function invoked by the compiler.
-  pub fn parse(&mut self) -> Result<RST, ()> {
+  pub fn parse(&mut self) -> Result<Rst, ()> {
     let result = self.parse_sequence(SequenceParseMode::TopLevel);
     match result {
       // Err if parsing "succeeded" but there are soft syntax errors
       Ok(..) if self.has_errors => Err(()),
       // Ok if parsing succeeded and there are no syntax errors
-      Ok((seq, ..)) => Ok(RST::Sequence(Rc::new(seq))),
+      Ok((seq, ..)) => Ok(Rst::Sequence(Rc::new(seq))),
       // Err on hard syntax error
       Err(()) => Err(())
     }
@@ -164,7 +153,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         () => {
           if debug {
             let (line, col) = self.lookup.get(span.start);
-            sequence.push(Rc::new(RST::DebugInfoUpdateOuter(DebugInfo::Location { line, col })));
+            sequence.push(Rc::new(Rst::DebugCursor(DebugInfo::Location { line, col })));
           }
         }
       }
@@ -215,7 +204,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       macro_rules! whitespace {
         (allow) => {
           if let Some(ws) = pending_whitespace.take() {
-            seq_add!(RST::Whitespace(ws));
+            seq_add!(Rst::Whitespace(ws));
           }
         };
         (queue $ws:expr) => {
@@ -280,7 +269,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           }
           
-          seq_add!(RST::BlockValue(Rc::new(block)));
+          seq_add!(Rst::BlockValue(Rc::new(block)));
         },
         
         // Block start
@@ -309,7 +298,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           }
           
-          seq_add!(RST::Block(block));               
+          seq_add!(Rst::Block(block));               
         },
         
         // Block element delimiter (when in block parsing mode)
@@ -356,7 +345,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             },
             _ => {
               self.syntax_error(Problem::ExpectedToken("(".to_owned()), &self.reader.last_token_span());
-              RST::EmptyVal
+              Rst::EmptyVal
             },
           }
         }),
@@ -382,14 +371,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           
           // Handle hint/sink behavior
           match func_access {
-            RST::FuncCall(FunctionCall { flag, ..}) => {
+            Rst::FuncCall(FunctionCall { flag, ..}) => {
               // If the call is hinted, allow whitespace around it
               if matches!(flag, PrintFlag::Hint) {
                 whitespace!(allow);
               }
             },
             // Definitions are implicitly sinked and ignore surrounding whitespace
-            RST::FuncDef(_) => {
+            Rst::FuncDef(_) => {
               whitespace!(ignore both);
             },
             // Do nothing if it's an unsupported node type, e.g. NOP
@@ -413,11 +402,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let accessors = self.parse_accessor()?;
           for accessor in accessors {
             match accessor {
-              RST::VarGet(..) => {
+              Rst::VarGet(..) => {
                 is_seq_printing = true;
                 whitespace!(allow);
               },
-              RST::VarSet(..) | RST::VarDef(..) => {
+              Rst::VarSet(..) | Rst::VarDef(..) => {
                 // whitespace!(ignore both);
               },
               _ => unreachable!()
@@ -440,7 +429,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           whitespace!(allow);
           is_seq_printing = true;
           let frag = self.reader.last_token_string();
-          RST::Fragment(frag)
+          Rst::Fragment(frag)
         }),
         
         // Fragment
@@ -448,7 +437,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           whitespace!(allow);
           is_seq_printing = true;
           let frag = self.reader.last_token_string();
-          RST::Fragment(frag)
+          Rst::Fragment(frag)
         }),
         
         // Whitespace (only if sequence isn't empty)
@@ -467,54 +456,54 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           is_seq_printing = true;
           let mut s = RantString::new();
           s.push(ch);
-          RST::Fragment(s)
+          Rst::Fragment(s)
         }),
         
         // Integers
         RantToken::Integer(n) => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
-          RST::Integer(n)
+          Rst::Integer(n)
         }),
         
         // Floats
         RantToken::Float(n) => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
-          RST::Float(n)
+          Rst::Float(n)
         }),
         
         // True
         RantToken::True => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
-          RST::Boolean(true)
+          Rst::Boolean(true)
         }),
         
         // False
         RantToken::False => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
-          RST::Boolean(false)
+          Rst::Boolean(false)
         }),
         
         // None
         RantToken::NoneValue => no_flags!(on {
-          RST::EmptyVal
+          Rst::EmptyVal
         }),
         
         // Verbatim string literals
         RantToken::StringLiteral(s) => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
-          RST::Fragment(s)
+          Rst::Fragment(s)
         }),
         
         // Colon can be either fragment or argument separator.
         RantToken::Colon => no_flags!({
           match mode {
             SequenceParseMode::AnonFunctionExpr => return Ok((sequence.with_name_str("anonymous function expression"), SequenceEndType::AnonFunctionExprToArgs, true)),
-            _ => seq_add!(RST::Fragment(RantString::from(":")))
+            _ => seq_add!(Rst::Fragment(RantString::from(":")))
           }
         }),
         
@@ -528,7 +517,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             // Variable assignment expression
             SequenceParseMode::VariableAssignment => return Ok((sequence.with_name_str("variable assignment"), SequenceEndType::VariableAssignDelim, true)),
             // If we're anywhere else, just print the semicolon like normal text
-            _ => seq_add!(RST::Fragment(RantString::from(";")))
+            _ => seq_add!(Rst::Fragment(RantString::from(";")))
           }
         }),
         
@@ -567,14 +556,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
   
   /// Parses a list/map initializer.
-  fn parse_collection_initializer(&mut self, kind: CollectionInitKind, start_span: &Range<usize>) -> ParseResult<RST> {
+  fn parse_collection_initializer(&mut self, kind: CollectionInitKind, start_span: &Range<usize>) -> ParseResult<Rst> {
     match kind {
       CollectionInitKind::List => {
         self.reader.skip_ws();
         
         // Exit early on empty list
         if self.reader.eat_where(|token| matches!(token, Some((RantToken::RightParen, ..)))) {
-          return Ok(RST::ListInit(Rc::new(vec![])))
+          return Ok(Rst::ListInit(Rc::new(vec![])))
         }
         
         let mut sequences = vec![];
@@ -599,7 +588,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             _ => unreachable!()
           }
         }
-        Ok(RST::ListInit(Rc::new(sequences)))
+        Ok(Rst::ListInit(Rc::new(sequences)))
       },
       CollectionInitKind::Map => {
         let mut pairs = vec![];
@@ -660,7 +649,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }
         }
         
-        Ok(RST::MapInit(Rc::new(pairs)))
+        Ok(Rst::MapInit(Rc::new(pairs)))
       },
     }
     
@@ -793,7 +782,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
     
   /// Parses a function definition, anonymous function, or function call.
-  fn parse_func_access(&mut self, flag: PrintFlag) -> ParseResult<RST> {
+  fn parse_func_access(&mut self, flag: PrintFlag) -> ParseResult<Rst> {
     let start_span = self.reader.last_token_span();
     self.reader.skip_ws();
     // Check if we're defining a function (with [$ ...]) or creating a closure (with [? ...])
@@ -811,7 +800,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           self.reader.skip_ws();          
           let body = Rc::new(self.parse_func_body()?.with_name_str(format!("[{}]", func_id).as_str()));
           
-          Ok(RST::FuncDef(FunctionDef {
+          Ok(Rst::FuncDef(FunctionDef {
             id: Rc::new(func_id),
             params: Rc::new(params),
             body,
@@ -827,7 +816,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // TODO: Handle captured variables in closure bodies
           let body = Rc::new(self.parse_func_body()?.with_name_str("closure"));
           
-          Ok(RST::Closure(ClosureExpr {
+          Ok(Rst::Closure(ClosureExpr {
             capture_vars: Rc::new(vec![]),
             expr: body,
             params: Rc::new(params),
@@ -872,7 +861,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           flag
         };
         
-        Ok(RST::AnonFuncCall(afcall))
+        Ok(Rst::AnonFuncCall(afcall))
       } else {
         // Named function call
         let func_name = self.parse_access_path()?;
@@ -910,7 +899,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             flag
           };
           
-          Ok(RST::FuncCall(fcall))
+          Ok(Rst::FuncCall(fcall))
         } else {
           // Found EOF instead of end of function call, emit hard error
           self.syntax_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
@@ -1146,7 +1135,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
     
   /// Parses one or more accessors (getter/setter/definition).
-  fn parse_accessor(&mut self) -> ParseResult<Vec<RST>> {
+  fn parse_accessor(&mut self) -> ParseResult<Vec<Rst>> {
     let mut accessors = vec![];
     
     'read: loop {
@@ -1172,19 +1161,19 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           match token {
             // Empty definition
             RantToken::RightAngle => {
-              accessors.push(RST::VarDef(var_name, access_kind, None));
+              accessors.push(Rst::VarDef(var_name, access_kind, None));
               break 'read
             },
             // Accessor delimiter
             RantToken::Semi => {
-              accessors.push(RST::VarDef(var_name, access_kind, None));
+              accessors.push(Rst::VarDef(var_name, access_kind, None));
               continue 'read;
             },
             // Definition and assignment
             RantToken::Equals => {
               self.reader.skip_ws();
               let (var_assign_expr, end_type, ..) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
-              accessors.push(RST::VarDef(var_name, access_kind, Some(Rc::new(var_assign_expr))));
+              accessors.push(Rst::VarDef(var_name, access_kind, Some(Rc::new(var_assign_expr))));
               match end_type {
                 SequenceEndType::VariableAssignDelim => {
                   continue 'read
@@ -1217,19 +1206,19 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           match token {
             // If we hit a '>' here, it's a getter
             RantToken::RightAngle => {
-              accessors.push(RST::VarGet(Rc::new(var_path)));
+              accessors.push(Rst::VarGet(Rc::new(var_path)));
               break 'read;
             },
             // If we hit a ';' here, it's a getter with a continuation
             RantToken::Semi => {
-              accessors.push(RST::VarGet(Rc::new(var_path)));
+              accessors.push(Rst::VarGet(Rc::new(var_path)));
               continue 'read;
             },
             // If we hit a '=' here, it's a setter
             RantToken::Equals => {
               self.reader.skip_ws();
               let (var_assign_rhs, end_type, _) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
-              accessors.push(RST::VarSet(Rc::new(var_path), Rc::new(var_assign_rhs)));
+              accessors.push(Rst::VarSet(Rc::new(var_path), Rc::new(var_assign_rhs)));
               match end_type {
                 // Accessor was terminated
                 SequenceEndType::VariableAccessEnd => {                  

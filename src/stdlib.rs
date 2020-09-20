@@ -772,7 +772,15 @@ fn get(vm: &mut VM, key: String) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn load_stdlib(globals: &mut RantMap)
+fn require(vm: &mut VM, module_name: String) -> RantStdResult {
+  // TODO: Module caching
+  let module = vm.context_mut().try_load_module(&module_name).into_runtime_result()?;
+  vm.cur_frame_mut().push_intent_front(Intent::LoadModule { module_name });
+  vm.push_frame(Rc::clone(&module.root), true)?;
+  Ok(())
+}
+
+pub(crate) fn load_stdlib(globals: &mut RantMap, enable_require: bool)
 {
   macro_rules! load_func {
     ($fname:ident) => {{
@@ -842,4 +850,9 @@ pub(crate) fn load_stdlib(globals: &mut RantMap)
     // Dynamic Variable Access functions
     get
   );
+
+  // Load [require] function if requested
+  if enable_require {
+    load_func!(require);
+  }
 }

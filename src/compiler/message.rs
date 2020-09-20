@@ -49,6 +49,15 @@ pub enum Severity {
   Error
 }
 
+impl Display for Severity {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", match self {
+      Severity::Warning => "warning",
+      Severity::Error => "error",
+    })
+  }
+}
+
 /// Describes the location and nature of a compiler message.
 #[derive(Debug)]
 pub struct CompilerMessage {
@@ -71,6 +80,7 @@ impl CompilerMessage {
     self.pos.clone()
   }
 
+  /// Gets the severity of the message.
   pub fn severity(&self) -> Severity {
     self.severity
   }

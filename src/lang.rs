@@ -54,6 +54,17 @@ impl Display for Identifier {
   }
 }
 
+/// Checks if an identifier (variable name, arg name, static map key) is valid
+pub(crate) fn is_valid_ident(name: &str) -> bool {
+  if name.is_empty() { return false }
+  let mut has_non_digit = false;
+  let is_valid_chars = name.chars().all(|c| {
+    has_non_digit |= !c.is_ascii_digit();
+    c.is_alphanumeric() || matches!(c, '_' | '-')
+  });
+  has_non_digit && is_valid_chars
+}
+
 /// Component in an accessor path.
 #[derive(Debug)]
 pub enum AccessPathComponent {
@@ -166,19 +177,19 @@ impl Display for AccessPath {
 /// A series of Rant program elements.
 #[derive(Debug)]
 pub struct Sequence {
-  elements: Vec<Rc<RST>>,
+  elements: Vec<Rc<Rst>>,
   name: Option<RantString>,
 }
 
 impl Sequence {
-  pub fn new(seq: Vec<Rc<RST>>) -> Self {
+  pub fn new(seq: Vec<Rc<Rst>>) -> Self {
     Self {
       elements: seq,
       name: None,
     }
   }
   
-  pub fn one(rst: RST) -> Self {
+  pub fn one(rst: Rst) -> Self {
     Self {
       elements: vec![Rc::new(rst)],
       name: None,
@@ -207,7 +218,7 @@ impl Sequence {
 }
 
 impl Deref for Sequence {
-  type Target = Vec<Rc<RST>>;
+  type Target = Vec<Rc<Rst>>;
   fn deref(&self) -> &Self::Target {
     &self.elements
   }
@@ -348,7 +359,7 @@ pub enum MapKeyExpr {
 
 /// Rant Syntax Tree
 #[derive(Debug)]
-pub enum RST {
+pub enum Rst {
   /// No Operation
   Nop,
   /// Program sequence
@@ -388,52 +399,50 @@ pub enum RST {
   /// Empty value
   EmptyVal,
   /// Provides debug information about the next sequence element
-  DebugInfoUpdateOuter(DebugInfo),
-  /// Provides debug information about the containing element
-  DebugInfoUpdateInner(DebugInfo),
+  DebugCursor(DebugInfo),
 }
 
-impl RST {
+impl Rst {
   pub fn display_name(&self) -> &'static str {
     match self {
-      RST::Sequence(_) =>                     "sequence",
-      RST::Block(..) =>                       "block",
-      RST::ListInit(_) =>                     "list",
-      RST::MapInit(_) =>                      "map",
-      RST::Closure(_) =>                      "closure",
-      RST::AnonFuncCall(_) =>                 "anonymous function call",
-      RST::FuncCall(_) =>                     "function call",
-      RST::FuncDef(_) =>                      "function definition",
-      RST::Fragment(_) =>                     "fragment",
-      RST::Whitespace(_) =>                   "whitespace",
-      RST::Integer(_) =>                      "integer",
-      RST::Float(_) =>                        "float",
-      RST::Boolean(_) =>                      "boolean",
-      RST::EmptyVal =>                        "empty",
-      RST::Nop =>                             "nothing",
-      RST::VarDef(..) =>                      "variable definition",
-      RST::VarGet(_) =>                       "variable",
-      RST::VarSet(..) =>                      "variable assignment",
+      Rst::Sequence(_) =>                     "sequence",
+      Rst::Block(..) =>                       "block",
+      Rst::ListInit(_) =>                     "list",
+      Rst::MapInit(_) =>                      "map",
+      Rst::Closure(_) =>                      "closure",
+      Rst::AnonFuncCall(_) =>                 "anonymous function call",
+      Rst::FuncCall(_) =>                     "function call",
+      Rst::FuncDef(_) =>                      "function definition",
+      Rst::Fragment(_) =>                     "fragment",
+      Rst::Whitespace(_) =>                   "whitespace",
+      Rst::Integer(_) =>                      "integer",
+      Rst::Float(_) =>                        "float",
+      Rst::Boolean(_) =>                      "boolean",
+      Rst::EmptyVal =>                        "empty",
+      Rst::Nop =>                             "nothing",
+      Rst::VarDef(..) =>                      "variable definition",
+      Rst::VarGet(_) =>                       "variable",
+      Rst::VarSet(..) =>                      "variable assignment",
       _ =>                                    "???"
     }
   }
   
   pub fn is_printing(&self) -> bool {
     matches!(self, 
-      RST::Block(Block { flag: PrintFlag::Hint, .. }) |
-      RST::AnonFuncCall(AnonFunctionCall { flag: PrintFlag::Hint, .. }) |
-      RST::FuncCall(FunctionCall { flag: PrintFlag::Hint, .. }) |
-      RST::Integer(_) |
-      RST::Float(_) |
-      RST::Boolean(_) |
-      RST::Fragment(_) |
-      RST::Whitespace(_) |
-      RST::VarGet(_)
+      Rst::Block(Block { flag: PrintFlag::Hint, .. }) |
+      Rst::AnonFuncCall(AnonFunctionCall { flag: PrintFlag::Hint, .. }) |
+      Rst::FuncCall(FunctionCall { flag: PrintFlag::Hint, .. }) |
+      Rst::Integer(_) |
+      Rst::Float(_) |
+      Rst::Boolean(_) |
+      Rst::Fragment(_) |
+      Rst::Whitespace(_) |
+      Rst::VarGet(_)
     )
   }
 }
 
-impl Display for RST {
+impl Display for Rst {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}", self.display_name())
   }

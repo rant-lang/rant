@@ -3,6 +3,9 @@
 * Added `Rant::with_random_seed()` constructor
 * Added support for multi-part accessors
 * Upgraded `quickscope` to 0.1.2
+* Added support for modules
+* Added new stdlib functions:
+  * `[require]`
 
 # 4.0.0-alpha.4
 

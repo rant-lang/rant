@@ -87,6 +87,8 @@ pub enum Intent {
   BuildList { init: Rc<Vec<Rc<Sequence>>>, index: usize, list: RantList },
   /// Pop value and optional key from stack and add them to a map. If `pair_index` is out of range, print the map.
   BuildMap { init: Rc<Vec<(MapKeyExpr, Rc<Sequence>)>>, pair_index: usize, map: RantMap },
+  /// Pops a map off the stack and loads it as a module with the specified name.
+  LoadModule { module_name: String },
 }
 
 #[derive(Debug)]
@@ -282,35 +284,39 @@ impl<'rant> VM<'rant> {
               continue 'from_the_top;
             }
           },
+          Intent::LoadModule { module_name } => {
+            let module = self.pop_val()?;
+            self.def_var(&module_name, AccessPathKind::Local, module)?;
+          },
         }
       }
       
       // Run frame's sequence elements in order
       while let Some(rst) = &self.cur_frame_mut().seq_next() {
         match Rc::deref(rst) {
-          RST::DebugInfoUpdateOuter(info) => {
+          Rst::DebugCursor(info) => {
             self.cur_frame_mut().set_debug_info(info);
           },
-          RST::Fragment(frag) => self.cur_frame_mut().write_frag(frag),
-          RST::Whitespace(ws) => self.cur_frame_mut().write_ws(ws),
-          RST::Integer(n) => self.cur_frame_mut().write_value(RantValue::Integer(*n)),
-          RST::Float(n) => self.cur_frame_mut().write_value(RantValue::Float(*n)),
-          RST::EmptyVal => self.cur_frame_mut().write_value(RantValue::Empty),
-          RST::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
-          RST::BlockValue(block) => self.cur_frame_mut().write_value(RantValue::Block(Rc::clone(block))),
-          RST::ListInit(elements) => {
+          Rst::Fragment(frag) => self.cur_frame_mut().write_frag(frag),
+          Rst::Whitespace(ws) => self.cur_frame_mut().write_ws(ws),
+          Rst::Integer(n) => self.cur_frame_mut().write_value(RantValue::Integer(*n)),
+          Rst::Float(n) => self.cur_frame_mut().write_value(RantValue::Float(*n)),
+          Rst::EmptyVal => self.cur_frame_mut().write_value(RantValue::Empty),
+          Rst::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
+          Rst::BlockValue(block) => self.cur_frame_mut().write_value(RantValue::Block(Rc::clone(block))),
+          Rst::ListInit(elements) => {
             self.cur_frame_mut().push_intent_front(Intent::BuildList { init: Rc::clone(elements), index: 0, list: RantList::new() });
             continue 'from_the_top;
           },
-          RST::MapInit(elements) => {
+          Rst::MapInit(elements) => {
             self.cur_frame_mut().push_intent_front(Intent::BuildMap { init: Rc::clone(elements), pair_index: 0, map: RantMap::new() });
             continue 'from_the_top;
           },
-          RST::Block(block) => {
+          Rst::Block(block) => {
             self.push_block(block, block.flag)?;
             continue 'from_the_top;
           },
-          RST::VarDef(vname, access_kind, val_expr) => {
+          Rst::VarDef(vname, access_kind, val_expr) => {
             if let Some(val_expr) = val_expr {
               // If a value is present, it needs to be evaluated first
               self.cur_frame_mut().push_intent_front(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind });
@@ -321,7 +327,7 @@ impl<'rant> VM<'rant> {
               self.def_var(vname.as_str(), *access_kind, RantValue::Empty)?;
             }
           },
-          RST::VarGet(path) => {
+          Rst::VarGet(path) => {
             // Get list of dynamic keys in path
             let dynamic_keys = path.dynamic_keys();
 
@@ -343,7 +349,7 @@ impl<'rant> VM<'rant> {
             }
             continue 'from_the_top;
           },
-          RST::VarSet(path, val_expr) => {
+          Rst::VarSet(path, val_expr) => {
             // Get list of dynamic keys in path
             let exprs = path.dynamic_keys();
 
@@ -363,7 +369,7 @@ impl<'rant> VM<'rant> {
             }
             continue 'from_the_top;
           },
-          RST::FuncDef(fdef) => {
+          Rst::FuncDef(fdef) => {
             let FunctionDef { 
               id, 
               body, 
@@ -394,7 +400,7 @@ impl<'rant> VM<'rant> {
 
             continue 'from_the_top;
           },
-          RST::Closure(closure_expr) => {
+          Rst::Closure(closure_expr) => {
             let ClosureExpr {
               capture_vars,
               expr,
@@ -414,7 +420,7 @@ impl<'rant> VM<'rant> {
 
             self.cur_frame_mut().write_value(func);
           },
-          RST::AnonFuncCall(afcall) => {
+          Rst::AnonFuncCall(afcall) => {
             let AnonFunctionCall {
               expr,
               args,
@@ -433,7 +439,7 @@ impl<'rant> VM<'rant> {
 
             continue 'from_the_top;
           },
-          RST::FuncCall(fcall) => {
+          Rst::FuncCall(fcall) => {
             let FunctionCall {
               id,
               arguments,
@@ -871,6 +877,16 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
+  pub fn context(&self) -> &Rant {
+    &self.engine
+  }
+
+  #[inline(always)]
+  pub fn context_mut(&mut self) -> &mut Rant {
+    &mut self.engine
+  }
+
+  #[inline(always)]
   pub fn resolver(&self) -> &Resolver {
     &self.resolver
   }
@@ -944,6 +960,8 @@ pub enum RuntimeErrorType {
   KeyError(KeyError),
   /// Error occurred while iterating selector
   SelectorError(SelectorError),
+  /// Error occurred while trying to load a module
+  ModuleLoadError(ModuleLoadError),
 }
 
 impl Display for RuntimeErrorType {
@@ -961,6 +979,7 @@ impl Display for RuntimeErrorType {
       RuntimeErrorType::IndexError(err) => write!(f, "{}", err),
       RuntimeErrorType::KeyError(err) => write!(f, "{}", err),
       RuntimeErrorType::SelectorError(err) => write!(f, "{}", err),
+      RuntimeErrorType::ModuleLoadError(err) => write!(f, "{}", err),
     }
   }
 }

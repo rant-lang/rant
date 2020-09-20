@@ -1,8 +1,8 @@
-use std::{rc::Rc, ops::{DerefMut, Deref}};
+use std::{rc::Rc};
 use std::{collections::VecDeque};
 use fnv::{FnvBuildHasher};
 use quickscope::ScopeMap;
-use crate::{lang::{Sequence, RST}, RantMap, RantValue, Rant};
+use crate::{lang::{Sequence, Rst}, RantValue, Rant};
 use crate::runtime::*;
 use super::{OutputBuffer, output::OutputWriter, Intent};
 
@@ -36,6 +36,7 @@ impl Default for CallStack {
 }
 
 impl CallStack {
+  #[inline]
   pub fn new() -> Self {
     Self {
       frames: Default::default(),
@@ -199,7 +200,7 @@ impl StackFrame {
 
 impl StackFrame {
   #[inline]
-  pub fn seq_next(&mut self) -> Option<Rc<RST>> {
+  pub fn seq_next(&mut self) -> Option<Rc<Rst>> {
     if self.is_done() {
       return None
     }
@@ -255,12 +256,13 @@ impl StackFrame {
     self.output.as_ref().map(|output| func(output))
   }
 
+  /// Writes debug information to the current frame to be used in stack trace generation.
   #[inline]
   pub fn set_debug_info(&mut self, info: &DebugInfo) {
     match info {
-        DebugInfo::Location { line, col } => self.debug_pos = (*line, *col),
-        DebugInfo::SourceName(name) => self.debug_source = Some(name.clone()),
-        DebugInfo::ScopeName(_) => todo!(),
+      DebugInfo::Location { line, col } => self.debug_pos = (*line, *col),
+      DebugInfo::SourceName(name) => self.debug_source = Some(name.clone()),
+      DebugInfo::ScopeName(_) => todo!(),
     }
   }
 }

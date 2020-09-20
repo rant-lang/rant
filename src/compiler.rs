@@ -1,4 +1,4 @@
-use crate::{lang::{RST, Sequence}, RantProgram};
+use crate::{lang::{Rst, Sequence}, RantProgram};
 use parser::RantParser;
 use std::{fmt::Display, rc::Rc, path::Path};
 use std::io::ErrorKind as IOErrorKind;
@@ -67,7 +67,7 @@ impl RantCompiler {
     // Return compilation result
     match parser.parse() {
       Ok(rst) => Ok(RantProgram::new(match rst {
-        RST::Sequence(seq) => seq,
+        Rst::Sequence(seq) => seq,
         other => Rc::new(Sequence::new(vec![Rc::new(other)]))
       })),
       Err(()) => Err(ErrorKind::SyntaxError),

@@ -35,23 +35,39 @@ mod stdlib;
 mod value;
 pub mod compiler;
 
+use compiler::CompilerMessage;
 use rand::Rng;
 pub use collections::*;
+use lang::is_valid_ident;
 pub use value::*;
 pub use convert::*;
 use crate::lang::{Sequence};
 use crate::compiler::{RantCompiler, Reporter, ErrorKind as CompilerErrorKind};
 use crate::runtime::*;
-use std::{path::Path, rc::Rc, cell::RefCell};
+use std::{path::Path, rc::Rc, cell::RefCell, fmt::Display, path::PathBuf, io::ErrorKind};
+use std::env;
 use random::RantRng;
+
+type IOErrorKind = std::io::ErrorKind;
+
+pub(crate) type RantString = smartstring::alias::CompactString;
 
 /// The build version according to the crate metadata at the time of compiling.
 pub const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// The name of the environment variable that Rant checks when checking the global modules path.
+pub const ENV_MODULES_PATH_KEY: &str = "RANT_MODULES_PATH";
+
 /// The Rant language version implemented by this library.
 pub const RANT_VERSION: &str = "4.0";
 
-pub(crate) type RantString = smartstring::alias::CompactString;
+/// Name of global variable that stores cached modules.
+pub(crate) const MODULES_CACHE_KEY: &str = "__MODULES";
+
+/// The file extension that Rant expects modules to have.
+pub(crate) const RANT_FILE_EXTENSION: &str = "rant";
+
+pub(crate) type ModuleLoadResult = Result<RantProgram, ModuleLoadError>;
 
 /// A Rant execution context.
 #[derive(Debug)]
@@ -59,6 +75,7 @@ pub struct Rant {
   rng: Rc<RantRng>,
   debug_mode: bool,
   globals: RantMapRef,
+  options: RantOptions,
 }
 
 impl Rant {
@@ -88,23 +105,24 @@ impl Rant {
     let mut rant = Self {
       debug_mode: options.debug_mode,
       globals: Rc::new(RefCell::new(RantMap::new())),
-      rng: Rc::new(RantRng::new(options.seed))
+      rng: Rc::new(RantRng::new(options.seed)),
+      options,
     };
-    if options.use_stdlib {
-      rant.load_stdlib();
-      rant.set_default_globals();
-    }
+
+    rant.load_stdlib();
     rant
   }
 
+  #[inline]
   fn load_stdlib(&mut self) {
+    if !self.options.use_stdlib {
+      return
+    }
+    
     let mut globals = self.globals.borrow_mut();
     // Load standard library
-    stdlib::load_stdlib(&mut globals);    
-  }
+    stdlib::load_stdlib(&mut globals, self.options.enable_require);    
 
-  fn set_default_globals(&mut self) {
-    let mut globals = self.globals.borrow_mut();
     // Add standard variables
     globals.raw_set("RANT_VERSION", RantValue::String(RANT_VERSION.to_owned()));
   }
@@ -196,9 +214,98 @@ impl Rant {
     let mut vm = VM::new(self.rng.clone(), self, program);
     Ok(vm.run()?.to_string())
   }
+
+  /// Attempts to load and compile a module with the specified name.
+  pub(crate) fn try_load_module(&mut self, module_name: &str) -> ModuleLoadResult {
+    if !self.options.enable_require {
+      return Err(ModuleLoadError {
+        name: module_name.to_owned(),
+        reason: ModuleLoadErrorReason::NotAllowed,
+      })
+    }
+
+    // Module names may only be valid identifiers
+    if !is_valid_ident(module_name) {
+      return Err(ModuleLoadError {
+        name: module_name.to_owned(),
+        reason: ModuleLoadErrorReason::NotFound,
+      })
+    }
+
+    // Try to find module path that exists
+    if let Some(module_path) = self.find_module_path(module_name) {
+      let mut errors = vec![];
+      let compile_result = self.compile_file(module_path, &mut errors);
+      match compile_result {
+        Ok(module) => Ok(module),
+        Err(err) => {
+          Err(ModuleLoadError {
+            name: module_name.to_owned(),
+            reason: match err{
+              CompilerErrorKind::SyntaxError => {
+                ModuleLoadErrorReason::CompileFailed(errors)
+              },
+              CompilerErrorKind::IOError(ioerr) => {
+                match ioerr {
+                  IOErrorKind::NotFound => {
+                    ModuleLoadErrorReason::NotFound
+                  },
+                  IOErrorKind::PermissionDenied => {
+                    ModuleLoadErrorReason::NotAllowed
+                  },
+                  other => ModuleLoadErrorReason::FileIOError(ioerr)
+                }
+              }
+            }
+          })
+        }
+      }
+    } else {
+      Err(ModuleLoadError {
+        name: module_name.to_owned(),
+        reason: ModuleLoadErrorReason::NotFound,
+      })
+    }
+  }
+
+  #[inline]
+  fn find_module_path(&self, module_name: &str) -> Option<PathBuf> {
+    // Check local module path
+    if let Some(local_module_path) = 
+      self.options.local_module_path
+      .as_ref()
+      .map(PathBuf::from)
+      .or_else(||
+        env::current_dir()
+        .ok()
+      )
+      .map(|path| path
+        .join(&module_name)
+        .with_extension(RANT_FILE_EXTENSION)
+      )
+    {
+      if local_module_path.exists() {
+        return Some(local_module_path);
+      }
+    }
+
+    // Check global modules, if enabled
+    if self.options.enable_global_modules {
+      return env::var_os(ENV_MODULES_PATH_KEY)
+        .map(PathBuf::from)
+        .map(|path| path
+          .join(&module_name)
+          .with_extension(RANT_FILE_EXTENSION)
+        )
+        .filter(|path| path.exists());
+    }
+    
+    None
+  }
 }
 
 /// Provides options for customizing the creation of a `Rant` instance.
+#[derive(Debug, Clone)]
 pub struct RantOptions {
   /// Specifies whether the standard library should be loaded.
   pub use_stdlib: bool,
@@ -207,9 +314,9 @@ pub struct RantOptions {
   /// The initial seed to pass to the RNG. Defaults to 0.
   pub seed: u64,
   /// Enables the [require] function, allowing modules to be loaded.
-  pub allow_require: bool,
+  pub enable_require: bool,
   /// Enables loading modules from RANT_MODULES_PATH.
-  pub allow_global_modules: bool,
+  pub enable_global_modules: bool,
   /// Specifies a preferred module loading path with higher precedence than the global module path.
   /// If not specified, looks in the current working directory.
   pub local_module_path: Option<String>,
@@ -221,8 +328,8 @@ impl Default for RantOptions {
       use_stdlib: true,
       debug_mode: false,
       seed: 0,
-      allow_require: true,
-      allow_global_modules: true,
+      enable_require: true,
+      enable_global_modules: true,
       local_module_path: None,
     }
   }
@@ -254,5 +361,65 @@ impl RantProgram {
   /// Gets the name of the program, if any.
   pub fn name(&self) -> Option<&str> {
     self.name.as_ref().map(|s| s.as_str())
+  }
+}
+
+/// Represents an error that occurred when attempting to load a Rant module.
+#[derive(Debug)]
+pub struct ModuleLoadError {
+  name: String,
+  reason: ModuleLoadErrorReason,
+}
+
+impl ModuleLoadError {
+  /// Gets the name of the module that failed to load.
+  #[inline]
+  pub fn name(&self) -> &str {
+    &self.name
+  }
+
+  /// Gets the reason for the module load failure.
+  #[inline]
+  pub fn reason(&self) -> &ModuleLoadErrorReason {
+    &self.reason
+  }
+}
+
+/// Represents the reason for which a Rant module failed to load.
+#[derive(Debug)]
+pub enum ModuleLoadErrorReason {
+  /// The module could not load because the calling context has module loading disabled.
+  NotAllowed,
+  /// The module was not found.
+  NotFound,
+  /// The module could not be compiled.
+  CompileFailed(Vec<CompilerMessage>),
+  /// The module could not load due to a file I/O error.
+  FileIOError(ErrorKind),
+}
+
+impl Display for ModuleLoadError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self.reason() {
+      ModuleLoadErrorReason::NotAllowed => write!(f, "module loading is disabled"),
+      ModuleLoadErrorReason::NotFound => write!(f, "module '{}' not found", self.name()),
+      ModuleLoadErrorReason::CompileFailed(msgs) => write!(f, "module '{}' failed to compile: {}",
+      self.name(),
+      msgs.iter().fold(String::new(), |mut acc, msg| {
+        acc.push_str(&format!("[{}] {}\n", msg.severity(), msg.message())); 
+        acc
+      })),
+      ModuleLoadErrorReason::FileIOError(ioerr) => write!(f, "file I/O error ({:?})", ioerr),
+    }
+  }
+}
+
+impl IntoRuntimeResult<RantProgram> for ModuleLoadResult {
+  fn into_runtime_result(self) -> RuntimeResult<RantProgram> {
+    self.map_err(|err| RuntimeError {
+      description: err.to_string(),
+      error_type: RuntimeErrorType::ModuleLoadError(err),
+      stack_trace: None,
+    })
   }
 }
