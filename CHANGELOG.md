@@ -12,6 +12,7 @@
   * Consecutive duplicate stack frames are now combined
 * Added new stdlib functions:
   * `[require]`
+  * `[error]`
 
 # 4.0.0-alpha.4
 
