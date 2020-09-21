@@ -5,8 +5,9 @@ use std::{rc::Rc, ops::Range, collections::HashSet};
 use crate::{RantString, lang::*};
 use line_col::LineColLookup;
 
-
 type ParseResult<T> = Result<T, ()>;
+
+const MAIN_PROGRAM_SCOPE_NAME: &str = "main scope";
 
 enum SequenceParseMode {
   /// Parse a sequence like a top-level program.
@@ -95,10 +96,11 @@ pub struct RantParser<'source, 'report, R: Reporter> {
   lookup: LineColLookup<'source>,
   reporter: &'report mut R,
   debug_enabled: bool,
+  origin: Rc<RantString>,
 }
 
 impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
-  pub fn new(source: &'source str, reporter: &'report mut R, debug_enabled: bool) -> Self {
+  pub fn new(source: &'source str, reporter: &'report mut R, debug_enabled: bool, origin: RantString) -> Self {
     let reader = RantTokenReader::new(source);
     let lookup = LineColLookup::new(source);
     Self {
@@ -108,22 +110,28 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       lookup,
       reporter,
       debug_enabled,
+      origin: Rc::new(origin),
     }
   }
 }
 
 impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   /// Top-level parsing function invoked by the compiler.
-  pub fn parse(&mut self) -> Result<Rst, ()> {
+  pub fn parse(&mut self) -> Result<Rc<Sequence>, ()> {
     let result = self.parse_sequence(SequenceParseMode::TopLevel);
     match result {
       // Err if parsing "succeeded" but there are soft syntax errors
       Ok(..) if self.has_errors => Err(()),
       // Ok if parsing succeeded and there are no syntax errors
-      Ok((seq, ..)) => Ok(Rst::Sequence(Rc::new(seq))),
+      Ok((seq, ..)) => Ok(Rc::new(seq)),
       // Err on hard syntax error
       Err(()) => Err(())
     }
+  }
+
+  #[inline(always)]
+  pub fn origin(&self) -> &Rc<RantString> {
+    &self.origin
   }
   
   /// Reports a syntax error, allowing parsing to continue but causing the final compilation to fail. 
@@ -140,8 +148,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
   
   /// Parses a sequence of items. Items are individual elements of a Rant program (fragments, blocks, function calls, etc.)
+  #[inline]
   fn parse_sequence(&mut self, mode: SequenceParseMode) -> ParseResult<(Sequence, SequenceEndType, bool)> {
-    let mut sequence = Sequence::empty();
+    let mut sequence = Sequence::empty(&self.origin);
     let mut next_print_flag = PrintFlag::None;
     let mut last_print_flag_span: Option<Range<usize>> = None;
     let mut is_seq_printing = false;
@@ -552,7 +561,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
     
     // Return the top-level sequence
-    Ok((sequence.with_name_str("program"), SequenceEndType::ProgramEnd, is_seq_printing))
+    Ok((sequence.with_name_str(MAIN_PROGRAM_SCOPE_NAME), SequenceEndType::ProgramEnd, is_seq_printing))
   }
   
   /// Parses a list/map initializer.

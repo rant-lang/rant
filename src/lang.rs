@@ -178,26 +178,29 @@ impl Display for AccessPath {
 #[derive(Debug)]
 pub struct Sequence {
   elements: Vec<Rc<Rst>>,
-  name: Option<RantString>,
+  pub name: Option<RantString>,
+  pub origin: Rc<RantString>,
 }
 
 impl Sequence {
-  pub fn new(seq: Vec<Rc<Rst>>) -> Self {
+  pub fn new(seq: Vec<Rc<Rst>>, origin: &Rc<RantString>) -> Self {
     Self {
       elements: seq,
       name: None,
+      origin: Rc::clone(origin),
     }
   }
   
-  pub fn one(rst: Rst) -> Self {
+  pub fn one(rst: Rst, origin: &Rc<RantString>) -> Self {
     Self {
       elements: vec![Rc::new(rst)],
       name: None,
+      origin: Rc::clone(origin),
     }
   }
   
-  pub fn empty() -> Self {
-    Self::new(vec![])
+  pub fn empty(origin: &Rc<RantString>) -> Self {
+    Self::new(vec![], origin)
   }
 
   #[inline(always)]
@@ -452,6 +455,4 @@ impl Display for Rst {
 #[derive(Debug)]
 pub enum DebugInfo {
   Location { line: usize, col: usize },
-  SourceName(RantString),
-  ScopeName(RantString),
 }

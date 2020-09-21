@@ -1,9 +1,13 @@
 # 4.0.0-alpha.5
 
 * Added `Rant::with_random_seed()` constructor
+* Removed `RantProgram::with_name()` method
+* Added `.compile_named()` and `.compile_quiet_named()` methods to `Rant`
 * Added support for multi-part accessors
 * Upgraded `quickscope` to 0.1.2
+* `[sep]` now supports `block` values and will auto-resolve them for each separator
 * Added support for modules
+* Improved stack trace formatting
 * Added new stdlib functions:
   * `[require]`
 

@@ -1,6 +1,6 @@
-use crate::{lang::{Rst, Sequence}, RantProgram};
+use crate::{RantProgram, RantString};
 use parser::RantParser;
-use std::{fmt::Display, rc::Rc, path::Path};
+use std::{fmt::Display, path::Path};
 use std::io::ErrorKind as IOErrorKind;
 use std::{error::Error, fs};
 
@@ -61,15 +61,12 @@ pub struct RantCompiler {
 }
 
 impl RantCompiler {
-  pub fn compile_string<R: Reporter>(source: &str, reporter: &mut R, debug_enabled: bool) -> CompileResult {
-    let mut parser = RantParser::new(source, reporter, debug_enabled);
+  pub fn compile_string<R: Reporter>(source: &str, reporter: &mut R, debug_enabled: bool, origin: &str) -> CompileResult {
+    let mut parser = RantParser::new(source, reporter, debug_enabled, RantString::from(origin));
 
     // Return compilation result
     match parser.parse() {
-      Ok(rst) => Ok(RantProgram::new(match rst {
-        Rst::Sequence(seq) => seq,
-        other => Rc::new(Sequence::new(vec![Rc::new(other)]))
-      })),
+      Ok(seq) => Ok(RantProgram::new(seq, RantString::from(origin))),
       Err(()) => Err(ErrorKind::SyntaxError),
     }
   }
@@ -79,7 +76,7 @@ impl RantCompiler {
     let file_read_result = fs::read_to_string(path);
     match file_read_result {
       Ok(source) => {
-        Self::compile_string(&source, reporter, debug_enabled).map(|pgm| pgm.with_name(&source_name))
+        Self::compile_string(&source, reporter, debug_enabled, &source_name)
       },
       // Something went wrong with reading the file
       Err(err) => {

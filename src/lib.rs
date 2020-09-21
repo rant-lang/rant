@@ -61,6 +61,9 @@ pub const ENV_MODULES_PATH_KEY: &str = "RANT_MODULES_PATH";
 /// The Rant language version implemented by this library.
 pub const RANT_VERSION: &str = "4.0";
 
+/// The default name given to programs compiled from raw strings.
+pub const DEFAULT_PROGRAM_NAME: &str = "program";
+
 /// Name of global variable that stores cached modules.
 pub(crate) const MODULES_CACHE_KEY: &str = "__MODULES";
 
@@ -139,7 +142,13 @@ impl Rant {
   /// Compiles a source string using the specified reporter.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile<R: Reporter>(&self, source: &str, reporter: &mut R) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile_string(source, reporter, self.debug_mode)
+    RantCompiler::compile_string(source, reporter, self.debug_mode, DEFAULT_PROGRAM_NAME)
+  }
+
+  /// Compiles a source string using the specified reporter and source name.
+  #[must_use = "compiling a program without storing or running it achieves nothing"]
+  pub fn compile_named<R: Reporter>(&self, source: &str, reporter: &mut R, name: &str) -> Result<RantProgram, CompilerErrorKind> {
+    RantCompiler::compile_string(source, reporter, self.debug_mode, name)
   }
 
   /// Compiles a source string without reporting problems.
@@ -151,7 +160,19 @@ impl Rant {
   /// If you require this information, use the `compile()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_quiet(&self, source: &str) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile_string(source, &mut (), self.debug_mode)
+    RantCompiler::compile_string(source, &mut (), self.debug_mode, DEFAULT_PROGRAM_NAME)
+  }
+
+  /// Compiles a source string without reporting problems and assigns it the specified name.
+  ///
+  /// ## Note
+  ///
+  /// This method will not generate any compiler messages, even if it fails.
+  ///
+  /// If you require this information, use the `compile()` method instead.
+  #[must_use = "compiling a program without storing or running it achieves nothing"]
+  pub fn compile_quiet_named(&self, source: &str, name: &str) -> Result<RantProgram, CompilerErrorKind> {
+    RantCompiler::compile_string(source, &mut (), self.debug_mode, name)
   }
   
   /// Compiles a source file using the specified reporter.
@@ -253,7 +274,7 @@ impl Rant {
                   IOErrorKind::PermissionDenied => {
                     ModuleLoadErrorReason::NotAllowed
                   },
-                  other => ModuleLoadErrorReason::FileIOError(ioerr)
+                  _ => ModuleLoadErrorReason::FileIOError(ioerr)
                 }
               }
             }
@@ -338,29 +359,22 @@ impl Default for RantOptions {
 /// A compiled Rant program.
 #[derive(Debug)]
 pub struct RantProgram {
-  name: Option<RantString>,
+  name: RantString,
   root: Rc<Sequence>
 }
 
 impl RantProgram {
-  pub(crate) fn new(root: Rc<Sequence>) -> Self {
+  pub(crate) fn new(root: Rc<Sequence>, name: RantString) -> Self {
     Self {
-      name: None,
+      name,
       root,
     }
   }
 
-  /// Consumes a program, assigns the specified name to it, and returns it.
-  pub fn with_name<S: ToString>(self, name: S) -> Self {
-    Self {
-      root: self.root,
-      name: Some(RantString::from(name.to_string()))
-    }
-  }
-
   /// Gets the name of the program, if any.
-  pub fn name(&self) -> Option<&str> {
-    self.name.as_ref().map(|s| s.as_str())
+  #[inline]
+  pub fn name(&self) -> &str {
+    self.name.as_str()
   }
 }
 

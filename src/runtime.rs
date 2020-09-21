@@ -749,6 +749,10 @@ impl<'rant> VM<'rant> {
               self.push_val(RantValue::Function(sep_func))?;
               self.cur_frame_mut().push_intent_front(Intent::Call { argc: 0, flag: if is_printing { PrintFlag::Hint } else { PrintFlag::Sink } });
             },
+            // If the separator is a block, resolve it
+            RantValue::Block(sep_block) => {
+              self.push_block(&sep_block, sep_block.flag)?;
+            },
             // Print the separator if it's a non-function value
             val => {
               self.cur_frame_mut().write_value(val);
@@ -823,17 +827,11 @@ impl<'rant> VM<'rant> {
 
   #[inline(always)]
   fn push_frame_unchecked(&mut self, callee: Rc<Sequence>, use_output: bool) {
-    let mut frame = StackFrame::new(
+    let frame = StackFrame::new(
       callee, 
       use_output, 
       self.call_stack.top().map(|last| last.output()).flatten()
     );
-
-    if self.engine.debug_mode {
-      if let Some(name) = self.program.name() {
-        frame.set_debug_info(&DebugInfo::SourceName(RantString::from(name)));
-      }
-    }
 
     self.call_stack.push_frame(frame);
   }
@@ -845,17 +843,11 @@ impl<'rant> VM<'rant> {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
     }
     
-    let mut frame = StackFrame::new(
+    let frame = StackFrame::new(
       callee,
       use_output,
       self.call_stack.top().map(|last| last.output()).flatten()
     );
-
-    if self.engine.debug_mode {
-      if let Some(name) = self.program.name() {
-        frame.set_debug_info(&DebugInfo::SourceName(RantString::from(name)));
-      }
-    }
 
     self.call_stack.push_frame(frame);
     Ok(())
