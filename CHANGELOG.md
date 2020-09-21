@@ -8,6 +8,8 @@
 * `[sep]` now supports `block` values and will auto-resolve them for each separator
 * Added support for modules
 * Improved stack trace formatting
+  * Error messages are categorized and have improved readability
+  * Consecutive duplicate stack frames are now combined
 * Added new stdlib functions:
   * `[require]`
 

@@ -921,15 +921,13 @@ impl Error for RuntimeError {
 
 impl Display for RuntimeError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.description)
+    write!(f, "[{}] {}", self.error_type, self.description)
   }
 }
 
 /// Provides general categories of runtime errors encountered in Rant.
 #[derive(Debug)]
 pub enum RuntimeErrorType {
-  /// General error type; check message attached to error
-  GeneralError,
   /// Stack overflow
   StackOverflow,
   /// Stack underflow
@@ -954,24 +952,26 @@ pub enum RuntimeErrorType {
   SelectorError(SelectorError),
   /// Error occurred while trying to load a module
   ModuleLoadError(ModuleLoadError),
+  /// Error manually triggered by program
+  UserError,
 }
 
 impl Display for RuntimeErrorType {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      RuntimeErrorType::GeneralError => write!(f, ""),
-      RuntimeErrorType::StackOverflow => write!(f, "stack overflow"),
-      RuntimeErrorType::StackUnderflow => write!(f, "stack underflow"),
-      RuntimeErrorType::InvalidAccess => write!(f, "invalid variable access"),
-      RuntimeErrorType::ExternalError => write!(f, "external error"),
-      RuntimeErrorType::ArgumentMismatch => write!(f, "argument mismatch"),
-      RuntimeErrorType::ArgumentError => write!(f, "argument error"),
-      RuntimeErrorType::CannotInvokeValue => write!(f, "value not invokable"),
-      RuntimeErrorType::ValueError(err) => write!(f, "{}", err),
-      RuntimeErrorType::IndexError(err) => write!(f, "{}", err),
-      RuntimeErrorType::KeyError(err) => write!(f, "{}", err),
-      RuntimeErrorType::SelectorError(err) => write!(f, "{}", err),
-      RuntimeErrorType::ModuleLoadError(err) => write!(f, "{}", err),
-    }
+    write!(f, "{}", match self {
+      RuntimeErrorType::StackOverflow => "stack overflow",
+      RuntimeErrorType::StackUnderflow => "stack underflow",
+      RuntimeErrorType::InvalidAccess => "invalid access",
+      RuntimeErrorType::ExternalError => "external error",
+      RuntimeErrorType::ArgumentMismatch => "argument mismatch",
+      RuntimeErrorType::ArgumentError => "argument error",
+      RuntimeErrorType::CannotInvokeValue => "cannot invoke value",
+      RuntimeErrorType::UserError => "user error",
+      RuntimeErrorType::ValueError(_) => "value error",
+      RuntimeErrorType::IndexError(_) => "index error",
+      RuntimeErrorType::KeyError(_) => "key error",
+      RuntimeErrorType::SelectorError(_) => "selector error",
+      RuntimeErrorType::ModuleLoadError(_) => "module load error",
+    })
   }
 }

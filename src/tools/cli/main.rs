@@ -207,7 +207,7 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) -> ExitCode {
       exitcode::OK
     },
     Err(err) => {
-      eprintln!("{}: {}\n\nstack trace:\n{}", "Runtime error".bright_red().bold(), err.description, err.stack_trace.unwrap_or_else(|| "(no trace available)".to_owned()));
+      eprintln!("{}: {}\n\nstack trace:\n{}", "Runtime error".bright_red().bold(), &err, &err.stack_trace.as_deref().unwrap_or_else(|| "(no trace available)"));
       if show_stats {
         eprintln!("{} in {:?} (seed = {:016x})", "Crashed".bright_red().bold(), run_time, seed);
       }

@@ -81,9 +81,34 @@ impl CallStack {
 
   pub fn gen_stack_trace(&self) -> String {
     let mut trace = String::new();
+    let mut last_frame_info: Option<(String, usize)> = None;
     for frame in self.frames.iter().rev() {
-      trace.push_str(format!("-> {}\n", frame).as_str());
+      let current_frame_string = frame.to_string();
+
+      if let Some((last_frame_string, count)) = last_frame_info.take() {
+        if current_frame_string == last_frame_string {
+          last_frame_info = Some((last_frame_string, count + 1));
+        } else {
+          // spit out last repeated frame
+          match count {
+            1 => trace.push_str(&format!("-> {}\n", last_frame_string)),
+            _ => trace.push_str(&format!("-> {} ({} frames)\n", last_frame_string, count)),
+          }
+          last_frame_info = Some((current_frame_string, 1));
+        }
+      } else {
+        last_frame_info = Some((current_frame_string, 1));
+      }
     }
+
+    // emit bottom frame
+    if let Some((last_frame_string, count)) = last_frame_info.take() {
+      match count {
+        1 => trace.push_str(&format!("-> {}", last_frame_string)),
+        _ => trace.push_str(&format!("-> {} ({} frames)", last_frame_string, count)),
+      }
+    }
+
     trace
   }
 

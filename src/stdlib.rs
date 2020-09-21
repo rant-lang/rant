@@ -772,6 +772,15 @@ fn get(vm: &mut VM, key: String) -> RantStdResult {
   Ok(())
 }
 
+fn error(vm: &mut VM, msg: Option<String>) -> RantStdResult {
+  const DEFAULT_ERROR_MESSAGE: &str = "user error";
+  Err(RuntimeError {
+    error_type: RuntimeErrorType::UserError,
+    description: msg.unwrap_or_else(|| DEFAULT_ERROR_MESSAGE.to_owned()),
+    stack_trace: None,
+  })
+}
+
 fn require(vm: &mut VM, module_name: String) -> RantStdResult {
   // TODO: Module caching
   let module = vm.context_mut().try_load_module(&module_name).into_runtime_result()?;
@@ -848,7 +857,10 @@ pub(crate) fn load_stdlib(globals: &mut RantMap, enable_require: bool)
     lower, upper, seg, split, lines, indent,
 
     // Dynamic Variable Access functions
-    get
+    get,
+
+    // Error functions
+    error
   );
 
   // Load [require] function if requested

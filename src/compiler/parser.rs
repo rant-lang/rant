@@ -90,12 +90,19 @@ fn super_range(a: &Range<usize>, b: &Range<usize>) -> Range<usize> {
 
 /// A parser that turns Rant code into an RST (Rant Syntax Tree).
 pub struct RantParser<'source, 'report, R: Reporter> {
+  /// A string slice containing the source code being parsed.
   source: &'source str,
+  /// Flag set if there are compiler errors.
   has_errors: bool,
+  /// The token stream used by the parser.
   reader: RantTokenReader<'source>,
+  /// The line/col lookup for error reporting.
   lookup: LineColLookup<'source>,
+  /// The error reporter.
   reporter: &'report mut R,
+  /// Enables additional debug information.
   debug_enabled: bool,
+  /// A string describing the origin (containing program) of a program element.
   origin: Rc<RantString>,
 }
 
