@@ -15,7 +15,7 @@ Easily create dynamic templates, dialogue, stories, names, test data, and much m
 
 ## WARNING:
 
-**This project is in early alpha. Expect to see broken/missing features.**
+**This project is in alpha. Expect to see broken/missing features.**
 
 **While I encourage you to try it out and give feedback, please do not use in production environments until a stable version is released.**
 
@@ -63,7 +63,7 @@ Need to work with structured data rather than just strings? No problem. Rant off
 Rant comes with a CLI tool that includes a REPL. You can install and run it with:
 
 ```sh
-$ cargo install rant --version=4.0.0-alpha.4 --all-features
+$ cargo install rant --version=4.0.0-alpha.6 --all-features
 $ rant
 ```
 
