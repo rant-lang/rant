@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(clippy::ptr_arg)]
 
 use super::{reader::RantTokenReader, lexer::RantToken, message::*, Problem, Reporter};
 use std::{rc::Rc, ops::Range, collections::HashSet};

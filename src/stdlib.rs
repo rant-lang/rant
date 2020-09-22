@@ -8,7 +8,7 @@ use crate::runtime::*;
 use crate::convert::*;
 use crate::convert::ToRant;
 use std::{cmp::Ordering, mem, iter::FromIterator};
-use lang::{PrintFlag, AccessPathKind};
+use lang::{PrintFlag};
 use resolver::{SelectorMode, Reps, Selector};
 use format::WhitespaceNormalizationMode;
 
