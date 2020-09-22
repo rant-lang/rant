@@ -8,7 +8,7 @@ use crate::runtime::*;
 use crate::convert::*;
 use crate::convert::ToRant;
 use std::{cmp::Ordering, mem, iter::FromIterator};
-use lang::PrintFlag;
+use lang::{PrintFlag, AccessPathKind};
 use resolver::{SelectorMode, Reps, Selector};
 use format::WhitespaceNormalizationMode;
 
@@ -782,10 +782,19 @@ fn error(vm: &mut VM, msg: Option<String>) -> RantStdResult {
 }
 
 fn require(vm: &mut VM, module_name: String) -> RantStdResult {
-  // TODO: Module caching
-  let module = vm.context_mut().try_load_module(&module_name).into_runtime_result()?;
+  // Check if module is cached
+  if let Some(RantValue::Map(module_cache_ref)) = vm.context().get_global(crate::MODULES_CACHE_KEY) {
+    if let Some(RantValue::Map(cached_module)) = module_cache_ref.borrow().raw_get(&module_name) {
+      vm.cur_frame_mut().push_intent_front(Intent::LoadModule { module_name });
+      vm.push_val(RantValue::Map(Rc::clone(cached_module)))?;
+      return Ok(())
+    }
+  }
+
+  // If not cached, attempt to load it from file
+  let module_pgm = vm.context_mut().try_load_module(&module_name).into_runtime_result()?;
   vm.cur_frame_mut().push_intent_front(Intent::LoadModule { module_name });
-  vm.push_frame(Rc::clone(&module.root), true)?;
+  vm.push_frame(Rc::clone(&module_pgm.root), true)?;
   Ok(())
 }
 

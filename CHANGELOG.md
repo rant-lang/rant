@@ -1,5 +1,6 @@
 # 4.0.0-alpha.6
 
+* Modules are now cached by the executing context in a global map
 * Added support for variable capturing in closures
 * Added `.delete_global()` and `.has_global()` methods to `Rant`
 * Removed `.globals()` method from `Rant`

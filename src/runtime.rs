@@ -286,6 +286,16 @@ impl<'rant> VM<'rant> {
           },
           Intent::LoadModule { module_name } => {
             let module = self.pop_val()?;
+
+            // Cache the module
+            if let Some(RantValue::Map(module_cache_ref)) = self.engine.get_global(crate::MODULES_CACHE_KEY) {
+              module_cache_ref.borrow_mut().raw_set(&module_name, module.clone());
+            } else {
+              let mut cache = RantMap::new();
+              cache.raw_set(&module_name, module.clone());
+              self.engine.set_global(crate::MODULES_CACHE_KEY, RantValue::Map(Rc::new(RefCell::new(cache))));
+            }
+
             self.def_var_value(&module_name, AccessPathKind::Local, module)?;
           },
         }
