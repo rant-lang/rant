@@ -2,7 +2,7 @@
 
 * Modules are now cached by the executing context in a global map
 * Added support for variable capturing in closures
-* Added `.delete_global()` and `.has_global()` methods to `Rant`
+* Added `.delete_global()`, `.has_global()`, `.delete_global()`, `.global_names()` methods to `Rant`
 * Removed `.globals()` method from `Rant`
 * Upgraded `quickscope` to 0.1.3
 

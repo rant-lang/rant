@@ -198,22 +198,25 @@ impl Rant {
     }
   }
 
-  /// Gets a global variable.
+  /// Gets the value of a global variable.
   #[inline]
   pub fn get_global(&self, key: &str) -> Option<RantValue> {
     self.globals.get(key).map(|var| var.value_cloned())
   }
 
+  /// Gets a global variable by its `RantVar` representation.
   #[inline]
   pub(crate) fn get_global_var(&self, key: &str) -> Option<&RantVar> {
     self.globals.get(key)
   }
 
+  /// Sets a global variable to the provided `RantVar`.
   #[inline]
   pub(crate) fn set_global_var(&mut self, key: &str, var: RantVar) {
     self.globals.insert(RantString::from(key), var);
   }
 
+  /// Gets a mutable reference to the `RantVar` representation of the specified variable.
   #[inline]
   pub(crate) fn get_global_var_mut(&mut self, key: &str) -> Option<&mut RantVar> {
     self.globals.get_mut(key)
