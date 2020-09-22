@@ -767,7 +767,7 @@ fn reset_attrs(vm: &mut VM, _: ()) -> RantStdResult {
 }
 
 fn get(vm: &mut VM, key: String) -> RantStdResult {
-  let val = vm.get_var(key.as_str(), lang::AccessPathKind::Local)?;
+  let val = vm.get_var_value(key.as_str(), lang::AccessPathKind::Local)?;
   vm.cur_frame_mut().write_value(val);
   Ok(())
 }
@@ -789,16 +789,16 @@ fn require(vm: &mut VM, module_name: String) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn load_stdlib(globals: &mut RantMap, enable_require: bool)
+pub(crate) fn load_stdlib(context: &mut Rant)
 {
   macro_rules! load_func {
     ($fname:ident) => {{
       let func = $fname.as_rant_func();
-      globals.raw_set(stringify!($fname), RantValue::Function(Rc::new(func)));
+      context.set_global(stringify!($fname), RantValue::Function(Rc::new(func)));
     }};
     ($fname:ident, $id:literal) => {{
       let func = $fname.as_rant_func();
-      globals.raw_set($id, RantValue::Function(Rc::new(func)));
+      context.set_global($id, RantValue::Function(Rc::new(func)));
     }};
   }
 
@@ -864,7 +864,10 @@ pub(crate) fn load_stdlib(globals: &mut RantMap, enable_require: bool)
   );
 
   // Load [require] function if requested
-  if enable_require {
+  if context.options.enable_require {
     load_func!(require);
   }
+
+  // Miscellaneous
+  context.set_global("RANT_VERSION", RantValue::String(RANT_VERSION.to_owned()));
 }

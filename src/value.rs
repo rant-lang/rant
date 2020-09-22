@@ -1,4 +1,4 @@
-use crate::{lang::{Block, Parameter, Sequence}};
+use crate::{lang::{Block, Parameter, Sequence}, lang::Identifier, RantVar};
 use crate::runtime::*;
 use crate::{collections::*, util::*, IntoRuntimeResult, RuntimeResult, RuntimeError, RuntimeErrorType, stdlib::RantStdResult};
 use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div, Rem}, cmp, cell::RefCell};
@@ -477,7 +477,7 @@ pub struct RantFunction {
   pub(crate) params: Rc<Vec<Parameter>>,
   pub(crate) min_arg_count: usize,
   pub(crate) vararg_start_index: usize,
-  pub(crate) captured_vars: Option<RantMap>,
+  pub(crate) captured_vars: Vec<(Identifier, RantVar)>,
   pub(crate) body: RantFunctionInterface,
 }
 

@@ -3,7 +3,9 @@
 use super::{reader::RantTokenReader, lexer::RantToken, message::*, Problem, Reporter};
 use std::{rc::Rc, ops::Range, collections::HashSet};
 use crate::{RantString, lang::*};
+use fnv::FnvBuildHasher;
 use line_col::LineColLookup;
+use quickscope::ScopeSet;
 
 type ParseResult<T> = Result<T, ()>;
 
@@ -104,6 +106,10 @@ pub struct RantParser<'source, 'report, R: Reporter> {
   debug_enabled: bool,
   /// A string describing the origin (containing program) of a program element.
   origin: Rc<RantString>,
+  /// Keeps track of active variables in each scope while parsing.
+  var_stack: ScopeSet<Identifier>,
+  /// Keeps track of active variable capture frames.
+  capture_stack: Vec<(usize, HashSet<Identifier, FnvBuildHasher>)>,
 }
 
 impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
@@ -118,6 +124,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       reporter,
       debug_enabled,
       origin: Rc::new(origin),
+      var_stack: Default::default(),
+      capture_stack: Default::default(),
     }
   }
 }
@@ -153,10 +161,19 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   fn unexpected_last_token_error(&mut self) {
     self.syntax_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &self.reader.last_token_span())
   }
-  
+
   /// Parses a sequence of items. Items are individual elements of a Rant program (fragments, blocks, function calls, etc.)
   #[inline]
   fn parse_sequence(&mut self, mode: SequenceParseMode) -> ParseResult<(Sequence, SequenceEndType, bool)> {
+    self.var_stack.push_layer();
+    let parse_result = self.parse_sequence_inner(mode);
+    self.var_stack.pop_layer();
+    parse_result
+  }
+  
+  /// Inner logic of `parse_sequence()`. Intended to be wrapped in other specialized sequence-parsing functions.
+  #[inline(always)]
+  fn parse_sequence_inner(&mut self, mode: SequenceParseMode) -> ParseResult<(Sequence, SequenceEndType, bool)> {    
     let mut sequence = Sequence::empty(&self.origin);
     let mut next_print_flag = PrintFlag::None;
     let mut last_print_flag_span: Option<Range<usize>> = None;
@@ -812,15 +829,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Function params
           let params = self.parse_func_params(&start_span)?;
           // Read function body
-          // TODO: Handle captured variables in function bodies
           self.reader.skip_ws();          
-          let body = Rc::new(self.parse_func_body()?.with_name_str(format!("[{}]", func_id).as_str()));
+          let (body, captures) = self.parse_func_body(&params)?;
           
           Ok(Rst::FuncDef(FunctionDef {
+            body: Rc::new(body.with_name_str(format!("[{}]", func_id).as_str())),
             id: Rc::new(func_id),
             params: Rc::new(params),
-            body,
-            capture_vars: Rc::new(vec![]),
+            capture_vars: Rc::new(captures),
           }))
         },
         // Closure
@@ -829,12 +845,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let params = self.parse_func_params(&start_span)?;
           self.reader.skip_ws();
           // Read function body
-          // TODO: Handle captured variables in closure bodies
-          let body = Rc::new(self.parse_func_body()?.with_name_str("closure"));
+          let (body, captures) = self.parse_func_body(&params)?;
           
           Ok(Rst::Closure(ClosureExpr {
-            capture_vars: Rc::new(vec![]),
-            expr: body,
+            capture_vars: Rc::new(captures),
+            expr: Rc::new(body.with_name_str("closure")),
             params: Rc::new(params),
           }))
         },
@@ -967,7 +982,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     
     // Parse the first part of the path
     match first_part {
-      // The first part of the path may only be a variable name
+      // The first part of the path may only be a variable name (for now)
       Some((RantToken::Fragment, span)) => {
         let varname = Identifier::new(self.reader.last_token_string());
         if is_valid_ident(varname.as_str()) {
@@ -1059,29 +1074,57 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     
     Ok(seq)
   }
-    
-  /// Parses a function body.
-  fn parse_func_body(&mut self) -> ParseResult<Sequence> {
+
+  /// Parses a function body and captures variables.
+  fn parse_func_body(&mut self, params: &Vec<Parameter>) -> ParseResult<(Sequence, Vec<Identifier>)> {
     if !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
       self.syntax_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
       return Err(())
     }
     
     let start_span = self.reader.last_token_span();
-    let (seq, seq_end, _) = self.parse_sequence(SequenceParseMode::FunctionBody)?;
-    
-    match seq_end {
-      SequenceEndType::FunctionBodyEnd => {},
-      SequenceEndType::ProgramEnd => {
-        // Hard error if block isn't closed
-        let err_span = start_span.start .. self.source.len();
-        self.syntax_error(Problem::UnclosedBlock, &err_span);
-        return Err(())
-      },
-      _ => unreachable!()
+
+    // Since we're about to push another var_stack frame, we can use the current depth of var_stack as the index
+    let capture_height = self.var_stack.depth();
+
+    // Push a new capture frame
+    self.capture_stack.push((capture_height, Default::default()));
+
+    // Push a new variable frame
+    self.var_stack.push_layer();
+
+    // Define each parameter as a variable in the current var_stack frame so they are not accidentally captured
+    for param in params {
+      self.var_stack.define(param.name.clone());
     }
-    
-    Ok(seq)
+
+    // parse_sequence_inner() is used here so that the new stack frame can be customized before use
+    let parse_result = self.parse_sequence_inner(SequenceParseMode::FunctionBody);
+
+    self.var_stack.pop_layer();
+
+    // Pop the topmost capture frame and grab the set of captures
+    let (_, mut capture_set) = self.capture_stack.pop().unwrap();
+
+    match parse_result {
+      Ok((seq, seq_end, ..)) => {
+        match seq_end {
+          SequenceEndType::FunctionBodyEnd => {},
+          SequenceEndType::ProgramEnd => {
+            // Hard error if block isn't closed
+            let err_span = start_span.start .. self.source.len();
+            self.syntax_error(Problem::UnclosedBlock, &err_span);
+            return Err(())
+          },
+          _ => unreachable!()
+        }
+  
+        Ok((seq, capture_set.drain().collect()))
+      },
+      Err(()) => {
+        Err(())
+      }
+    }
   }
     
   /// Parses a block.
@@ -1149,9 +1192,53 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       Err(())
     }
   }
-    
+
   /// Parses one or more accessors (getter/setter/definition).
+  #[inline]
   fn parse_accessor(&mut self) -> ParseResult<Vec<Rst>> {
+    let parse_result = self.parse_accessor_inner();
+
+    // Update variable captures
+    if let Ok(accessors) = &parse_result {
+      for accessor in accessors {
+        match accessor {
+          Rst::VarDef(id, access_kind, ..) => {
+            match access_kind {
+              AccessPathKind::Local => {
+                self.var_stack.define(id.clone());
+              },
+              AccessPathKind::Descope(n) => {
+                self.var_stack.define_parent(id.clone(), *n);
+              },
+              AccessPathKind::ExplicitGlobal => {},
+            }
+          },
+          Rst::VarGet(path) | Rst::VarSet(path, ..) => {
+            // Only local getters can capture variables
+            if path.kind().is_local() {
+              // At least one capture frame must exist
+              if let Some((capture_frame_height, captures)) = self.capture_stack.last_mut() {
+                // Getter must be accessing a variable
+                if let Some(id) = path.capture_var_name() {
+                  // Variable must not exist in the current scope of the active function
+                  if self.var_stack.height_of(&id).unwrap_or_default() < *capture_frame_height {
+                    captures.insert(id);
+                  }
+                }
+              }
+            }
+          },
+          _ => {}
+        }
+      }
+    }
+
+    parse_result
+  }
+    
+  /// Inner functionality of `parse_accessor()`. Do not call directly.
+  #[inline(always)]
+  fn parse_accessor_inner(&mut self) -> ParseResult<Vec<Rst>> {
     let mut accessors = vec![];
     
     'read: loop {

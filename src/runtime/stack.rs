@@ -11,23 +11,8 @@ type CallStackVector = SmallVec<[StackFrame; super::CALL_STACK_INLINE_COUNT]>;
 /// Represents a call stack and its associated locals.
 pub struct CallStack {
   frames: CallStackVector,
-  locals: ScopeMap<RantString, RantValue, FnvBuildHasher>,
+  locals: ScopeMap<RantString, RantVar, FnvBuildHasher>,
 }
-
-// // Allows direct immutable access to internal stack vector
-// impl Deref for CallStack {
-//   type Target = CallStackVector;
-//   fn deref(&self) -> &Self::Target {
-//     &self.frames
-//   }
-// }
-
-// // Allows direct mutable access to internal stack vector
-// impl DerefMut for CallStack {
-//   fn deref_mut(&mut self) -> &mut Self::Target {
-//     &mut self.frames
-//   }
-// }
 
 impl Default for CallStack {
   fn default() -> Self {
@@ -113,17 +98,17 @@ impl CallStack {
   }
 
   #[inline]
-  pub fn set_local(&mut self, context: &Rant, id: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
+  pub fn set_var_value(&mut self, context: &mut Rant, id: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
     match access {
       AccessPathKind::Local => {
         if let Some(var) = self.locals.get_mut(id) {
-          *var = val;
+          var.write(val);
           return Ok(())
         }
       },
       AccessPathKind::Descope(n) => {
         if let Some(var) = self.locals.get_parent_mut(id, n) {
-          *var = val;
+          var.write(val);
           return Ok(())
         }
       },
@@ -132,9 +117,8 @@ impl CallStack {
     }
 
     // Check globals
-    let mut globals = context.globals.borrow_mut();
-    if globals.raw_has_key(id) {
-      globals.raw_set(id, val);
+    if context.has_global(id) {
+      context.set_global(id, val);
       return Ok(())
     }
 
@@ -146,24 +130,24 @@ impl CallStack {
   }
 
   #[inline]
-  pub fn get_local(&self, context: &Rant, id: &str, access: AccessPathKind) -> RuntimeResult<RantValue> {
+  pub fn get_var_value(&self, context: &Rant, id: &str, access: AccessPathKind) -> RuntimeResult<RantValue> {
     match access {
       AccessPathKind::Local => {
-        if let Some(val) = self.locals.get(id) {
-          return Ok(val.clone())
+        if let Some(var) = self.locals.get(id) {
+          return Ok(var.value_cloned())
         }
       },
       AccessPathKind::Descope(n) => {
-        if let Some(val) = self.locals.get_parent(id, n) {
-          return Ok(val.clone())
+        if let Some(var) = self.locals.get_parent(id, n) {
+          return Ok(var.value_cloned())
         }
       },
       AccessPathKind::ExplicitGlobal => {},
     }    
 
     // Check globals
-    if let Some(val) = context.globals.borrow().raw_get(id) {
-      return Ok(val.clone())
+    if let Some(val) = context.get_global(id) {
+      return Ok(val)
     }
 
     Err(RuntimeError {
@@ -173,21 +157,65 @@ impl CallStack {
     })
   }
 
-  #[inline]
-  pub fn def_local(&mut self, context: &Rant, id: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
+  pub fn get_var_mut<'a>(&'a mut self, context: &'a mut Rant, id: &str, access: AccessPathKind) -> RuntimeResult<&'a mut RantVar> {
     match access {
       AccessPathKind::Local => {
-        self.locals.define(RantString::from(id), val);
+        if let Some(var) = self.locals.get_mut(id) {
+          return Ok(var)
+        }
+      },
+      AccessPathKind::Descope(n) => {
+        if let Some(var) = self.locals.get_parent_mut(id, n) {
+          return Ok(var)
+        }
+      },
+      AccessPathKind::ExplicitGlobal => {},
+    }    
+
+    // Check globals
+    if let Some(var) = context.get_global_var_mut(id) {
+      return Ok(var)
+    }
+
+    Err(RuntimeError {
+      error_type: RuntimeErrorType::InvalidAccess,
+      description: format!("variable '{}' not found", id),
+      stack_trace: None,
+    })
+  }
+
+  pub fn def_var(&mut self, context: &mut Rant, id: &str, access: AccessPathKind, var: RantVar) -> RuntimeResult<()> {
+    match access {
+      AccessPathKind::Local => {
+        self.locals.define(RantString::from(id), var);
         return Ok(())
       },
       AccessPathKind::Descope(descope_count) => {
-        self.locals.define_parent(RantString::from(id), val, descope_count);
+        self.locals.define_parent(RantString::from(id), var, descope_count);
         return Ok(())
       },
       AccessPathKind::ExplicitGlobal => {}
     }
     
-    context.globals.borrow_mut().raw_set(id, val);
+    context.set_global_var(id, var);
+    Ok(())
+  }
+
+  #[inline]
+  pub fn def_var_value(&mut self, context: &mut Rant, id: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
+    match access {
+      AccessPathKind::Local => {
+        self.locals.define(RantString::from(id), RantVar::ByVal(val));
+        return Ok(())
+      },
+      AccessPathKind::Descope(descope_count) => {
+        self.locals.define_parent(RantString::from(id), RantVar::ByVal(val), descope_count);
+        return Ok(())
+      },
+      AccessPathKind::ExplicitGlobal => {}
+    }
+    
+    context.set_global(id, val);
     Ok(())
   }
 }

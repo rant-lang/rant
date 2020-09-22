@@ -33,20 +33,25 @@ mod util;
 mod collections;
 mod stdlib;
 mod value;
+mod var;
 pub mod compiler;
 
-use compiler::CompilerMessage;
-use rand::Rng;
 pub use collections::*;
-use lang::is_valid_ident;
 pub use value::*;
 pub use convert::*;
+pub use var::*;
+
+use crate::compiler::CompilerMessage;
 use crate::lang::{Sequence};
 use crate::compiler::{RantCompiler, Reporter, ErrorKind as CompilerErrorKind};
 use crate::runtime::*;
-use std::{path::Path, rc::Rc, cell::RefCell, fmt::Display, path::PathBuf, io::ErrorKind};
+use crate::lang::is_valid_ident;
+use crate::random::RantRng;
+
+use std::{path::Path, rc::Rc, cell::RefCell, fmt::Display, path::PathBuf, io::ErrorKind, collections::HashMap};
+use fnv::FnvBuildHasher;
 use std::env;
-use random::RantRng;
+use rand::Rng;
 
 type IOErrorKind = std::io::ErrorKind;
 
@@ -64,11 +69,11 @@ pub const RANT_VERSION: &str = "4.0";
 /// The default name given to programs compiled from raw strings.
 pub const DEFAULT_PROGRAM_NAME: &str = "program";
 
+/// The file extension that Rant expects modules to have.
+pub const RANT_FILE_EXTENSION: &str = "rant";
+
 /// Name of global variable that stores cached modules.
 pub(crate) const MODULES_CACHE_KEY: &str = "__MODULES";
-
-/// The file extension that Rant expects modules to have.
-pub(crate) const RANT_FILE_EXTENSION: &str = "rant";
 
 pub(crate) type ModuleLoadResult = Result<RantProgram, ModuleLoadError>;
 
@@ -77,7 +82,7 @@ pub(crate) type ModuleLoadResult = Result<RantProgram, ModuleLoadError>;
 pub struct Rant {
   rng: Rc<RantRng>,
   debug_mode: bool,
-  globals: RantMapRef,
+  globals: HashMap<RantString, RantVar, FnvBuildHasher>,
   options: RantOptions,
 }
 
@@ -107,27 +112,17 @@ impl Rant {
   pub fn with_options(options: RantOptions) -> Self {
     let mut rant = Self {
       debug_mode: options.debug_mode,
-      globals: Rc::new(RefCell::new(RantMap::new())),
+      globals: Default::default(),
       rng: Rc::new(RantRng::new(options.seed)),
       options,
     };
 
-    rant.load_stdlib();
-    rant
-  }
-
-  #[inline]
-  fn load_stdlib(&mut self) {
-    if !self.options.use_stdlib {
-      return
-    }
-    
-    let mut globals = self.globals.borrow_mut();
     // Load standard library
-    stdlib::load_stdlib(&mut globals, self.options.enable_require);    
+    if rant.options.use_stdlib {
+      stdlib::load_stdlib(&mut rant);
+    }
 
-    // Add standard variables
-    globals.raw_set("RANT_VERSION", RantValue::String(RANT_VERSION.to_owned()));
+    rant
   }
 }
 
@@ -193,19 +188,53 @@ impl Rant {
     RantCompiler::compile_file(path, &mut (), self.debug_mode)
   }
 
-  /// Gets the global variable map of the Rant context.
-  pub fn globals(&self) -> RantMapRef {
-    Rc::clone(&self.globals)
-  }
-
   /// Sets a global variable.
+  #[inline]
   pub fn set_global(&mut self, key: &str, value: RantValue) {
-    self.globals.borrow_mut().raw_set(key, value);
+    if let Some(global_var) = self.globals.get_mut(key) {
+      global_var.write(value);
+    } else {
+      self.globals.insert(RantString::from(key), RantVar::ByVal(value));
+    }
   }
 
   /// Gets a global variable.
+  #[inline]
   pub fn get_global(&self, key: &str) -> Option<RantValue> {
-    self.globals.borrow().raw_get(key).cloned()
+    self.globals.get(key).map(|var| var.value_cloned())
+  }
+
+  #[inline]
+  pub(crate) fn get_global_var(&self, key: &str) -> Option<&RantVar> {
+    self.globals.get(key)
+  }
+
+  #[inline]
+  pub(crate) fn set_global_var(&mut self, key: &str, var: RantVar) {
+    self.globals.insert(RantString::from(key), var);
+  }
+
+  #[inline]
+  pub(crate) fn get_global_var_mut(&mut self, key: &str) -> Option<&mut RantVar> {
+    self.globals.get_mut(key)
+  }
+
+  /// Returns `true` if a global with the specified key exists.
+  #[inline]
+  pub fn has_global(&self, key: &str) -> bool {
+    self.globals.contains_key(key)
+  }
+
+  /// Removes the global with the specified key. Returns `true` if the global existed prior to removal.
+  #[inline]
+  pub fn delete_global(&mut self, key: &str) -> bool {
+    self.globals.remove(key).is_some()
+  }
+
+  /// Iterates over the names of all globals stored in the context.
+  #[inline]
+  pub fn global_names(&self) -> impl Iterator<Item = &str> {
+    self.globals.keys().map(|k| k.as_str())
   }
   
   /// Gets the current RNG seed.

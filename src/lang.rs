@@ -105,6 +105,12 @@ impl AccessPathKind {
       AccessPathKind::Descope(n) => *n
     }
   }
+
+  /// Returns `true` if the access type is `Local`.
+  #[inline]
+  pub fn is_local(&self) -> bool {
+    matches!(self, Self::Local)
+  }
 }
 
 /// Describes the location of a value.

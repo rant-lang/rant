@@ -513,7 +513,7 @@ impl<Params: FromRantArgs, Function: Fn(&mut VM, Params) -> RantStdResult> AsRan
 
     RantFunction {
       body,
-      captured_vars: None,
+      captured_vars: vec![],
       min_arg_count: params.iter().take_while(|p| p.is_required()).count(),
       vararg_start_index: params.iter()
       .enumerate()

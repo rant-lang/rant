@@ -1,3 +1,10 @@
+# 4.0.0-alpha.6
+
+* Added support for variable capturing in closures
+* Added `.delete_global()` and `.has_global()` methods to `Rant`
+* Removed `.globals()` method from `Rant`
+* Upgraded `quickscope` to 0.1.3
+
 # 4.0.0-alpha.5
 
 * Added `Rant::with_random_seed()` constructor

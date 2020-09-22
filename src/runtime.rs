@@ -6,10 +6,10 @@ use smallvec::SmallVec;
 pub use stack::*;
 pub use output::*;
 
+pub(crate) mod format;
 pub(crate) mod resolver;
 mod output;
 mod stack;
-pub(crate) mod format;
 
 pub type RuntimeResult<T> = Result<T, RuntimeError>;
 
@@ -138,11 +138,11 @@ impl<'rant> VM<'rant> {
           },
           Intent::SetVar { vname, access_kind } => {
             let val = self.pop_val()?;
-            self.set_var(vname.as_str(), access_kind, val)?;
+            self.set_var_value(vname.as_str(), access_kind, val)?;
           },
           Intent::DefVar { vname, access_kind } => {
             let val = self.pop_val()?;
-            self.def_var(vname.as_str(), access_kind, val)?;
+            self.def_var_value(vname.as_str(), access_kind, val)?;
           },
           Intent::BuildDynamicGetter { path, dynamic_key_count, mut pending_exprs, override_print } => {
             if let Some(key_expr) = pending_exprs.pop() {
@@ -286,7 +286,7 @@ impl<'rant> VM<'rant> {
           },
           Intent::LoadModule { module_name } => {
             let module = self.pop_val()?;
-            self.def_var(&module_name, AccessPathKind::Local, module)?;
+            self.def_var_value(&module_name, AccessPathKind::Local, module)?;
           },
         }
       }
@@ -324,7 +324,7 @@ impl<'rant> VM<'rant> {
               continue 'from_the_top;
             } else {
               // If there's no assignment, just set it to <>
-              self.def_var(vname.as_str(), *access_kind, RantValue::Empty)?;
+              self.def_var_value(vname.as_str(), *access_kind, RantValue::Empty)?;
             }
           },
           Rst::VarGet(path) => {
@@ -377,10 +377,18 @@ impl<'rant> VM<'rant> {
               capture_vars
             } = fdef;
 
+            // Capture variables
+            let mut captured_vars = vec![];
+            for capture_id in capture_vars.iter() {
+              let var = self.call_stack.get_var_mut(&mut self.engine, capture_id, AccessPathKind::Local)?;
+              var.make_by_ref();
+              captured_vars.push((capture_id.clone(), var.clone()));
+            }
+
             let func = RantValue::Function(Rc::new(RantFunction {
               params: Rc::clone(params),
               body: RantFunctionInterface::User(Rc::clone(body)),
-              captured_vars: Default::default(), // TODO: Actually capture variables, don't be lazy!
+              captured_vars,
               min_arg_count: params.iter().take_while(|p| p.is_required()).count(),
               vararg_start_index: params.iter()
                 .enumerate()
@@ -407,10 +415,18 @@ impl<'rant> VM<'rant> {
               params,
             } = closure_expr;
 
+            // Capture variables
+            let mut captured_vars = vec![];
+            for capture_id in capture_vars.iter() {
+              let var = self.call_stack.get_var_mut(&mut self.engine, capture_id, AccessPathKind::Local)?;
+              var.make_by_ref();
+              captured_vars.push((capture_id.clone(), var.clone()));
+            }
+
             let func = RantValue::Function(Rc::new(RantFunction {
               params: Rc::clone(params),
               body: RantFunctionInterface::User(Rc::clone(&expr)),
-              captured_vars: Default::default(), // TODO: Capture variables on anonymous functions
+              captured_vars,
               min_arg_count: params.iter().take_while(|p| p.is_required()).count(),
               vararg_start_index: params.iter()
                 .enumerate()
@@ -538,11 +554,21 @@ impl<'rant> VM<'rant> {
         // Pass the args to the function scope
         let mut args = args.drain(..);
         for param in func.params.iter() {
-          self.call_stack.def_local(
+          self.call_stack.def_var_value(
             self.engine, 
             param.name.as_str(), 
             AccessPathKind::Local, 
             args.next().unwrap_or(RantValue::Empty)
+          )?;
+        }
+
+        // Pass captured vars to the function scope
+        for (capture_name, capture_var) in func.captured_vars.iter() {
+          self.call_stack.def_var(
+            self.engine,
+            capture_name.as_str(),
+            AccessPathKind::Local,
+            RantVar::clone(capture_var)
           )?;
         }
       },
@@ -584,8 +610,8 @@ impl<'rant> VM<'rant> {
     for accessor in path_iter {
       // Update setter target by keying off setter_key
       setter_target = match (&setter_target, &setter_key) {
-        (None, SetterKey::KeyRef(key)) => Some(self.get_var(key, access_kind)?),
-        (None, SetterKey::KeyString(key)) => Some(self.get_var(key.as_str(), access_kind)?),
+        (None, SetterKey::KeyRef(key)) => Some(self.get_var_value(key, access_kind)?),
+        (None, SetterKey::KeyString(key)) => Some(self.get_var_value(key.as_str(), access_kind)?),
         (Some(val), SetterKey::Index(index)) => Some(val.index_get(*index).into_runtime_result()?),
         (Some(val), SetterKey::KeyRef(key)) => Some(val.key_get(key).into_runtime_result()?),
         (Some(val), SetterKey::KeyString(key)) => Some(val.key_get(key.as_str()).into_runtime_result()?),
@@ -616,16 +642,16 @@ impl<'rant> VM<'rant> {
     match (&mut setter_target, &setter_key) {
       (None, SetterKey::KeyRef(vname)) => {
         if auto_def {
-          self.def_var(vname, access_kind, setter_value)?;
+          self.def_var_value(vname, access_kind, setter_value)?;
         } else {
-          self.set_var(vname, access_kind, setter_value)?;
+          self.set_var_value(vname, access_kind, setter_value)?;
         }
       },
       (None, SetterKey::KeyString(vname)) => {
         if auto_def {
-          self.def_var(vname.as_str(), access_kind, setter_value)?
+          self.def_var_value(vname.as_str(), access_kind, setter_value)?
         } else {
-          self.set_var(vname.as_str(), access_kind, setter_value)?
+          self.set_var_value(vname.as_str(), access_kind, setter_value)?
         }
       },
       (Some(target), SetterKey::Index(index)) => target.index_set(*index, setter_value).into_runtime_result()?,
@@ -651,11 +677,11 @@ impl<'rant> VM<'rant> {
     // Get the root variable
     let mut getter_value = match path_iter.next() {
         Some(AccessPathComponent::Name(vname)) => {
-          self.get_var(vname.as_str(), path.kind())?
+          self.get_var_value(vname.as_str(), path.kind())?
         },
         Some(AccessPathComponent::Expression(_)) => {
           let key = dynamic_keys.next().unwrap().to_string();
-          self.get_var(key.as_str(), path.kind())?
+          self.get_var_value(key.as_str(), path.kind())?
         },
         _ => unreachable!()
     };
@@ -778,18 +804,18 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  pub(crate) fn set_var(&mut self, varname: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
-    self.call_stack.set_local(self.engine, varname, access, val)
+  pub(crate) fn set_var_value(&mut self, varname: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
+    self.call_stack.set_var_value(self.engine, varname, access, val)
   }
 
   #[inline(always)]
-  pub(crate) fn get_var(&self, varname: &str, access: AccessPathKind, ) -> RuntimeResult<RantValue> {
-    self.call_stack.get_local(self.engine, varname, access)
+  pub(crate) fn get_var_value(&self, varname: &str, access: AccessPathKind, ) -> RuntimeResult<RantValue> {
+    self.call_stack.get_var_value(self.engine, varname, access)
   }
 
   #[inline(always)]
-  pub(crate) fn def_var(&mut self, varname: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
-    self.call_stack.def_local(self.engine, varname, access, val)
+  pub(crate) fn def_var_value(&mut self, varname: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
+    self.call_stack.def_var_value(self.engine, varname, access, val)
   }
   
   #[inline(always)]
