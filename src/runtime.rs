@@ -919,7 +919,6 @@ pub(crate) trait IntoRuntimeResult<T> {
   fn into_runtime_result(self) -> RuntimeResult<T>;
 }
 
-// TODO: Add stack trace to runtime errors
 #[derive(Debug)]
 pub struct RuntimeError {
   /// The type of runtime error.

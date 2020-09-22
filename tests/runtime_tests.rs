@@ -151,3 +151,18 @@ fn multi_accessor_reassign() {
 fn multi_accessor_delim_term() {
   assert_matches!(run_rant!(r#"<$foo=8; $bar=2; $baz=[add:<foo>;<bar>]; baz;>"#), Ok("10"));
 }
+
+#[test]
+fn closure_capture_var() {
+  assert_matches!(run_rant!(r#"[$gen-closure]{<$a=foo>[?]{<a>}}[![gen-closure]]"#), Ok("foo"));
+}
+
+#[test]
+fn closure_capture_arg() {
+  assert_matches!(run_rant!(r#"[$gen-closure:msg]{[?]{<msg>}}[![gen-closure:foo]]"#), Ok("foo"));
+}
+
+#[test]
+fn closure_mutate_captured_value() {
+  assert_matches!(run_rant!(r#"{<$a=0>[$^next-number]{<$val=<a>><a=[add:<a>;1]><val>}}[rep:4][sep:\s]{[next-number]}"#), Ok("0 1 2 3"));
+}
