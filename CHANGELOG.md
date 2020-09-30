@@ -1,3 +1,13 @@
+# 4.0.0-alpha.7
+
+* Added new stdlib functions:
+  * `[max]`
+  * `[min]`
+  * `[shred]`
+  * `[shuffled]`
+  * `[sort]`
+  * `[sum]`
+
 # 4.0.0-alpha.6
 
 * Modules are now cached by the executing context in a global map

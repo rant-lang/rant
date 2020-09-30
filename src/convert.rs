@@ -217,6 +217,19 @@ impl FromRant for f64 {
   }
 }
 
+impl ToRant for f32 {
+  fn to_rant(self) -> Result<RantValue, ValueError> {
+    Ok(RantValue::Float(self as f64))
+  }
+}
+
+impl ToRant for f64 {
+  fn to_rant(self) -> Result<RantValue, ValueError> {
+    Ok(RantValue::Float(self))
+  }
+}
+
+
 impl ToRant for String {
   fn to_rant(self) -> ValueResult<RantValue> {
     Ok(RantValue::String(self))

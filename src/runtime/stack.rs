@@ -220,6 +220,7 @@ impl CallStack {
   }
 }
 
+/// Represents a call stack frame.
 pub struct StackFrame {
   /// Node sequence being executed by the frame
   sequence: Rc<Sequence>,
@@ -231,13 +232,16 @@ pub struct StackFrame {
   output: Option<OutputWriter>,
   /// Intent queue for the frame
   intents: VecDeque<Intent>,
-  // Line/col for debug info
+  /// Line/col for debug info
   debug_pos: (usize, usize),
-  // Source name for debug info
+  /// Source name for debug info
   origin: Rc<RantString>,
+  /// A usage hint provided by the program element that created the frame.
+  flavor: StackFrameFlavor,
 }
 
 impl StackFrame {
+  #[inline]
   pub fn new(sequence: Rc<Sequence>, has_output: bool, prev_output: Option<&OutputWriter>) -> Self {
     Self {
       origin: Rc::clone(&sequence.origin),
@@ -247,7 +251,15 @@ impl StackFrame {
       pc: 0,
       intents: Default::default(),
       debug_pos: (0, 0),
+      flavor: Default::default(),
     }
+  }
+
+  #[inline(always)]
+  pub fn with_flavor(self, flavor: StackFrameFlavor) -> Self {
+    let mut frame = self;
+    frame.flavor = flavor;
+    frame
   }
 }
 
@@ -362,5 +374,23 @@ impl Display for StackFrame {
       self.debug_pos.1,
       self.sequence.name().map(|name| name.as_str()).unwrap_or("???"), 
     )
+  }
+}
+
+/// Hints at what kind of program element a specific stack frame represents.
+///
+/// The runtime can use this information to find where to unwind the call stack to on specific operations like breaking, returning, etc.
+pub enum StackFrameFlavor {
+  /// Nothing special.
+  Original,
+  /// Frame is used for the body of a function.
+  FunctionBody,
+  /// Frame is used for a block element.
+  BlockElement,
+}
+
+impl Default for StackFrameFlavor {
+  fn default() -> Self {
+    Self::Original
   }
 }

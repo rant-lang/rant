@@ -361,6 +361,79 @@ fn dignz(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   Ok(())
 }
 
+fn shred(vm: &mut VM, (value, n, variance): (RantValue, i64, Option<f64>)) -> RantStdResult {
+  if n <= 0 {
+    return Err(RuntimeError {
+      error_type: RuntimeErrorType::ArgumentError,
+      description: "shred count must be greater than zero".to_owned(),
+      stack_trace: None,
+    })
+  }
+
+  let rng = vm.rng();
+  
+  match value {
+    RantValue::Integer(m) => {
+      let mut shreds = vec![];
+      let variance = variance.unwrap_or_default().abs() as i64;
+      let quotient = m / n;
+      let remainder = m % n;
+
+      let (head_chunk, tail_chunk) = (quotient + remainder, quotient);
+
+      // Populate chunks
+      for i in 0..n {
+        shreds.push(if i == 0 { head_chunk } else { tail_chunk });
+      }
+
+      // Redistribute chunk size randomly
+      for i in 0..n {
+        let shift = rng.next_i64(0, variance + 1);
+        let cell = shreds.get_mut(i as usize).unwrap();
+        *cell -= shift;
+        let cell = shreds.get_mut(((i + 1) % n) as usize).unwrap();
+        *cell += shift;
+      }
+
+      vm.cur_frame_mut().write_value(shreds.to_rant().into_runtime_result()?);
+    },
+    RantValue::Float(m) => {
+      let mut shreds = vec![];
+      let variance = variance.unwrap_or_default().abs() as f64;
+      let nf = n as f64;
+      let quotient = m / nf;
+      let remainder = m % nf;
+
+      let (head_chunk, tail_chunk) = (quotient + remainder, quotient);
+
+      // Populate chunks
+      for i in 0..n {
+        shreds.push(if i == 0 { head_chunk } else { tail_chunk });
+      }
+
+      // Redistribute chunk size randomly
+      for i in 0..n {
+        let shift = rng.next_f64(0.0, variance);
+        let cell = shreds.get_mut(i as usize).unwrap();
+        *cell -= shift;
+        let cell = shreds.get_mut(((i + 1) % n) as usize).unwrap();
+        *cell += shift;
+      }
+
+      vm.cur_frame_mut().write_value(shreds.to_rant().into_runtime_result()?);
+    },
+    other => {
+      return Err(RuntimeError {
+        error_type: RuntimeErrorType::ArgumentError,
+        description: format!("cannot shred '{}' value", other.type_name()),
+        stack_trace: None,
+      })
+    }
+  }
+
+  Ok(())
+}
+
 fn maybe(vm: &mut VM, p: Option<f64>) -> RantStdResult {
   let b = vm.rng().next_bool(p.unwrap_or(0.5));
   vm.cur_frame_mut().write_value(RantValue::Boolean(b));
@@ -385,6 +458,83 @@ fn join(vm: &mut VM, (sep, list): (RantValue, Vec<RantValue>)) -> RantStdResult 
     }
     frame.write_value(val);
   }
+  Ok(())
+}
+
+fn sum(vm: &mut VM, list: RantListRef) -> RantStdResult {
+  let list = list.borrow();
+  if list.is_empty() {
+    return Ok(())
+  }
+
+  let mut iter = list.iter().cloned();
+  let mut sum = iter.next().unwrap();
+  
+  for val in iter {
+    sum = sum + val;
+  }
+
+  vm.cur_frame_mut().write_value(sum);
+
+  Ok(())
+}
+
+fn min(vm: &mut VM, list: RantListRef) -> RantStdResult {
+  let list = list.borrow();
+  if list.is_empty() {
+    return Ok(());
+  }
+
+  let mut iter = list.iter();
+  let mut min = iter.next().unwrap();
+
+  for val in iter {
+    if val < min {
+      min = val;
+    }
+  }
+
+  vm.cur_frame_mut().write_value(min.clone());
+
+  Ok(())
+}
+
+fn max(vm: &mut VM, list: RantListRef) -> RantStdResult {
+  let list = list.borrow();
+  if list.is_empty() {
+    return Ok(());
+  }
+
+  let mut iter = list.iter();
+  let mut max = iter.next().unwrap();
+
+  for val in iter {
+    if val > max {
+      max = val;
+    }
+  }
+
+  vm.cur_frame_mut().write_value(max.clone());
+
+  Ok(())
+}
+
+fn shuffled(vm: &mut VM, list: RantListRef) -> RantStdResult {
+  let mut list = list.borrow().clone();
+  if list.is_empty() {
+    return Ok(());
+  }
+
+  let n = list.len();
+  let rng = vm.rng();
+
+  for i in 0..n {
+    let swap_index = rng.next_usize(n);
+    list.swap(i, swap_index);
+  }
+
+  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list))));
+  
   Ok(())
 }
 
@@ -509,6 +659,12 @@ fn take(vm: &mut VM, (collection, pos): (RantValue, RantValue)) -> RantStdResult
   Ok(())
 }
 
+fn sort(vm: &mut VM, list: RantListRef) -> RantStdResult {
+  let mut list = list.borrow_mut();
+  list.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+  Ok(())
+}
+
 fn sorted(vm: &mut VM, list: RantListRef) -> RantStdResult {
   let mut list_copy = list.borrow().clone();
   list_copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
@@ -518,6 +674,10 @@ fn sorted(vm: &mut VM, list: RantListRef) -> RantStdResult {
 
 fn shuffle(vm: &mut VM, list: RantListRef) -> RantStdResult {
   let mut list = list.borrow_mut();
+  if list.is_empty() {
+    return Ok(())
+  }
+
   let n = list.len();
   let rng = vm.rng();
   for i in 0..n {
@@ -850,7 +1010,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     to_int as "int", to_float as "float", to_string as "string",
 
     // Generator functions
-    dig, digh, dignz, maybe, num, numf,
+    dig, digh, dignz, maybe, num, numf, shred,
 
     // Prototype functions
     proto, set_proto as "set-proto",
@@ -859,7 +1019,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     clear, keys, has_key as "has-key", insert, remove, take,
 
     // List functions
-    pick, join, sorted, shuffle,
+    pick, join, sort, sorted, shuffle, shuffled, sum, min, max,
     list_push as "push", list_pop as "pop",
 
     // String functions
