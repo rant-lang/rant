@@ -133,7 +133,7 @@ impl<'rant> VM<'rant> {
             let val = self.pop_val()?;
             self.cur_frame_mut().write_value(val);
           },
-          Intent::CheckBlock => {
+          Intent::CheckBlock => {            
             self.check_block()?;
           },
           Intent::SetVar { vname, access_kind } => {
@@ -512,6 +512,8 @@ impl<'rant> VM<'rant> {
         self.push_val(output)?;
       }
     }
+
+    debug_assert_eq!(self.val_stack.len(), 1);
     
     // Once stack is empty, program is done-- return last frame's output as a string
     Ok(self.pop_val().unwrap_or_default())
@@ -746,9 +748,11 @@ impl<'rant> VM<'rant> {
   /// Checks for an active block and attempts to iterate it. If a valid element is returned, it is pushed onto the call stack.
   pub(crate) fn check_block(&mut self) -> RuntimeResult<()> {
     let mut is_printing = false;
+    let mut is_repeater = false;
     
     // Check if there's an active block and try to iterate it
     let next_element = if let Some(state) = self.resolver.active_block_mut() {
+      is_repeater = state.is_repeater();
       // Get the next element
       if let Some(element) = state.next_element().into_runtime_result()? {
         // Figure out if the block is supposed to print anything
@@ -776,7 +780,15 @@ impl<'rant> VM<'rant> {
             self.cur_frame_mut().push_intent_front(Intent::PrintValue);
           }
           // Push the next element
-          self.push_frame(Rc::clone(&elem_seq), is_printing)?;
+          self.push_frame_flavored(
+            Rc::clone(&elem_seq), 
+            is_printing, 
+            if is_repeater { 
+              StackFrameFlavor::Repeater 
+            } else { 
+              Default::default()
+            }
+          )?;
         },
         BlockAction::Separator(separator) => {
           match separator {
@@ -890,6 +902,63 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
+  pub(crate) fn push_frame_flavored(&mut self, callee: Rc<Sequence>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
+    // Check if this push would overflow the stack
+    if self.call_stack.len() >= MAX_STACK_SIZE {
+      runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
+    }
+    
+    let frame = StackFrame::new(
+      callee,
+      use_output,
+      self.call_stack.top().map(|last| last.output()).flatten()
+    ).with_flavor(flavor);
+
+    self.call_stack.push_frame(frame);
+    Ok(())
+  }
+
+  // FIXME: If called during dynamic key evaluation / other multi-push operations, it could leave the value stack dirty.
+  // DO NOT allow this function to succeed in such contexts.
+  #[inline]
+  pub fn interrupt_repeater(&mut self, break_val: Option<RantValue>, should_continue: bool) -> RuntimeResult<()> {
+    if let Some(block_depth) = self.call_stack.taste_for_first(StackFrameFlavor::Repeater) {
+      // Tell the active block to stop running if it's a break
+      if !should_continue {
+        self.resolver_mut().active_repeater_mut().unwrap().force_stop();
+      }
+
+      // Pop down to owning scope of block
+      if let Some(break_val) = break_val {
+        for _ in 0..=block_depth {
+          self.pop_frame()?;
+        }
+        self.push_val(break_val)?;
+      } else {
+        for i in 0..=block_depth {
+          let mut old_frame = self.pop_frame()?;
+          if let Some(output) = old_frame.render_output_value() {
+            if i < block_depth {
+              self.cur_frame_mut().write_value(output);
+            } else {
+              self.push_val(output)?;
+            }
+          }
+        }
+      }
+
+      // Make sure to pop off any blocks that are on top of the repeater, or weird stuff happens
+      while !self.resolver().active_block().unwrap().is_repeater() {
+        self.resolver_mut().pop_block();
+      }      
+      
+      Ok(())
+    } else {
+      runtime_error!(RuntimeErrorType::ControlFlowError, "no reachable repeater to interrupt");
+    }
+  }
+
+  #[inline(always)]
   pub fn cur_frame_mut(&mut self) -> &mut StackFrame {
     self.call_stack.top_mut().unwrap()
   }
@@ -989,6 +1058,8 @@ pub enum RuntimeErrorType {
   ModuleLoadError(ModuleLoadError),
   /// Error manually triggered by program
   UserError,
+  /// Error during control flow operation (e.g. return or break)
+  ControlFlowError,
 }
 
 impl Display for RuntimeErrorType {
@@ -1007,6 +1078,7 @@ impl Display for RuntimeErrorType {
       RuntimeErrorType::KeyError(_) => "key error",
       RuntimeErrorType::SelectorError(_) => "selector error",
       RuntimeErrorType::ModuleLoadError(_) => "module load error",
+      RuntimeErrorType::ControlFlowError => "control flow error",
     })
   }
 }

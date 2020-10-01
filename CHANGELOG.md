@@ -1,6 +1,8 @@
 # 4.0.0-alpha.7
 
 * Added new stdlib functions:
+  * `[break]`
+  * `[continue]`
   * `[max]`
   * `[min]`
   * `[shred]`

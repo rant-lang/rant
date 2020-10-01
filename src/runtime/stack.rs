@@ -218,6 +218,32 @@ impl CallStack {
     context.set_global(id, val);
     Ok(())
   }
+
+  /// Scans the stack from the top looking for the first occurrence of the specified frame flavor.
+  /// Returns the top-relative index of the first occurrence, or `None` if no match was found or another flavor was found first.
+  #[inline]
+  pub fn taste_for_first(&self, scan_flavor: StackFrameFlavor) -> Option<usize> {
+    for (frame_index, frame) in self.frames.iter().rev().enumerate() {
+      match frame.flavor {
+        StackFrameFlavor::Original => {},
+        flavor if flavor == scan_flavor => return Some(frame_index),
+        _ => return None,
+      }
+    }
+    None
+  }
+
+  /// Scans the stack from the top looking for the first occurrence of the specified frame flavor.
+  /// Returns the top-relative index of the first occurrence, or `None` if no match was found or another flavor was found first.
+  #[inline]
+  pub fn taste_for(&self, scan_flavor: StackFrameFlavor) -> Option<usize> {
+    for (frame_index, frame) in self.frames.iter().rev().enumerate() {
+      if frame.flavor == scan_flavor {
+        return Some(frame_index)
+      }
+    }
+    None
+  }
 }
 
 /// Represents a call stack frame.
@@ -380,13 +406,18 @@ impl Display for StackFrame {
 /// Hints at what kind of program element a specific stack frame represents.
 ///
 /// The runtime can use this information to find where to unwind the call stack to on specific operations like breaking, returning, etc.
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum StackFrameFlavor {
   /// Nothing special.
   Original,
   /// Frame is used for the body of a function.
   FunctionBody,
-  /// Frame is used for a block element.
-  BlockElement,
+  /// Frame is used for a repeater element.
+  Repeater,
+  /// Frame is used to evaluate a dynamic key.
+  DynamicKeyExpression,
+  /// Frame is used to evaluate a function argument.
+  ArgumentExpression,
 }
 
 impl Default for StackFrameFlavor {

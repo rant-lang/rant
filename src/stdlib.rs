@@ -815,6 +815,16 @@ fn else_(vm: &mut VM, _: ()) -> RantStdResult {
   Ok(())
 }
 
+fn break_(vm: &mut VM, val: Option<RantValue>) -> RantStdResult {
+  vm.interrupt_repeater(val, false)?;
+  Ok(())
+}
+
+fn continue_(vm: &mut VM, val: Option<RantValue>) -> RantStdResult {
+  vm.interrupt_repeater(val, true)?;
+  Ok(())
+}
+
 fn resolve(vm: &mut VM, value: RantValue) -> RantStdResult {
   if let RantValue::Block(block) = value {
     vm.push_block(block.as_ref(), block.flag)?;
@@ -836,10 +846,11 @@ fn resolve(vm: &mut VM, value: RantValue) -> RantStdResult {
 
 fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
   vm.resolver_mut().attrs_mut().reps = match reps {
-    RantValue::Integer(n) => Reps::Finite(n.max(0) as usize),
+    RantValue::Integer(n) => Reps::Repeat(n.max(0) as usize),
     RantValue::String(s) => match s.as_str() {
+      "once" => Reps::Once,
       "all" => Reps::All,
-      "forever" => Reps::Infinite,
+      "forever" => Reps::RepeatForever,
       _ => return Err(RuntimeError {
         error_type: RuntimeErrorType::ArgumentError,
         description: format!("unknown repetition mode: '{}'", s),
@@ -984,8 +995,8 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     // Formatting functions
     whitespace_fmt as "whitespace-fmt",
 
-    // Block attribute functions
-    if_ as "if", else_if as "else-if", else_ as "else", mksel, rep, sel, sep,
+    // Block attribute / block control flow functions
+    break_ as "break", continue_ as "continue", if_ as "if", else_if as "else-if", else_ as "else", mksel, rep, sel, sep,
 
     // Attribute frame stack functions
     push_attrs as "push-attrs", pop_attrs as "pop-attrs", count_attrs as "count-attrs", reset_attrs as "reset-attrs",

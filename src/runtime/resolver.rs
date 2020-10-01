@@ -18,8 +18,10 @@ pub struct Resolver {
 }
 
 /// Stores state information for a block that is currently being resolved.
+#[derive(Debug)]
 pub struct BlockState {
   elements: Rc<Vec<Rc<Sequence>>>,
+  force_stop: bool,
   flag: PrintFlag,
   rng: Rc<RantRng>,
   attrs: AttributeFrame,
@@ -51,6 +53,11 @@ impl BlockState {
     }
   }
 
+  #[inline(always)]
+  pub fn force_stop(&mut self) {
+    self.force_stop = true;
+  }
+
   #[inline]
   pub fn step_index(&self) -> usize {
     self.cur_steps - 1
@@ -66,11 +73,18 @@ impl BlockState {
     self.total_steps
   }
 
+  #[inline]
+  pub fn is_repeater(&self) -> bool {
+    matches!(self.attrs.reps, Reps::Repeat(_) | Reps::RepeatForever | Reps::All)
+  }
+
   /// Indicates whether the block has finished and should return.
   #[inline(always)]
   pub(crate) fn is_done(&self) -> bool {
+    // Force-stop from break
+    self.force_stop
     // Conditional value has evaluated to false
-    !self.attrs.condval.unwrap_or(true) 
+    || !self.attrs.condval.unwrap_or(true) 
     // Finite repetitions are exhausted
     || (!self.attrs.reps.is_infinite() && self.cur_steps >= self.total_steps)
   }
@@ -86,19 +100,22 @@ pub enum BlockAction {
   Separator(RantValue),
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum Reps {
   /// Repeat forever.
-  Infinite,
+  RepeatForever,
   /// Iterate as many times as there are elements in the block.
   All,
   /// Iterate a specific number of times.
-  Finite(usize)
+  Repeat(usize),
+  // Resolve once.
+  Once,
 }
 
 impl Reps {
   #[inline(always)]
   pub fn is_infinite(&self) -> bool {
-    matches!(self, Reps::Infinite)
+    matches!(self, Reps::RepeatForever)
   }
 
   #[inline(always)]
@@ -109,9 +126,10 @@ impl Reps {
   #[inline]
   pub fn get_rep_count_for(&self, block: &Block) -> usize {
     match self {
-      Reps::Infinite => 0,
+      Reps::RepeatForever => 0,
+      Reps::Once => 1,
       Reps::All => block.len(),
-      Reps::Finite(n) => *n,
+      Reps::Repeat(n) => *n,
     }
   }
 }
@@ -140,6 +158,7 @@ impl Resolver {
       total_steps: attrs.reps.get_rep_count_for(block),
       attrs,
       prev_step_separated: false,
+      force_stop: false,
     };
     // Since blocks are associated with call stack frames, there is no need to check the stack size here
     self.block_stack.push(state);
@@ -161,6 +180,24 @@ impl Resolver {
   #[inline]
   pub fn active_block_mut(&mut self) -> Option<&mut BlockState> {
     self.block_stack.last_mut()
+  }
+
+  /// Gets a mutable reference to the active repeater state.
+  #[inline]
+  pub fn active_repeater_mut(&mut self) -> Option<&mut BlockState> {
+    self.block_stack
+      .iter_mut()
+      .rev()
+      .find(|b| b.is_repeater())
+  }
+
+  /// Gets a reference to the active repeater state.
+  #[inline]
+  pub fn active_repeater(&self) -> Option<&BlockState> {
+    self.block_stack
+      .iter()
+      .rev()
+      .find(|b| b.is_repeater())
   }
 
   /// Takes the topmost attribute frame for use elsewhere and replaces it with a default one.
@@ -218,6 +255,7 @@ impl Resolver {
 }
 
 /// A full set of block attributes.
+#[derive(Debug)]
 pub struct AttributeFrame {
   /// Conditional value returned from last [if]-like call
   pub condval: Option<bool>,
@@ -274,7 +312,7 @@ impl Default for AttributeFrame {
       condval: None,
       prev_condval: None,
       no_propagate_condval: false,
-      reps: Reps::Finite(1),
+      reps: Reps::Once,
       separator: RantValue::Empty,
       selector: None,
     }
