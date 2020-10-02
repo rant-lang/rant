@@ -825,6 +825,11 @@ fn continue_(vm: &mut VM, val: Option<RantValue>) -> RantStdResult {
   Ok(())
 }
 
+fn return_(vm: &mut VM, val: Option<RantValue>) -> RantStdResult {
+  vm.func_return(val)?;
+  Ok(())
+}
+
 fn resolve(vm: &mut VM, value: RantValue) -> RantStdResult {
   if let RantValue::Block(block) = value {
     vm.push_block(block.as_ref(), block.flag)?;
@@ -995,8 +1000,9 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     // Formatting functions
     whitespace_fmt as "whitespace-fmt",
 
-    // Block attribute / block control flow functions
-    break_ as "break", continue_ as "continue", if_ as "if", else_if as "else-if", else_ as "else", mksel, rep, sel, sep,
+    // Block attribute / control flow functions
+    break_ as "break", continue_ as "continue", if_ as "if", else_if as "else-if", else_ as "else", 
+    mksel, rep, return_ as "return", sel, sep,
 
     // Attribute frame stack functions
     push_attrs as "push-attrs", pop_attrs as "pop-attrs", count_attrs as "count-attrs", reset_attrs as "reset-attrs",

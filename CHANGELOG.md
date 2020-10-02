@@ -5,6 +5,7 @@
   * `[continue]`
   * `[max]`
   * `[min]`
+  * `[return]`
   * `[shred]`
   * `[shuffled]`
   * `[sort]`

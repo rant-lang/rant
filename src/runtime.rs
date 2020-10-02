@@ -152,7 +152,7 @@ impl<'rant> VM<'rant> {
               } else {
                 self.cur_frame_mut().push_intent_front(Intent::BuildDynamicGetter { path, dynamic_key_count, pending_exprs, override_print });
               }
-              self.push_frame(Rc::clone(&key_expr), true)?;
+              self.push_frame_flavored(Rc::clone(&key_expr), true, StackFrameFlavor::DynamicKeyExpression)?;
             } else {
               self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print });
             }
@@ -166,7 +166,7 @@ impl<'rant> VM<'rant> {
             if eval_count < arg_exprs.len() {
               let arg_expr = Rc::clone(arg_exprs.get(arg_exprs.len() - eval_count - 1).unwrap());
               self.cur_frame_mut().push_intent_front(Intent::Invoke { arg_exprs, eval_count: eval_count + 1, flag });
-              self.push_frame(arg_expr, true)?;
+              self.push_frame_flavored(arg_expr, true, StackFrameFlavor::ArgumentExpression)?;
               continue 'from_the_top;
             } else {
               // Pop the evaluated args off the stack
@@ -213,13 +213,12 @@ impl<'rant> VM<'rant> {
               if pending_exprs.is_empty() {
                 // Set value once this frame is active again
                 self.cur_frame_mut().push_intent_front(Intent::SetValue { path, auto_def, expr_count });
-                self.push_frame(Rc::clone(&key_expr), true)?;
+                self.push_frame_flavored(Rc::clone(&key_expr), true, StackFrameFlavor::DynamicKeyExpression)?;
               } else {
                 self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, auto_def, expr_count, pending_exprs, val_source });
-                self.push_frame(Rc::clone(&key_expr), true)?;
+                self.push_frame_flavored(Rc::clone(&key_expr), true, StackFrameFlavor::DynamicKeyExpression)?;
                 continue 'from_the_top;
               }
-              
             } else {
               self.cur_frame_mut().push_intent_front(Intent::SetValue { path, auto_def, expr_count });
             }
@@ -561,7 +560,7 @@ impl<'rant> VM<'rant> {
         }
 
         // Push the function onto the call stack
-        self.push_frame(Rc::clone(user_func), is_printing)?;
+        self.push_frame_flavored(Rc::clone(user_func), is_printing, StackFrameFlavor::FunctionBody)?;
 
         // Pass the args to the function scope
         let mut args = args.drain(..);
@@ -784,9 +783,9 @@ impl<'rant> VM<'rant> {
             Rc::clone(&elem_seq), 
             is_printing, 
             if is_repeater { 
-              StackFrameFlavor::Repeater 
+              StackFrameFlavor::RepeaterElement 
             } else { 
-              Default::default()
+              StackFrameFlavor::BlockElement
             }
           )?;
         },
@@ -918,11 +917,9 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
-  // FIXME: If called during dynamic key evaluation / other multi-push operations, it could leave the value stack dirty.
-  // DO NOT allow this function to succeed in such contexts.
   #[inline]
   pub fn interrupt_repeater(&mut self, break_val: Option<RantValue>, should_continue: bool) -> RuntimeResult<()> {
-    if let Some(block_depth) = self.call_stack.taste_for_first(StackFrameFlavor::Repeater) {
+    if let Some(block_depth) = self.call_stack.taste_for_first(StackFrameFlavor::RepeaterElement) {
       // Tell the active block to stop running if it's a break
       if !should_continue {
         self.resolver_mut().active_repeater_mut().unwrap().force_stop();
@@ -955,6 +952,44 @@ impl<'rant> VM<'rant> {
       Ok(())
     } else {
       runtime_error!(RuntimeErrorType::ControlFlowError, "no reachable repeater to interrupt");
+    }
+  }
+
+  #[inline]
+  pub fn func_return(&mut self, ret_val: Option<RantValue>) -> RuntimeResult<()> {
+    if let Some(block_depth) = self.call_stack.taste_for_first(StackFrameFlavor::FunctionBody) {
+      // Pop down to owning scope of function
+      if let Some(break_val) = ret_val {
+        for _ in 0..=block_depth {
+          self.pop_frame()?;
+        }
+        self.push_val(break_val)?;
+      } else {
+        for i in 0..=block_depth {
+          let mut old_frame = self.pop_frame()?;
+
+          // If a block state is associated with the popped frame, pop that too
+          match old_frame.flavor() {
+            StackFrameFlavor::RepeaterElement | StackFrameFlavor::BlockElement => {
+              self.resolver_mut().pop_block();
+            },
+            _ => {}
+          }
+
+          // Handle output
+          if let Some(output) = old_frame.render_output_value() {
+            if i < block_depth {
+              self.cur_frame_mut().write_value(output);
+            } else {
+              self.push_val(output)?;
+            }
+          }
+        }
+      }
+      
+      Ok(())
+    } else {
+      runtime_error!(RuntimeErrorType::ControlFlowError, "no reachable function to return from");
     }
   }
 
