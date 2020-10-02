@@ -3,6 +3,9 @@
 * Fixed: def + get/set of same variable in chained accessor causes erroneous variable capture inside functions
 * Added new stdlib functions:
   * `[alpha]`
+  * `[assoc]`
+  * `[sift]`
+  * `[sifted]`
 
 # 4.0.0-alpha.7
 

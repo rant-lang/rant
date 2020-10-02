@@ -594,6 +594,23 @@ fn keys(vm: &mut VM, map: RantMapRef) -> RantStdResult {
   Ok(())
 }
 
+fn assoc(vm: &mut VM, (keys, values): (RantListRef, RantListRef)) -> RantStdResult {
+  let keys = keys.borrow();
+  let values = values.borrow();
+  if keys.len() != values.len() {
+    runtime_error!(RuntimeErrorType::ArgumentError, "assoc: key and value counts don't match");
+  }
+
+  let mut map = RantMap::new();
+  for (key, val) in keys.iter().zip(values.iter()) {
+    map.raw_set(key.to_string().as_ref(), val.clone());
+  }
+
+  vm.cur_frame_mut().write_value(RantValue::Map(Rc::new(RefCell::new(map))));
+
+  Ok(())
+}
+
 fn list_push(vm: &mut VM, (list, value): (RantListRef, RantValue)) -> RantStdResult {
   list.borrow_mut().push(value);
   Ok(())
@@ -602,6 +619,38 @@ fn list_push(vm: &mut VM, (list, value): (RantListRef, RantValue)) -> RantStdRes
 fn list_pop(vm: &mut VM, list: RantListRef) -> RantStdResult {
   let value = list.borrow_mut().pop().unwrap_or(RantValue::Empty);
   vm.cur_frame_mut().write_value(value);
+  Ok(())
+}
+
+fn sift(vm: &mut VM, (list, size): (RantListRef, usize)) -> RantStdResult {
+  let mut list = list.borrow_mut();
+  if list.len() <= size {
+    return Ok(())
+  }
+
+  let rng = vm.rng();
+  while list.len() > size {
+    let remove_index = rng.next_usize(list.len());
+    list.remove(remove_index);
+  }
+
+  Ok(())
+}
+
+fn sifted(vm: &mut VM, (list, size): (RantListRef, usize)) -> RantStdResult {
+  let mut list = list.borrow().clone();
+  if list.len() <= size {
+    return Ok(())
+  }
+
+  let rng = vm.rng();
+  while list.len() > size {
+    let remove_index = rng.next_usize(list.len());
+    list.remove(remove_index);
+  }
+
+  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list))));
+
   Ok(())
 }
 
@@ -1073,7 +1122,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     proto, set_proto as "set-proto",
 
     // Collection functions
-    clear, keys, has_key as "has-key", insert, remove, take,
+    assoc, clear, keys, has_key as "has-key", insert, remove, sift, sifted, take,
 
     // List functions
     pick, join, sort, sorted, shuffle, shuffled, sum, min, max,
