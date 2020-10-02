@@ -1194,53 +1194,51 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
   }
 
-  /// Parses one or more accessors (getter/setter/definition).
   #[inline]
-  fn parse_accessor(&mut self) -> ParseResult<Vec<Rst>> {
-    let parse_result = self.parse_accessor_inner();
-
-    // Update variable captures
-    if let Ok(accessors) = &parse_result {
-      for accessor in accessors {
-        match accessor {
-          Rst::VarDef(id, access_kind, ..) => {
-            match access_kind {
-              AccessPathKind::Local => {
-                self.var_stack.define(id.clone());
-              },
-              AccessPathKind::Descope(n) => {
-                self.var_stack.define_parent(id.clone(), *n);
-              },
-              AccessPathKind::ExplicitGlobal => {},
-            }
+  fn do_capture_pass(&mut self, capturing_rst: &Rst) {
+    match capturing_rst {
+      Rst::VarDef(id, access_kind, ..) => {
+        match access_kind {
+          AccessPathKind::Local => {
+            self.var_stack.define(id.clone());
           },
-          Rst::VarGet(path) | Rst::VarSet(path, ..) => {
-            // Only local getters can capture variables
-            if path.kind().is_local() {
-              // At least one capture frame must exist
-              if let Some((capture_frame_height, captures)) = self.capture_stack.last_mut() {
-                // Getter must be accessing a variable
-                if let Some(id) = path.capture_var_name() {
-                  // Variable must not exist in the current scope of the active function
-                  if self.var_stack.height_of(&id).unwrap_or_default() < *capture_frame_height {
-                    captures.insert(id);
-                  }
-                }
+          AccessPathKind::Descope(n) => {
+            self.var_stack.define_parent(id.clone(), *n);
+          },
+          AccessPathKind::ExplicitGlobal => {},
+        }
+      },
+      Rst::VarGet(path) | Rst::VarSet(path, ..) => {
+        // Only local getters can capture variables
+        if path.kind().is_local() {
+          // At least one capture frame must exist
+          if let Some((capture_frame_height, captures)) = self.capture_stack.last_mut() {
+            // Must be accessing a variable
+            if let Some(id) = path.capture_var_name() {
+              // Variable must not exist in the current scope of the active function
+              if self.var_stack.height_of(&id).unwrap_or_default() < *capture_frame_height {
+                captures.insert(id);
               }
             }
-          },
-          _ => {}
+          }
         }
-      }
+      },
+      _ => {}
     }
-
-    parse_result
   }
     
-  /// Inner functionality of `parse_accessor()`. Do not call directly.
+  /// Parses one or more accessors (getter/setter/definition).
   #[inline(always)]
-  fn parse_accessor_inner(&mut self) -> ParseResult<Vec<Rst>> {
+  fn parse_accessor(&mut self) -> ParseResult<Vec<Rst>> {
     let mut accessors = vec![];
+
+    macro_rules! add_accessor {
+      ($rst:expr) => {{
+        let rst = $rst;
+        self.do_capture_pass(&rst);
+        accessors.push(rst);
+      }}
+    }
     
     'read: loop {
       self.reader.skip_ws();
@@ -1265,19 +1263,19 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           match token {
             // Empty definition
             RantToken::RightAngle => {
-              accessors.push(Rst::VarDef(var_name, access_kind, None));
+              add_accessor!(Rst::VarDef(var_name, access_kind, None));
               break 'read
             },
             // Accessor delimiter
             RantToken::Semi => {
-              accessors.push(Rst::VarDef(var_name, access_kind, None));
+              add_accessor!(Rst::VarDef(var_name, access_kind, None));
               continue 'read;
             },
             // Definition and assignment
             RantToken::Equals => {
               self.reader.skip_ws();
               let (var_assign_expr, end_type, ..) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
-              accessors.push(Rst::VarDef(var_name, access_kind, Some(Rc::new(var_assign_expr))));
+              add_accessor!(Rst::VarDef(var_name, access_kind, Some(Rc::new(var_assign_expr))));
               match end_type {
                 SequenceEndType::VariableAssignDelim => {
                   continue 'read
@@ -1310,19 +1308,19 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           match token {
             // If we hit a '>' here, it's a getter
             RantToken::RightAngle => {
-              accessors.push(Rst::VarGet(Rc::new(var_path)));
+              add_accessor!(Rst::VarGet(Rc::new(var_path)));
               break 'read;
             },
             // If we hit a ';' here, it's a getter with a continuation
             RantToken::Semi => {
-              accessors.push(Rst::VarGet(Rc::new(var_path)));
+              add_accessor!(Rst::VarGet(Rc::new(var_path)));
               continue 'read;
             },
             // If we hit a '=' here, it's a setter
             RantToken::Equals => {
               self.reader.skip_ws();
               let (var_assign_rhs, end_type, _) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
-              accessors.push(Rst::VarSet(Rc::new(var_path), Rc::new(var_assign_rhs)));
+              add_accessor!(Rst::VarSet(Rc::new(var_path), Rc::new(var_assign_rhs)));
               match end_type {
                 // Accessor was terminated
                 SequenceEndType::VariableAccessEnd => {                  

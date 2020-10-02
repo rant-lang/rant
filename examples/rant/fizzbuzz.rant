@@ -1,0 +1,8 @@
+[rep:100][sep:\n]
+{
+  [alt:
+    [if:[is-factor:[step];3]]{fizz}
+    [if:[is-factor:[step];5]]{buzz};
+    [step]
+  ]
+}

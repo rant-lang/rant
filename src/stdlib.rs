@@ -349,12 +349,26 @@ fn numf(vm: &mut VM, (a, b): (f64, f64)) -> RantStdResult {
   Ok(())
 }
 
-fn digh(vm: &mut VM, count: Option<usize>) -> RantStdResult {
+fn alpha(vm: &mut VM, count: Option<usize>) -> RantStdResult {
+  const CHARS: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
   let count = count.unwrap_or(1);
   let mut s = String::with_capacity(count);
   let rng = vm.rng();
   for _ in 0..count {
-    let ch = (&b"0123456789abcdef")[rng.next_usize(16)] as char;
+    let ch = CHARS[rng.next_usize(CHARS.len())] as char;
+    s.push(ch);
+  }
+  vm.cur_frame_mut().write_frag(s.as_str());
+  Ok(())
+}
+
+fn digh(vm: &mut VM, count: Option<usize>) -> RantStdResult {
+  const CHARS: &[u8] = b"0123456789abcdef";
+  let count = count.unwrap_or(1);
+  let mut s = String::with_capacity(count);
+  let rng = vm.rng();
+  for _ in 0..count {
+    let ch = CHARS[rng.next_usize(CHARS.len())] as char;
     s.push(ch);
   }
   vm.cur_frame_mut().write_frag(s.as_str());
@@ -362,11 +376,12 @@ fn digh(vm: &mut VM, count: Option<usize>) -> RantStdResult {
 }
 
 fn dig(vm: &mut VM, count: Option<usize>) -> RantStdResult {
+  const CHARS: &[u8] = b"0123456789";
   let count = count.unwrap_or(1);
   let mut s = String::with_capacity(count);
   let rng = vm.rng();
   for _ in 0..count {
-    let ch = (&b"0123456789")[rng.next_usize(10)] as char;
+    let ch = CHARS[rng.next_usize(CHARS.len())] as char;
     s.push(ch);
   }
   vm.cur_frame_mut().write_frag(s.as_str());
@@ -374,11 +389,12 @@ fn dig(vm: &mut VM, count: Option<usize>) -> RantStdResult {
 }
 
 fn dignz(vm: &mut VM, count: Option<usize>) -> RantStdResult {
+  const CHARS: &[u8] = b"123456789";
   let count = count.unwrap_or(1);
   let mut s = String::with_capacity(count);
   let rng = vm.rng();
   for _ in 0..count {
-    let ch = (&b"123456789")[rng.next_usize(9)] as char;
+    let ch = CHARS[rng.next_usize(CHARS.len())] as char;
     s.push(ch);
   }
   vm.cur_frame_mut().write_frag(s.as_str());
@@ -1051,7 +1067,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     to_int as "int", to_float as "float", to_string as "string",
 
     // Generator functions
-    dig, digh, dignz, maybe, num, numf, shred,
+    alpha, dig, digh, dignz, maybe, num, numf, shred,
 
     // Prototype functions
     proto, set_proto as "set-proto",

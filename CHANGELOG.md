@@ -1,3 +1,9 @@
+# 4.0.0-alpha.8
+
+* Fixed: def + get/set of same variable in chained accessor causes erroneous variable capture inside functions
+* Added new stdlib functions:
+  * `[alpha]`
+
 # 4.0.0-alpha.7
 
 * Main program body can now be returned from with `[return]`
