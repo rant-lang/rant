@@ -104,7 +104,7 @@ fn nop(vm: &mut VM, _: VarArgs<RantEmpty>) -> RantStdResult {
   Ok(())
 }
 
-/// `$[seed]`
+/// `[$seed]`
 ///
 /// Prints the RNG seed currently in use.
 fn seed(vm: &mut VM, _: ()) -> RantStdResult {
@@ -113,6 +113,30 @@ fn seed(vm: &mut VM, _: ()) -> RantStdResult {
   };
   let frame = vm.cur_frame_mut();
   frame.write_value(RantValue::Integer(signed_seed));
+  Ok(())
+}
+
+/// `$[fork: seed? (string|integer)]`
+///
+/// Forks the RNG with the specified seed.
+fn fork(vm: &mut VM, seed: Option<RantValue>) -> RantStdResult {
+  let rng = match seed {
+    Some(RantValue::Integer(i)) => vm.rng().fork_i64(i),
+    Some(RantValue::String(s)) => vm.rng().fork_str(&s),
+    Some(other) => runtime_error!(RuntimeErrorType::ArgumentError, "seeding fork with '{}' value is not supported", other.type_name()),
+    None => vm.rng().fork_random(),
+  };
+  vm.push_rng(Rc::new(rng));
+  Ok(())
+}
+
+/// `$[unfork]`
+///
+/// Unforks the RNG down one level.
+fn unfork(vm: &mut VM, _: ()) -> RantStdResult {
+  if vm.pop_rng().is_none() {
+    runtime_error!(RuntimeErrorType::InvalidOperation, "cannot unfork root seed");
+  }
   Ok(())
 }
 
@@ -995,7 +1019,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
 
   load_funcs!(
     // General functions
-    alt, call, either, len, get_type as "type", seed, nop, resolve,
+    alt, call, either, len, get_type as "type", seed, nop, resolve, fork, unfork,
 
     // Formatting functions
     whitespace_fmt as "whitespace-fmt",

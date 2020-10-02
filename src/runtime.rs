@@ -2,7 +2,7 @@ use crate::*;
 use crate::lang::*;
 use std::{rc::Rc, cell::RefCell, ops::Deref, error::Error, fmt::Display};
 use resolver::{SelectorError, Resolver, BlockAction};
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 pub use stack::*;
 pub use output::*;
 
@@ -18,7 +18,7 @@ pub(crate) const CALL_STACK_INLINE_COUNT: usize = 4;
 pub(crate) const VALUE_STACK_INLINE_COUNT: usize = 4;
 
 pub struct VM<'rant> {
-  rng: Rc<RantRng>,
+  rng_stack: SmallVec<[Rc<RantRng>; 1]>,
   engine: &'rant mut Rant,
   program: &'rant RantProgram,
   val_stack: SmallVec<[RantValue; VALUE_STACK_INLINE_COUNT]>,
@@ -31,7 +31,7 @@ impl<'rant> VM<'rant> {
   pub fn new(rng: Rc<RantRng>, engine: &'rant mut Rant, program: &'rant RantProgram) -> Self {
     Self {
       resolver: Resolver::new(&rng),
-      rng,
+      rng_stack: smallvec![rng],
       engine,
       program,
       val_stack: Default::default(),
@@ -120,7 +120,7 @@ impl<'rant> VM<'rant> {
   fn run_inner(&mut self) -> RuntimeResult<RantValue> {
     // Push the program's root sequence onto the call stack
     // This doesn't need an overflow check because it will *always* succeed
-    self.push_frame_unchecked(self.program.root.clone(), true);
+    self.push_frame_unchecked(self.program.root.clone(), true, StackFrameFlavor::FunctionBody);
     
     // Run whatever is on the top of the call stack
     'from_the_top: 
@@ -748,12 +748,15 @@ impl<'rant> VM<'rant> {
   pub(crate) fn check_block(&mut self) -> RuntimeResult<()> {
     let mut is_printing = false;
     let mut is_repeater = false;
+
+    let rng = self.rng_clone();
     
     // Check if there's an active block and try to iterate it
     let next_element = if let Some(state) = self.resolver.active_block_mut() {
       is_repeater = state.is_repeater();
+      
       // Get the next element
-      if let Some(element) = state.next_element().into_runtime_result()? {
+      if let Some(element) = state.next_element(rng.as_ref()).into_runtime_result()? {
         // Figure out if the block is supposed to print anything
         is_printing = !state.flag().is_sink();
         Some(element)
@@ -762,6 +765,7 @@ impl<'rant> VM<'rant> {
         self.resolver.pop_block();
         None
       }
+      
     } else {
       None
     };
@@ -873,12 +877,12 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  fn push_frame_unchecked(&mut self, callee: Rc<Sequence>, use_output: bool) {
+  fn push_frame_unchecked(&mut self, callee: Rc<Sequence>, use_output: bool, flavor: StackFrameFlavor) {
     let frame = StackFrame::new(
       callee, 
       use_output, 
       self.call_stack.top().map(|last| last.output()).flatten()
-    );
+    ).with_flavor(flavor);
 
     self.call_stack.push_frame(frame);
   }
@@ -1005,7 +1009,26 @@ impl<'rant> VM<'rant> {
 
   #[inline(always)]
   pub fn rng(&self) -> &RantRng {
-    self.rng.as_ref()
+    self.rng_stack.last().unwrap().as_ref()
+  }
+
+  #[inline(always)]
+  pub fn rng_clone(&self) -> Rc<RantRng> {
+    Rc::clone(self.rng_stack.last().unwrap())
+  }
+
+  #[inline]
+  pub fn push_rng(&mut self, rng: Rc<RantRng>) {
+    self.rng_stack.push(rng);
+  }
+
+  #[inline]
+  pub fn pop_rng(&mut self) -> Option<Rc<RantRng>> {
+    if self.rng_stack.len() <= 1 {
+      return None
+    }
+
+    self.rng_stack.pop()
   }
 
   #[inline(always)]
@@ -1073,6 +1096,8 @@ pub enum RuntimeErrorType {
   StackUnderflow,
   /// Variable access error, such as attempting to access a nonexistent variable
   InvalidAccess,
+  /// Operation is not valid for the current program state
+  InvalidOperation,
   /// Error in function outside of Rant
   ExternalError,
   /// Too few/many arguments were passed to a function
@@ -1103,6 +1128,7 @@ impl Display for RuntimeErrorType {
       RuntimeErrorType::StackOverflow => "stack overflow",
       RuntimeErrorType::StackUnderflow => "stack underflow",
       RuntimeErrorType::InvalidAccess => "invalid access",
+      RuntimeErrorType::InvalidOperation => "invalid operation",
       RuntimeErrorType::ExternalError => "external error",
       RuntimeErrorType::ArgumentMismatch => "argument mismatch",
       RuntimeErrorType::ArgumentError => "argument error",

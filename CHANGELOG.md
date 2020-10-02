@@ -1,8 +1,10 @@
 # 4.0.0-alpha.7
 
+* Main program body can now be returned from with `[return]`
 * Added new stdlib functions:
   * `[break]`
   * `[continue]`
+  * `[fork]`
   * `[max]`
   * `[min]`
   * `[return]`
@@ -10,6 +12,8 @@
   * `[shuffled]`
   * `[sort]`
   * `[sum]`
+  * `[unfork]`
+* Upgraded `smartstring` to 0.2.5
 
 # 4.0.0-alpha.6
 

@@ -21,21 +21,39 @@ impl RantRng {
     }
   }
   
-  /// Creates a new RNG by hashing the parent seed with the supplied integer to produce a new seed.
+  /// Creates a new RNG by hashing the parent seed with the supplied `u64` to produce a new seed.
   /// Uses the Fowler-Noll-Vo hash function.
-  pub fn branch(&self, seed: u64) -> Self {
+  pub fn fork_u64(&self, seed: u64) -> Self {
     let mut hasher = FnvHasher::default();
     hasher.write_u64(self.seed);
     hasher.write_u64(seed);
     RantRng::new(hasher.finish())
   }
+
+  /// Creates a new RNG by hashing the parent seed with the supplied `i64` to produce a new seed.
+  /// Uses the Fowler-Noll-Vo hash function.
+  pub fn fork_i64(&self, seed: i64) -> Self {
+    let mut hasher = FnvHasher::default();
+    hasher.write_u64(self.seed);
+    hasher.write_i64(seed);
+    RantRng::new(hasher.finish())
+  }
   
   /// Creates a new RNG by hashing the parent seed with the supplied string to produce a new seed.
   /// Uses the Fowler-Noll-Vo hash function.
-  pub fn branch_str(&self, seed: &str) -> Self {
+  pub fn fork_str(&self, seed: &str) -> Self {
     let mut hasher = FnvHasher::default();
     hasher.write_u64(self.seed);
     hasher.write(seed.as_bytes());
+    RantRng::new(hasher.finish())
+  }
+
+  /// Creates a new RNG by hashing the parent seed and with the current generation to produce a new seed.
+  /// Uses the Fowler-Noll-Vo hash function.
+  pub fn fork_random(&self) -> Self {
+    let mut hasher = FnvHasher::default();
+    hasher.write_u64(self.seed);
+    hasher.write_u64(self.rng.borrow_mut().gen());
     RantRng::new(hasher.finish())
   }
 }

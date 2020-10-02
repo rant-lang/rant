@@ -31,7 +31,6 @@ cli-deps = ["argh", "codemap", "codemap-diagnostic", "colored", "ctrlc", "embedd
 [dependencies]
 # Library
 cast = "0.2.3"
-cervine = "0.0.6"
 fnv = "1.0.7"
 line-col = "0.2.1"
 logos = "0.11.4"
@@ -39,7 +38,7 @@ quickscope = "0.1.3"
 rand = "0.7.3"
 rand_xoshiro = "0.4.0"
 smallvec = "1.4.2"
-smartstring = "0.2.4"
+smartstring = "0.2.5"
 
 # CLI
 argh = { version = "0.1.3", optional = true }

@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc, mem, error::Error, fmt::Display};
 use crate::{random::RantRng, RantValue, lang::{Sequence, Block, PrintFlag}, FromRant, ValueError};
 use smallvec::SmallVec;
-use super::{RuntimeError, IntoRuntimeResult};
+use super::{IntoRuntimeResult, RuntimeError, VM};
 
 pub type SelectorRef = Rc<RefCell<Selector>>;
 
@@ -23,7 +23,6 @@ pub struct BlockState {
   elements: Rc<Vec<Rc<Sequence>>>,
   force_stop: bool,
   flag: PrintFlag,
-  rng: Rc<RantRng>,
   attrs: AttributeFrame,
   cur_steps: usize,
   total_steps: usize,
@@ -32,16 +31,16 @@ pub struct BlockState {
 
 impl BlockState {
   #[inline]
-  pub fn next_element(&mut self) -> Result<Option<BlockAction>, SelectorError> {
+  pub fn next_element(&mut self, rng: &RantRng) -> Result<Option<BlockAction>, SelectorError> {
     if !self.is_done() {
       if self.cur_steps == 0 || self.prev_step_separated {
         self.prev_step_separated = false;
         self.cur_steps += 1;
         let next_index = self.attrs.selector.as_ref().map_or_else(
           // Default block selection behavior
-          || Ok(self.rng.next_usize(self.elements.len())), 
+          || Ok(rng.next_usize(self.elements.len())), 
           // Selector behavior
-          |sel| sel.borrow_mut().select(self.elements.len(), self.rng.as_ref())
+          |sel| sel.borrow_mut().select(self.elements.len(), rng)
         )?;
         Ok(Some(BlockAction::Element(Rc::clone(&self.elements[next_index]))))
       } else {
@@ -154,7 +153,6 @@ impl Resolver {
       elements: Rc::clone(&block.elements),
       flag: PrintFlag::prioritize(block.flag, flag),
       cur_steps: 0,
-      rng: Rc::clone(&self.rng),
       total_steps: attrs.reps.get_rep_count_for(block),
       attrs,
       prev_step_separated: false,
