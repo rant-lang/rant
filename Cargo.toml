@@ -3,13 +3,22 @@ name = "rant"
 version = "4.0.0-alpha.8"
 authors = ["Nicholas Fleck <TheBerkin@users.noreply.github.com>"]
 edition = "2018"
-homepage = "https://rant-lang.org"
-repository = "https://github.com/rant-lang/rant"
+description = "The Rant procedural generation language"
 license = "AGPL-3.0-or-later"
-readme = "README.md"
+repository = "https://github.com/rant-lang/rant"
+homepage = "https://rant-lang.org"
 keywords = ["rant", "rantlang", "procedural", "text", "generation"]
 categories = ["text-processing", "game-development", "template-engine"]
-description = "The Rant procedural generation language"
+readme = "README.md"
+include = [
+  "**/*.rs", 
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*",
+  "THIRD_PARTY_LICENSES*",
+  "CHANGELOG.md",
+  "!tests/unincluded_*.rs"
+]
 default-run = "rant"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
