@@ -1,11 +1,18 @@
 # 4.0.0-alpha.8
 
+* Added: `RantProgramInfo` struct
+* Added: `RantProgram.alias()`
+* `[require]` now searches the containing directory of the running program before the local modules path
+* Added: new stdlib functions:
+  * `[alpha]`: print a string of random alphanumeric characters
+  * `[assoc]`: create a map from a list of keys and a list of values
+  * `[sift]`: remove random items from a list down to a target size
+  * `[sifted]`: create a random, ordered subset of a list
+* Changed: `[require]` now accepts a relative path, as long as it is contained in the modules directory
+* Changed: `RantProgram.name()` now returns `Option<&str>` instead of `&str`
+* Changed: Renamed `RantOptions.local_module_path` to `RantOptions.local_modules_path`
+* Fixed: Function calls don't trigger variable capture pass
 * Fixed: def + get/set of same variable in chained accessor causes erroneous variable capture inside functions
-* Added new stdlib functions:
-  * `[alpha]`
-  * `[assoc]`
-  * `[sift]`
-  * `[sifted]`
 
 # 4.0.0-alpha.7
 

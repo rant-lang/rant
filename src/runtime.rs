@@ -1050,6 +1050,11 @@ impl<'rant> VM<'rant> {
   pub fn resolver_mut(&mut self) -> &mut Resolver {
     &mut self.resolver
   }
+
+  #[inline(always)]
+  pub fn program(&self) -> &RantProgram {
+    self.program
+  }
 }
 
 pub(crate) trait IntoRuntimeResult<T> {

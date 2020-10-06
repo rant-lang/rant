@@ -45,7 +45,6 @@ use crate::compiler::CompilerMessage;
 use crate::lang::{Sequence};
 use crate::compiler::{RantCompiler, Reporter, ErrorKind as CompilerErrorKind};
 use crate::runtime::*;
-use crate::lang::is_valid_ident;
 use crate::random::RantRng;
 
 use std::{path::Path, rc::Rc, cell::RefCell, fmt::Display, path::PathBuf, io::ErrorKind, collections::HashMap};
@@ -137,13 +136,19 @@ impl Rant {
   /// Compiles a source string using the specified reporter.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile<R: Reporter>(&self, source: &str, reporter: &mut R) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile_string(source, reporter, self.debug_mode, DEFAULT_PROGRAM_NAME)
+    RantCompiler::compile(source, reporter, self.debug_mode, RantProgramInfo {
+      name: None,
+      path: None,
+    })
   }
 
   /// Compiles a source string using the specified reporter and source name.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_named<R: Reporter>(&self, source: &str, reporter: &mut R, name: &str) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile_string(source, reporter, self.debug_mode, name)
+    RantCompiler::compile(source, reporter, self.debug_mode, RantProgramInfo {
+      name: Some(name.to_owned()),
+      path: None,
+    })
   }
 
   /// Compiles a source string without reporting problems.
@@ -155,7 +160,10 @@ impl Rant {
   /// If you require this information, use the `compile()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_quiet(&self, source: &str) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile_string(source, &mut (), self.debug_mode, DEFAULT_PROGRAM_NAME)
+    RantCompiler::compile(source, &mut (), self.debug_mode, RantProgramInfo {
+      name: None,
+      path: None,
+    })
   }
 
   /// Compiles a source string without reporting problems and assigns it the specified name.
@@ -167,7 +175,10 @@ impl Rant {
   /// If you require this information, use the `compile()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_quiet_named(&self, source: &str, name: &str) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile_string(source, &mut (), self.debug_mode, name)
+    RantCompiler::compile(source, &mut (), self.debug_mode, RantProgramInfo {
+      name: Some(name.to_owned()),
+      path: None,
+    })
   }
   
   /// Compiles a source file using the specified reporter.
@@ -269,31 +280,23 @@ impl Rant {
   }
 
   /// Attempts to load and compile a module with the specified name.
-  pub(crate) fn try_load_module(&mut self, module_name: &str) -> ModuleLoadResult {
+  pub(crate) fn try_load_module(&mut self, module_path: &str, caller_origin: Rc<RantProgramInfo>) -> ModuleLoadResult {
     if !self.options.enable_require {
       return Err(ModuleLoadError {
-        name: module_name.to_owned(),
+        name: module_path.to_owned(),
         reason: ModuleLoadErrorReason::NotAllowed,
       })
     }
 
-    // Module names may only be valid identifiers
-    if !is_valid_ident(module_name) {
-      return Err(ModuleLoadError {
-        name: module_name.to_owned(),
-        reason: ModuleLoadErrorReason::NotFound,
-      })
-    }
-
     // Try to find module path that exists
-    if let Some(module_path) = self.find_module_path(module_name) {
+    if let Some(full_module_path) = self.find_module_path(module_path, caller_origin.path.as_deref()) {
       let mut errors = vec![];
-      let compile_result = self.compile_file(module_path, &mut errors);
+      let compile_result = self.compile_file(full_module_path, &mut errors);
       match compile_result {
         Ok(module) => Ok(module),
         Err(err) => {
           Err(ModuleLoadError {
-            name: module_name.to_owned(),
+            name: module_path.to_owned(),
             reason: match err{
               CompilerErrorKind::SyntaxError => {
                 ModuleLoadErrorReason::CompileFailed(errors)
@@ -315,42 +318,70 @@ impl Rant {
       }
     } else {
       Err(ModuleLoadError {
-        name: module_name.to_owned(),
+        name: module_path.to_owned(),
         reason: ModuleLoadErrorReason::NotFound,
       })
     }
   }
 
   #[inline]
-  fn find_module_path(&self, module_name: &str) -> Option<PathBuf> {
-    // Check local module path
-    if let Some(local_module_path) = 
-      self.options.local_module_path
+  fn find_module_path(&self, module_path: &str, dependant_path: Option<&str>) -> Option<PathBuf> {
+    let module_path = PathBuf::from(
+        module_path.replace("/", &String::from(std::path::MAIN_SEPARATOR))
+      )
+      .with_extension(RANT_FILE_EXTENSION);
+
+    macro_rules! search_for_module {
+      ($path:expr) => {
+        let path = $path;
+        // Construct full path to module
+        if let Ok(full_module_path) = path
+          .join(&module_path)
+          .canonicalize() 
+        {
+          // Verify file is still in modules directory and it exists
+          if full_module_path.starts_with(path) 
+          && full_module_path.exists() 
+          {
+            return Some(full_module_path)
+          }
+        }
+      }
+    }
+
+    // Search path of dependant running program
+    if let Some(program_path) = 
+      dependant_path
+      .map(PathBuf::from)
+      .as_deref()
+      .and_then(|p| p.parent())
+    {
+      search_for_module!(program_path);
+    }
+
+    // Search local modules path
+    if let Some(local_modules_path) = 
+      self.options.local_modules_path
       .as_ref()
       .map(PathBuf::from)
       .or_else(||
         env::current_dir()
         .ok()
       )
-      .map(|path| path
-        .join(&module_name)
-        .with_extension(RANT_FILE_EXTENSION)
-      )
+      .and_then(|p| p.canonicalize().ok())
     {
-      if local_module_path.exists() {
-        return Some(local_module_path);
-      }
+      search_for_module!(local_modules_path);
     }
 
     // Check global modules, if enabled
     if self.options.enable_global_modules {
-      return env::var_os(ENV_MODULES_PATH_KEY)
+      if let Some(global_modules_path) = 
+        env::var_os(ENV_MODULES_PATH_KEY)
         .map(PathBuf::from)
-        .map(|path| path
-          .join(&module_name)
-          .with_extension(RANT_FILE_EXTENSION)
-        )
-        .filter(|path| path.exists());
+        .and_then(|p| p.canonicalize().ok())
+      {
+        search_for_module!(global_modules_path);
+      }
     }
     
     None
@@ -372,7 +403,7 @@ pub struct RantOptions {
   pub enable_global_modules: bool,
   /// Specifies a preferred module loading path with higher precedence than the global module path.
   /// If not specified, looks in the current working directory.
-  pub local_module_path: Option<String>,
+  pub local_modules_path: Option<String>,
 }
 
 impl Default for RantOptions {
@@ -383,7 +414,7 @@ impl Default for RantOptions {
       seed: 0,
       enable_require: true,
       enable_global_modules: true,
-      local_module_path: None,
+      local_modules_path: None,
     }
   }
 }
@@ -391,22 +422,55 @@ impl Default for RantOptions {
 /// A compiled Rant program.
 #[derive(Debug)]
 pub struct RantProgram {
-  name: RantString,
+  info: Rc<RantProgramInfo>,
   root: Rc<Sequence>
 }
 
 impl RantProgram {
-  pub(crate) fn new(root: Rc<Sequence>, name: RantString) -> Self {
+  pub(crate) fn new(root: Rc<Sequence>, info: Rc<RantProgramInfo>) -> Self {
     Self {
-      name,
+      info,
       root,
     }
   }
 
-  /// Gets the name of the program, if any.
+  /// Gets the display name of the program, if any.
   #[inline]
-  pub fn name(&self) -> &str {
-    self.name.as_str()
+  pub fn name(&self) -> Option<&str> {
+    self.info.name.as_deref()
+  }
+
+  /// Gets the path to the program's source file, if any.
+  #[inline]
+  pub fn path(&self) -> Option<&str> {
+    self.info.path.as_deref()
+  }
+
+  /// Gets the metadata associated with the program.
+  #[inline]
+  pub fn info(&self) -> &RantProgramInfo {
+    self.info.as_ref()
+  }
+}
+
+/// Contains metadata used to identify a loaded program.
+#[derive(Debug)]
+pub struct RantProgramInfo {
+  path: Option<String>,
+  name: Option<String>,
+}
+
+impl RantProgramInfo {
+  /// Gets the display name of the program, if any.
+  #[inline]
+  pub fn name(&self) -> Option<&str> {
+    self.name.as_deref()
+  }
+
+  /// Gets tha path to the program's source file, if any.
+  #[inline]
+  pub fn path(&self) -> Option<&str> {
+    self.path.as_deref()
   }
 }
 

@@ -1,7 +1,7 @@
 //! Contains Rant's syntax tree implementation and supporting data structures.
 
 use std::{ops::{DerefMut, Deref}, fmt::Display, rc::Rc};
-use crate::RantString;
+use crate::{RantProgramInfo, RantString};
 
 /// Printflags indicate to the compiler whether a given program element is likely to print something or not.
 #[repr(u8)]
@@ -185,11 +185,11 @@ impl Display for AccessPath {
 pub struct Sequence {
   elements: Vec<Rc<Rst>>,
   pub name: Option<RantString>,
-  pub origin: Rc<RantString>,
+  pub origin: Rc<RantProgramInfo>,
 }
 
 impl Sequence {
-  pub fn new(seq: Vec<Rc<Rst>>, origin: &Rc<RantString>) -> Self {
+  pub fn new(seq: Vec<Rc<Rst>>, origin: &Rc<RantProgramInfo>) -> Self {
     Self {
       elements: seq,
       name: None,
@@ -197,7 +197,7 @@ impl Sequence {
     }
   }
   
-  pub fn one(rst: Rst, origin: &Rc<RantString>) -> Self {
+  pub fn one(rst: Rst, origin: &Rc<RantProgramInfo>) -> Self {
     Self {
       elements: vec![Rc::new(rst)],
       name: None,
@@ -205,7 +205,7 @@ impl Sequence {
     }
   }
   
-  pub fn empty(origin: &Rc<RantString>) -> Self {
+  pub fn empty(origin: &Rc<RantProgramInfo>) -> Self {
     Self::new(vec![], origin)
   }
 

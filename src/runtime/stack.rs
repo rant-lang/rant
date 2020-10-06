@@ -260,8 +260,8 @@ pub struct StackFrame {
   intents: VecDeque<Intent>,
   /// Line/col for debug info
   debug_pos: (usize, usize),
-  /// Source name for debug info
-  origin: Rc<RantString>,
+  /// Origin of sequence
+  origin: Rc<RantProgramInfo>,
   /// A usage hint provided by the program element that created the frame.
   flavor: StackFrameFlavor,
 }
@@ -321,6 +321,22 @@ impl StackFrame {
   #[inline]
   pub fn output(&self) -> Option<&OutputWriter> {
     self.output.as_ref()
+  }
+
+  #[inline]
+  pub fn origin(&self) -> &Rc<RantProgramInfo> {
+    &self.origin
+  }
+
+  #[inline]
+  pub fn origin_name(&self) -> &str {
+    self.origin.path
+      .as_deref()
+      .unwrap_or_else(|| 
+        self.origin.name
+          .as_deref()
+          .unwrap_or(DEFAULT_PROGRAM_NAME)
+      )
   }
 
   /// Takes the next intent to be handled.
@@ -401,7 +417,7 @@ impl StackFrame {
 impl Display for StackFrame {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "[{}:{}:{}] in {}", 
-      self.origin.as_ref(), 
+      self.origin_name(), 
       self.debug_pos.0, 
       self.debug_pos.1,
       self.sequence.name().map(|name| name.as_str()).unwrap_or("???"), 

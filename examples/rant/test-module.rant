@@ -1,0 +1,13 @@
+[require: test-submodule]
+
+<$module = @()>
+
+[$module/test] {
+  Hello from test-module!
+}
+
+[$module/test-sub] {
+  [test-submodule/test-sub]
+}
+
+<module>

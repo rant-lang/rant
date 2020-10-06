@@ -3,7 +3,7 @@
 
 use super::{reader::RantTokenReader, lexer::RantToken, message::*, Problem, Reporter};
 use std::{rc::Rc, ops::Range, collections::HashSet};
-use crate::{RantString, lang::*};
+use crate::{RantProgramInfo, RantString, lang::*};
 use fnv::FnvBuildHasher;
 use line_col::LineColLookup;
 use quickscope::ScopeSet;
@@ -19,8 +19,12 @@ enum SequenceParseMode {
   TopLevel,
   /// Parse a sequence like a block element.
   ///
+  /// Breaks on `Pipe`, `Colon`, and `RightBrace`.
+  BlockElementAny,
+  /// Parse a sequence like a block element (RHS only).
+  ///
   /// Breaks on `Pipe` and `RightBrace`.
-  BlockElement,
+  BlockElementRhs,
   /// Parse a sequence like a tag (function access) element.
   ///
   /// Breaks on `Semi` and `RightBracket`.
@@ -59,6 +63,8 @@ enum CollectionInitKind {
 enum SequenceEndType {
   /// Top-level program sequence was terminated by end-of-file.
   ProgramEnd,
+  /// Block element sequence is key and was terminated by `Colon`.
+  BlockAssocDelim,
   /// Block element sequence was terminated by `Pipe`.
   BlockDelim,
   /// Block element sequence was terminated by `RightBrace`.
@@ -106,7 +112,7 @@ pub struct RantParser<'source, 'report, R: Reporter> {
   /// Enables additional debug information.
   debug_enabled: bool,
   /// A string describing the origin (containing program) of a program element.
-  origin: Rc<RantString>,
+  info: Rc<RantProgramInfo>,
   /// Keeps track of active variables in each scope while parsing.
   var_stack: ScopeSet<Identifier>,
   /// Keeps track of active variable capture frames.
@@ -114,7 +120,7 @@ pub struct RantParser<'source, 'report, R: Reporter> {
 }
 
 impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
-  pub fn new(source: &'source str, reporter: &'report mut R, debug_enabled: bool, origin: RantString) -> Self {
+  pub fn new(source: &'source str, reporter: &'report mut R, debug_enabled: bool, info: &Rc<RantProgramInfo>) -> Self {
     let reader = RantTokenReader::new(source);
     let lookup = LineColLookup::new(source);
     Self {
@@ -124,7 +130,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       lookup,
       reporter,
       debug_enabled,
-      origin: Rc::new(origin),
+      info: Rc::clone(info),
       var_stack: Default::default(),
       capture_stack: Default::default(),
     }
@@ -143,11 +149,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       // Err on hard syntax error
       Err(()) => Err(())
     }
-  }
-
-  #[inline(always)]
-  pub fn origin(&self) -> &Rc<RantString> {
-    &self.origin
   }
   
   /// Reports a syntax error, allowing parsing to continue but causing the final compilation to fail. 
@@ -175,7 +176,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   /// Inner logic of `parse_sequence()`. Intended to be wrapped in other specialized sequence-parsing functions.
   #[inline(always)]
   fn parse_sequence_inner(&mut self, mode: SequenceParseMode) -> ParseResult<(Sequence, SequenceEndType, bool)> {    
-    let mut sequence = Sequence::empty(&self.origin);
+    let mut sequence = Sequence::empty(&self.info);
     let mut next_print_flag = PrintFlag::None;
     let mut last_print_flag_span: Option<Range<usize>> = None;
     let mut is_seq_printing = false;
@@ -340,7 +341,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Ignore pending whitespace
           whitespace!(ignore prev);
           match mode {
-            SequenceParseMode::BlockElement => {
+            SequenceParseMode::BlockElementAny => {
               return Ok((sequence.with_name_str("block element"), SequenceEndType::BlockDelim, is_seq_printing))
             },
             SequenceParseMode::DynamicKey => {
@@ -358,7 +359,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Ignore pending whitespace
           whitespace!(ignore prev);
           match mode {
-            SequenceParseMode::BlockElement => {
+            SequenceParseMode::BlockElementAny => {
               return Ok((sequence.with_name_str("block element"), SequenceEndType::BlockEnd, is_seq_printing))
             },
             SequenceParseMode::FunctionBody => {
@@ -931,7 +932,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             flag
           };
           
-          Ok(Rst::FuncCall(fcall))
+          let func_call = Rst::FuncCall(fcall);
+
+          // Do variable capture pass on function call
+          self.do_capture_pass(&func_call);
+
+          Ok(func_call)
         } else {
           // Found EOF instead of end of function call, emit hard error
           self.syntax_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
@@ -1143,7 +1149,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     let mut sequences = vec![];
     
     loop {
-      let (seq, seq_end, is_seq_printing) = self.parse_sequence(SequenceParseMode::BlockElement)?;
+      let (seq, seq_end, is_seq_printing) = self.parse_sequence(SequenceParseMode::BlockElementAny)?;
       auto_hint |= is_seq_printing;
       
       match seq_end {
@@ -1208,7 +1214,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           AccessPathKind::ExplicitGlobal => {},
         }
       },
-      Rst::VarGet(path) | Rst::VarSet(path, ..) => {
+      Rst::VarGet(path) | Rst::VarSet(path, ..) | Rst::FuncCall(FunctionCall { id: path, .. }, ..) => {
         // Only local getters can capture variables
         if path.kind().is_local() {
           // At least one capture frame must exist

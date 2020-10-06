@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc, mem, error::Error, fmt::Display};
 use crate::{random::RantRng, RantValue, lang::{Sequence, Block, PrintFlag}, FromRant, ValueError};
 use smallvec::SmallVec;
-use super::{IntoRuntimeResult, RuntimeError, VM};
+use super::{IntoRuntimeResult, RuntimeError};
 
 pub type SelectorRef = Rc<RefCell<Selector>>;
 

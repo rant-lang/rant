@@ -1,0 +1,6 @@
+# This file is used by test_module to demonstrate sub-dependency discovery.
+<$module=@()>
+[$module/test-sub] {
+  Hello from test-submodule!
+}
+<module>
