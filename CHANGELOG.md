@@ -1,7 +1,6 @@
 # 4.0.0-alpha.8
 
 * Added: `RantProgramInfo` struct
-* Added: `RantProgram.alias()`
 * `[require]` now searches the containing directory of the running program before the local modules path
 * Added: new stdlib functions:
   * `[alpha]`: print a string of random alphanumeric characters
