@@ -1214,7 +1214,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           AccessPathKind::ExplicitGlobal => {},
         }
       },
-      Rst::VarGet(path) | Rst::VarSet(path, ..) | Rst::FuncCall(FunctionCall { id: path, .. }, ..) => {
+      Rst::VarGet(path) | 
+      Rst::VarSet(path, ..) | 
+      Rst::FuncCall(FunctionCall { id: path, .. }, ..) => {
         // Only local getters can capture variables
         if path.kind().is_local() {
           // At least one capture frame must exist

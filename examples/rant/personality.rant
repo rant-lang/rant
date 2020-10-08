@@ -1,0 +1,16 @@
+# Generate a map of the "Big Five" personality traits
+# with random rating values that add up to 50
+<$personality = 
+  [assoc:
+    (ope; con; ext; agr; neu);
+    [shred: 50; 5; [rand: 1; 10]] # Use random variance to reduce trait deviation
+  ]
+>
+
+# Print the values
+[whitespace-fmt:verbatim]
+"Openness to experience:"   <personality/ope>\n
+"Conscientiousness:"        <personality/con>\n
+"Extraversion:"             <personality/ext>\n
+"Agreeableness:"            <personality/agr>\n
+"Neuroticism:"              <personality/neu>\n

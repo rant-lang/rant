@@ -204,6 +204,44 @@ fn recip(vm: &mut VM, val: RantValue) -> RantStdResult {
   Ok(())
 }
 
+/// `[$floor: val (integer|float)]`
+///
+/// Gets the largest integer that is less than or equal to the specified value.
+fn floor(vm: &mut VM, val: RantValue) -> RantStdResult {
+  let val_result = match val {
+    RantValue::Float(f) => RantValue::Float(f.floor()),
+    RantValue::Integer(i) => RantValue::Integer(i),
+    other => runtime_error!(RuntimeErrorType::ArgumentError, "cannot use floor function on '{}' value")
+  };
+  vm.cur_frame_mut().write_value(val_result);
+  Ok(())
+}
+
+/// `[$ceil: val (integer|float)]`
+///
+/// Gets the smallest integer that is greater than or equal to the specified value.
+fn ceil(vm: &mut VM, val: RantValue) -> RantStdResult {
+  let val_result = match val {
+    RantValue::Float(f) => RantValue::Float(f.ceil()),
+    RantValue::Integer(i) => RantValue::Integer(i),
+    other => runtime_error!(RuntimeErrorType::ArgumentError, "cannot use ceil function on '{}' value")
+  };
+  vm.cur_frame_mut().write_value(val_result);
+  Ok(())
+}
+
+/// `[$frac: val (float)]`
+///
+/// Gets the fractional part of the specified float value.
+fn frac(vm: &mut VM, val: RantValue) -> RantStdResult {
+  let val_result = match val {
+    RantValue::Float(f) => RantValue::Float(f.fract()),
+    other => runtime_error!(RuntimeErrorType::ArgumentError, "cannot use frac function on '{}' value")
+  };
+  vm.cur_frame_mut().write_value(val_result);
+  Ok(())
+}
+
 /// `[$is-odd: val (integer)]`
 ///
 /// Returns true if `val` is odd.
@@ -337,13 +375,13 @@ fn get_type(vm: &mut VM, val: RantValue) -> RantStdResult {
   Ok(())
 }
 
-fn num(vm: &mut VM, (a, b): (i64, i64)) -> RantStdResult {
+fn rand(vm: &mut VM, (a, b): (i64, i64)) -> RantStdResult {
   let n = vm.rng().next_i64(a, b);
   vm.cur_frame_mut().write_value(RantValue::Integer(n));
   Ok(())
 }
 
-fn numf(vm: &mut VM, (a, b): (f64, f64)) -> RantStdResult {
+fn randf(vm: &mut VM, (a, b): (f64, f64)) -> RantStdResult {
   let n = vm.rng().next_f64(a, b);
   vm.cur_frame_mut().write_value(RantValue::Float(n));
   Ok(())
@@ -470,6 +508,56 @@ fn shred(vm: &mut VM, (value, n, variance): (RantValue, i64, Option<f64>)) -> Ra
       })
     }
   }
+
+  Ok(())
+}
+
+fn squish(vm: &mut VM, (list, target_size): (RantListRef, usize)) -> RantStdResult {
+  let mut list = list.borrow_mut();
+
+  if target_size == 0 {
+    runtime_error!(RuntimeErrorType::ArgumentError, "cannot squish to a target size of 0");
+  }
+
+  if list.len() <= target_size || list.len() < 2 {
+    return Ok(())
+  }
+
+  let rng = vm.rng();
+  while list.len() > target_size {
+    let n = list.len();
+    let left_index = rng.next_usize(n - 1);
+    let right_index = (left_index + 1) % n;
+    let left_val = list.get(left_index).unwrap().clone();
+    let right_val = list.remove(right_index);
+    list[left_index] = left_val + right_val;
+  }
+
+  Ok(())
+}
+
+fn squished(vm: &mut VM, (list, target_size): (RantListRef, usize)) -> RantStdResult {
+  let mut list = list.borrow_mut().clone();
+
+  if target_size == 0 {
+    runtime_error!(RuntimeErrorType::ArgumentError, "cannot squish to a target size of 0");
+  }
+
+  if list.len() <= target_size || list.len() < 2 {
+    return Ok(())
+  }
+
+  let rng = vm.rng();
+  while list.len() > target_size {
+    let n = list.len();
+    let left_index = rng.next_usize(n - 1);
+    let right_index = (left_index + 1) % n;
+    let left_val = list.get(left_index).unwrap().clone();
+    let right_val = list.remove(right_index);
+    list[left_index] = left_val + right_val;
+  }
+
+  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list))));
 
   Ok(())
 }
@@ -1129,13 +1217,13 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     to_int as "int", to_float as "float", to_string as "string",
 
     // Generator functions
-    alpha, dig, digh, dignz, maybe, num, numf, shred,
+    alpha, dig, digh, dignz, maybe, rand, randf, shred,
 
     // Prototype functions
     proto, set_proto as "set-proto",
 
     // Collection functions
-    assoc, clear, keys, has_key as "has-key", insert, remove, sift, sifted, take,
+    assoc, clear, keys, has_key as "has-key", insert, remove, sift, sifted, squish, squished, take,
 
     // List functions
     pick, join, sort, sorted, shuffle, shuffled, sum, min, max,

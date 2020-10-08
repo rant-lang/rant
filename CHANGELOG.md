@@ -1,15 +1,21 @@
 # 4.0.0-alpha.8
 
 * Added: `RantProgramInfo` struct
-* `[require]` now searches the containing directory of the running program before the local modules path
+* Added: `[require]` now searches the containing directory of the running program before the local modules path
 * Added: new stdlib functions:
   * `[alpha]`: print a string of random alphanumeric characters
   * `[assoc]`: create a map from a list of keys and a list of values
+  * `[ceil]`: get the smallest integer greater than or equal to a number
+  * `[floor]`: get the largest integer less than or equal to a number
+  * `[frac]`: get the fractional part of a float value
   * `[sift]`: remove random items from a list down to a target size
   * `[sifted]`: create a random, ordered subset of a list
+  * `[squish]`: merge random adjacent elements in-place in a list using addition until a target size is reached
+  * `[squished]`: make a copy of a list with random adjacent elements merged down to a target size
 * Changed: `[require]` now accepts a relative path, as long as it is contained in the modules directory
 * Changed: `RantProgram.name()` now returns `Option<&str>` instead of `&str`
 * Changed: Renamed `RantOptions.local_module_path` to `RantOptions.local_modules_path`
+* Changed: Renamed stdlib functions `[num]` and `[numf]` to `[rand]` and `[randf]`, respectively
 * Fixed: Function calls don't trigger variable capture pass
 * Fixed: def + get/set of same variable in chained accessor causes erroneous variable capture inside functions
 
