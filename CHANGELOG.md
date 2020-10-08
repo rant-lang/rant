@@ -1,3 +1,8 @@
+# 4.0.0-alpha.9
+
+* Added: new stdlib functions:
+  * `[translate]`: map a list's values to the values in a map
+
 # 4.0.0-alpha.8
 
 * Added: `RantProgramInfo` struct

@@ -699,6 +699,20 @@ fn assoc(vm: &mut VM, (keys, values): (RantListRef, RantListRef)) -> RantStdResu
   Ok(())
 }
 
+fn translate(vm: &mut VM, (list, map): (RantListRef, RantMapRef)) -> RantStdResult {
+  let list = list.borrow();
+  let map = map.borrow();
+
+  let translated: RantList = list
+    .iter()
+    .map(|val| map.raw_get(val.to_string().as_ref()).cloned().unwrap_or_else(|| val.clone()))
+    .collect();
+
+  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(translated))));
+
+  Ok(())
+}
+
 fn list_push(vm: &mut VM, (list, value): (RantListRef, RantValue)) -> RantStdResult {
   list.borrow_mut().push(value);
   Ok(())
@@ -1223,7 +1237,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     proto, set_proto as "set-proto",
 
     // Collection functions
-    assoc, clear, keys, has_key as "has-key", insert, remove, sift, sifted, squish, squished, take,
+    assoc, clear, keys, has_key as "has-key", insert, remove, sift, sifted, squish, squished, take, translate,
 
     // List functions
     pick, join, sort, sorted, shuffle, shuffled, sum, min, max,

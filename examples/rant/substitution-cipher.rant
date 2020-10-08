@@ -1,0 +1,29 @@
+# Constructs a substitution cipher function
+[$make-cipher: alphabet] {
+  <
+    $letters = [split: <alphabet>];
+    $sub-letters = [shuffled: <letters>];
+    $cipher = [assoc: <letters>; <sub-letters>];
+    $cipher-rev = [assoc: <sub-letters>; <letters>];
+  >
+  # Return cipher functions
+  @(
+    encode = [?: message] {
+      [sum: [translate: [split: <message>]; <cipher>]]
+    };
+    decode = [?: message] {
+      [sum: [translate: [split: <message>]; <cipher-rev>]]
+    };
+  )
+}
+
+# Create a cipher and encode/decode a message
+<$cipher = [make-cipher: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"]>
+<$secret-message = "The quick brown fox jumps over the lazy dog.">
+<$encoded-message = [cipher/encode: <secret-message>]>
+<$decoded-message = [cipher/decode: <encoded-message>]>
+
+# Finally, print the result
+Original: \"<secret-message>\"\n
+Encoded: \"<encoded-message>\"\n
+Decoded: \"<decoded-message>\"\n
