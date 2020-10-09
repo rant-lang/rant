@@ -267,16 +267,30 @@ impl Rant {
     self.rng = Rc::new(RantRng::new(seed));
   }
   
-  /// Runs the specified Rant program and returns the generated output value.
+  /// Runs a program and returns the output value.
   pub fn run(&mut self, program: &RantProgram) -> RuntimeResult<RantValue> {
-    let mut vm = VM::new(self.rng.clone(), self, program);
-    vm.run()
+    VM::new(self.rng.clone(), self, program).run()
   }
 
-  /// Runs the specified Rant program and returns the generated output as a string.
+  /// Runs a program with the specified arguments and returns the output value.
+  pub fn run_with<A>(&mut self, program: &RantProgram, args: A) -> RuntimeResult<RantValue>
+  where A: Into<Option<HashMap<String, RantValue>>>
+  {
+    VM::new(self.rng.clone(), self, program).run_with(args)
+  }
+
+  /// Runs a Rant program and returns the generated output as a string.
   pub fn run_into_string(&mut self, program: &RantProgram) -> RuntimeResult<String> {
     let mut vm = VM::new(self.rng.clone(), self, program);
     Ok(vm.run()?.to_string())
+  }
+
+  /// Runs a Rant program with the specified arguments and returns the generated output as a string.
+  pub fn run_into_string_with<A>(&mut self, program: &RantProgram, args: A) -> RuntimeResult<String> 
+  where A: Into<Option<HashMap<String, RantValue>>>
+  {
+    let mut vm = VM::new(self.rng.clone(), self, program);
+    Ok(vm.run_with(args)?.to_string())
   }
 
   /// Attempts to load and compile a module with the specified name.

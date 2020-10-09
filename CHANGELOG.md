@@ -1,5 +1,6 @@
 # 4.0.0-alpha.9
 
+* Added: `Rant.run_with()`, `Rant.run_into_string_with()`
 * Added: new stdlib functions:
   * `[translate]`: map a list's values to the values in a map
 

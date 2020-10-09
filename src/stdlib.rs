@@ -527,7 +527,7 @@ fn squish(vm: &mut VM, (list, target_size): (RantListRef, usize)) -> RantStdResu
   while list.len() > target_size {
     let n = list.len();
     let left_index = rng.next_usize(n - 1);
-    let right_index = (left_index + 1) % n;
+    let right_index = left_index + 1;
     let left_val = list.get(left_index).unwrap().clone();
     let right_val = list.remove(right_index);
     list[left_index] = left_val + right_val;

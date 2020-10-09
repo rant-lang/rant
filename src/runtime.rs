@@ -115,6 +115,23 @@ impl<'rant> VM<'rant> {
     result
   }
 
+  /// Runs the program with arguments.
+  pub fn run_with<A>(&mut self, args: A) -> RuntimeResult<RantValue> 
+  where A: Into<Option<HashMap<String, RantValue>>>
+  {
+    if let Some(args) = args.into() {
+      for (k, v) in args {
+        self.def_var_value(&k, AccessPathKind::Local, v)?;
+      }
+    }
+
+    let mut result = self.run_inner();
+    // On error, generate stack trace
+    if let Err(err) = result.as_mut() {
+      err.stack_trace = Some(self.call_stack.gen_stack_trace());
+    }
+    result
+  }
   
   #[inline]
   fn run_inner(&mut self) -> RuntimeResult<RantValue> {
