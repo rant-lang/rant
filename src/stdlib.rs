@@ -387,6 +387,26 @@ fn randf(vm: &mut VM, (a, b): (f64, f64)) -> RantStdResult {
   Ok(())
 }
 
+fn rand_list(vm: &mut VM, (a, b, n): (i64, i64, usize)) -> RantStdResult {
+  let mut list = RantList::new();
+  let rng = vm.rng();
+  for _ in 0..n {
+    list.push(RantValue::Integer(rng.next_i64(a, b)));
+  }
+  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list))));
+  Ok(())
+}
+
+fn randf_list(vm: &mut VM, (a, b, n): (f64, f64, usize)) -> RantStdResult {
+  let mut list = RantList::new();
+  let rng = vm.rng();
+  for _ in 0..n {
+    list.push(RantValue::Float(rng.next_f64(a, b)));
+  }
+  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list))));
+  Ok(())
+}
+
 fn alpha(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   const CHARS: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
   let count = count.unwrap_or(1);
@@ -585,6 +605,22 @@ fn join(vm: &mut VM, (sep, list): (RantValue, Vec<RantValue>)) -> RantStdResult 
       frame.write_value(sep.clone());
     }
     frame.write_value(val);
+  }
+  Ok(())
+}
+
+#[allow(clippy::needless_range_loop)]
+fn oxford_join(vm: &mut VM, (comma, conj, comma_conj, list): (RantValue, RantValue, RantValue, Vec<RantValue>)) -> RantStdResult {
+  let frame = vm.cur_frame_mut();
+  let n = list.len();
+  for i in 0..n {
+    match (i, n, i == n - 1) {
+      (0, ..) | (_, 1, _) => {},
+      (1, 2, _) => frame.write_value(conj.clone()),
+      (.., false) => frame.write_value(comma.clone()),
+      (.., true) => frame.write_value(comma_conj.clone()),
+    }
+    frame.write_value(list[i].clone());
   }
   Ok(())
 }
@@ -1231,7 +1267,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     to_int as "int", to_float as "float", to_string as "string",
 
     // Generator functions
-    alpha, dig, digh, dignz, maybe, rand, randf, shred,
+    alpha, dig, digh, dignz, maybe, rand, randf, rand_list as "rand-list", randf_list as "randf-list", shred,
 
     // Prototype functions
     proto, set_proto as "set-proto",
@@ -1241,7 +1277,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
 
     // List functions
     pick, join, sort, sorted, shuffle, shuffled, sum, min, max,
-    list_push as "push", list_pop as "pop",
+    list_push as "push", list_pop as "pop", oxford_join as "oxford-join",
 
     // String functions
     lower, upper, seg, split, lines, indent,

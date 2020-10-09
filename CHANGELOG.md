@@ -2,6 +2,9 @@
 
 * Added: `Rant.run_with()`, `Rant.run_into_string_with()`
 * Added: new stdlib functions:
+  * `[oxford-join]`: print a list with custom separators for applying series commas and conjunctions
+  * `[rand-list]`: generate a list of random integers
+  * `[randf-list]`: generate a list of random floats
   * `[translate]`: map a list's values to the values in a map
 
 # 4.0.0-alpha.8
