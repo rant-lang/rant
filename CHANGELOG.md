@@ -6,6 +6,7 @@
   * `[rand-list]`: generate a list of random integers
   * `[randf-list]`: generate a list of random floats
   * `[translate]`: map a list's values to the values in a map
+* Fixed: `[sifted]` and `[squished]` returning `<>` when input list meets target size
 
 # 4.0.0-alpha.8
 

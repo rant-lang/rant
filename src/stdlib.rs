@@ -563,10 +563,6 @@ fn squished(vm: &mut VM, (list, target_size): (RantListRef, usize)) -> RantStdRe
     runtime_error!(RuntimeErrorType::ArgumentError, "cannot squish to a target size of 0");
   }
 
-  if list.len() <= target_size || list.len() < 2 {
-    return Ok(())
-  }
-
   let rng = vm.rng();
   while list.len() > target_size {
     let n = list.len();
@@ -777,9 +773,6 @@ fn sift(vm: &mut VM, (list, size): (RantListRef, usize)) -> RantStdResult {
 
 fn sifted(vm: &mut VM, (list, size): (RantListRef, usize)) -> RantStdResult {
   let mut list = list.borrow().clone();
-  if list.len() <= size {
-    return Ok(())
-  }
 
   let rng = vm.rng();
   while list.len() > size {
