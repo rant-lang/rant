@@ -578,6 +578,113 @@ fn squished(vm: &mut VM, (list, target_size): (RantListRef, usize)) -> RantStdRe
   Ok(())
 }
 
+fn filter(vm: &mut VM, (list, predicate): (RantListRef, RantFunctionRef)) -> RantStdResult {
+  let list_ref = list.borrow();
+  if list_ref.is_empty() {
+    vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list_ref.clone()))));
+    return Ok(())
+  }
+
+  fn _iterate_filter(vm: &mut VM, src: RantListRef, mut dest: RantList, index: usize, predicate: RantFunctionRef) -> RuntimeResult<()> {
+    let src_ref = src.borrow();
+
+    // Check predicate result from last iteration
+    if index > 0 {
+      match vm.pop_val()? {
+        RantValue::Boolean(passed) => dest.push(src_ref.get(index - 1).cloned().unwrap_or_default()),
+        other => runtime_error!(RuntimeErrorType::TypeError, "filter callback expected to return 'bool' value, but returned '{}' instead", other.type_name())
+      }
+    }
+
+    // Check if filtering finished
+    if index >= src_ref.len() {
+      vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(dest))));
+      return Ok(())
+    }
+
+    let src_clone = Rc::clone(&src);
+    let predicate_arg = src_ref.get(index).cloned().unwrap_or_default();
+    let predicate_clone = Rc::clone(&predicate);
+
+    // Prepare next iteration
+    vm.cur_frame_mut().push_intent_front(Intent::RuntimeCall(Box::new(move |vm| {
+      _iterate_filter(vm, src_clone, dest, index + 1, predicate)?;
+      Ok(())
+    })));
+
+    // Prepare predicate call for current iteration
+    vm.push_val(RantValue::Function(predicate_clone))?;
+    vm.push_val(predicate_arg)?;
+    vm.cur_frame_mut().push_intent_front(Intent::Call {
+      argc: 1,
+      flag: PrintFlag::None,
+      override_print: true,
+    });
+
+    Ok(())
+  }
+
+  let list_clone = Rc::clone(&list);
+  vm.cur_frame_mut().push_intent_front(Intent::RuntimeCall(Box::new(move |vm| {
+    _iterate_filter(vm, list_clone, RantList::new(), 0, predicate)?;
+    Ok(())
+  })));
+
+  Ok(())
+}
+
+fn map(vm: &mut VM, (list, map_func): (RantListRef, RantFunctionRef)) -> RantStdResult {
+  let list_ref = list.borrow();
+  if list_ref.is_empty() {
+    vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list_ref.clone()))));
+    return Ok(())
+  }
+
+  fn _iterate_map(vm: &mut VM, src: RantListRef, mut dest: RantList, index: usize, map_func: RantFunctionRef) -> RuntimeResult<()> {
+    let src_ref = src.borrow();
+
+    // Add result from last iteration to destination list
+    if index > 0 {
+      dest.push(vm.pop_val()?);
+    }
+
+    // Check if mapping finished
+    if index >= src_ref.len() {
+      vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(dest))));
+      return Ok(())
+    }
+
+    let src_clone = Rc::clone(&src);
+    let map_func_arg = src_ref.get(index).cloned().unwrap_or_default();
+    let map_func_clone = Rc::clone(&map_func);
+
+    // Prepare next iteration
+    vm.cur_frame_mut().push_intent_front(Intent::RuntimeCall(Box::new(move |vm| {
+      _iterate_map(vm, src_clone, dest, index + 1, map_func)?;
+      Ok(())
+    })));
+
+    // Prepare predicate call for current iteration
+    vm.push_val(RantValue::Function(map_func_clone))?;
+    vm.push_val(map_func_arg)?;
+    vm.cur_frame_mut().push_intent_front(Intent::Call {
+      argc: 1,
+      flag: PrintFlag::None,
+      override_print: true,
+    });
+
+    Ok(())
+  }
+
+  let list_clone = Rc::clone(&list);
+  vm.cur_frame_mut().push_intent_front(Intent::RuntimeCall(Box::new(move |vm| {
+    _iterate_map(vm, list_clone, RantList::new(), 0, map_func)?;
+    Ok(())
+  })));
+
+  Ok(())
+}
+
 fn maybe(vm: &mut VM, p: Option<f64>) -> RantStdResult {
   let b = vm.rng().next_bool(p.unwrap_or(0.5));
   vm.cur_frame_mut().write_value(RantValue::Boolean(b));
@@ -1016,7 +1123,7 @@ fn call(vm: &mut VM, (func, args): (RantFunctionRef, Option<Vec<RantValue>>)) ->
       vm.push_val(arg)?;
     }
   }
-  vm.cur_frame_mut().push_intent_front(Intent::Call { argc, flag: PrintFlag::None });
+  vm.cur_frame_mut().push_intent_front(Intent::Call { argc, flag: PrintFlag::None, override_print: false });
   Ok(())
 }
 
@@ -1269,7 +1376,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     assoc, clear, keys, has_key as "has-key", insert, remove, sift, sifted, squish, squished, take, translate,
 
     // List functions
-    pick, join, sort, sorted, shuffle, shuffled, sum, min, max,
+    pick, filter, join, map, sort, sorted, shuffle, shuffled, sum, min, max,
     list_push as "push", list_pop as "pop", oxford_join as "oxford-join",
 
     // String functions

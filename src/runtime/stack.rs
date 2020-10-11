@@ -249,7 +249,7 @@ impl CallStack {
 /// Represents a call stack frame.
 pub struct StackFrame {
   /// Node sequence being executed by the frame
-  sequence: Rc<Sequence>,
+  sequence: Option<Rc<Sequence>>,
   /// Program Counter (as index in sequence) for the current frame
   pc: usize,
   /// Has frame sequence started running?
@@ -271,13 +271,37 @@ impl StackFrame {
   pub fn new(sequence: Rc<Sequence>, has_output: bool, prev_output: Option<&OutputWriter>) -> Self {
     Self {
       origin: Rc::clone(&sequence.origin),
-      sequence,
+      sequence: Some(sequence),
       output: if has_output { Some(OutputWriter::new(prev_output)) } else { None },
       started: false,
       pc: 0,
       intents: Default::default(),
       debug_pos: (0, 0),
       flavor: Default::default(),
+    }
+  }
+
+  pub fn new_native(
+    func: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, 
+    has_output: bool, 
+    prev_output: Option<&OutputWriter>, 
+    origin: Rc<RantProgramInfo>, 
+    debug_pos: (usize, usize),
+    flavor: StackFrameFlavor
+  ) -> Self 
+  {
+    let mut intents: VecDeque<Intent> = Default::default();
+    intents.push_front(Intent::RuntimeCall(func));
+
+    Self {
+      origin,
+      sequence: None,
+      output: if has_output { Some(OutputWriter::new(prev_output)) } else { None },
+      started: false,
+      pc: 0,
+      intents,
+      debug_pos,
+      flavor,
     }
   }
 
@@ -303,7 +327,7 @@ impl StackFrame {
       self.started = true;
     }
     
-    self.sequence.get(self.pc).map(Rc::clone)
+    self.sequence.as_ref().and_then(|seq| seq.get(self.pc).map(Rc::clone))
   }
   
   /// Gets the Program Counter (PC) for the frame.
@@ -326,6 +350,11 @@ impl StackFrame {
   #[inline]
   pub fn origin(&self) -> &Rc<RantProgramInfo> {
     &self.origin
+  }
+
+  #[inline]
+  pub fn debug_pos(&self) -> (usize, usize) {
+    self.debug_pos
   }
 
   #[inline]
@@ -381,7 +410,7 @@ impl StackFrame {
 impl StackFrame {
   #[inline(always)]
   fn is_done(&self) -> bool {
-    self.pc >= self.sequence.len()
+    self.sequence.is_none() || self.pc >= self.sequence.as_ref().unwrap().len()
   }
   
   #[inline]
@@ -420,7 +449,7 @@ impl Display for StackFrame {
       self.origin_name(), 
       self.debug_pos.0, 
       self.debug_pos.1,
-      self.sequence.name().map(|name| name.as_str()).unwrap_or("???"), 
+      self.sequence.as_ref().and_then(|seq| seq.name().map(|name| name.as_str())).unwrap_or("???"), 
     )
   }
 }

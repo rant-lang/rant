@@ -2,11 +2,14 @@
 
 * Added: `Rant.run_with()`, `Rant.run_into_string_with()`
 * Added: new stdlib functions:
+  * `[filter]`: make a copy of a list containing only items that pass a predicate
+  * `[map]`: apply a function to items in a list and return another list with the results
   * `[oxford-join]`: print a list with custom separators for applying series commas and conjunctions
   * `[rand-list]`: generate a list of random integers
   * `[randf-list]`: generate a list of random floats
   * `[translate]`: map a list's values to the values in a map
 * Fixed: `[sifted]` and `[squished]` returning `<>` when input list meets target size
+* Fixed: Sinks not honored on native function calls
 
 # 4.0.0-alpha.8
 

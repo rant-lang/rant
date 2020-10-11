@@ -61,7 +61,7 @@ macro_rules! runtime_error {
 
 /// RSTs can assign intents to the current stack frame
 /// to override its usual behavior next time it's active.
-#[derive(Debug)]
+
 pub enum Intent {
   /// Take the pending output from last frame and print it.
   PrintValue,
@@ -82,13 +82,15 @@ pub enum Intent {
   /// Evaluate `arg_exprs` in order, then pop the argument values off the stack, pop a function off the stack, and pass the arguments to the function.
   Invoke { arg_exprs: Rc<Vec<Rc<Sequence>>>, eval_count: usize, flag: PrintFlag },
   /// Pop `argc` args off the stack, then pop a function off the stack and call it with the args.
-  Call { argc: usize, flag: PrintFlag },
+  Call { argc: usize, flag: PrintFlag, override_print: bool },
   /// Pop value from stack and add it to a list. If `index` is out of range, print the list.
   BuildList { init: Rc<Vec<Rc<Sequence>>>, index: usize, list: RantList },
   /// Pop value and optional key from stack and add them to a map. If `pair_index` is out of range, print the map.
   BuildMap { init: Rc<Vec<(MapKeyExpr, Rc<Sequence>)>>, pair_index: usize, map: RantMap },
   /// Pops a map off the stack and loads it as a module with the specified name.
   LoadModule { module_name: String },
+  /// Calls a function that accepts a mutable reference to the current runtime.
+  RuntimeCall(Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>),
 }
 
 #[derive(Debug)]
@@ -201,11 +203,11 @@ impl<'rant> VM<'rant> {
               };
 
               // Call the function
-              self.call_func(func, args, flag)?;
+              self.call_func(func, args, flag, false)?;
               continue 'from_the_top;
             }
           },
-          Intent::Call { argc, flag } => {
+          Intent::Call { argc, flag, override_print } => {
             // Pop the evaluated args off the stack
             let mut args = vec![];
             for _ in 0..argc {
@@ -221,7 +223,7 @@ impl<'rant> VM<'rant> {
             };
 
             // Call the function
-            self.call_func(func, args, flag)?;
+            self.call_func(func, args, flag, override_print)?;
             continue 'from_the_top;
           },
           Intent::BuildDynamicSetter { path, auto_def, expr_count, mut pending_exprs, val_source } => {
@@ -313,6 +315,9 @@ impl<'rant> VM<'rant> {
             }
 
             self.def_var_value(&module_name, AccessPathKind::Local, module)?;
+          },
+          Intent::RuntimeCall(func) => {
+            func(self)?;
           },
         }
       }
@@ -536,8 +541,9 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline]
-  fn call_func(&mut self, func: RantFunctionRef, mut args: Vec<RantValue>, flag: PrintFlag) -> RuntimeResult<()> {
+  fn call_func(&mut self, func: RantFunctionRef, mut args: Vec<RantValue>, flag: PrintFlag, override_print: bool) -> RuntimeResult<()> {
     let argc = args.len();
+    let is_printing = !flag.is_sink();
 
     // Verify the args fit the signature
     let mut args = if func.is_variadic() {
@@ -562,20 +568,18 @@ impl<'rant> VM<'rant> {
       args
     };
 
+    // Tell frame to print output if it's available
+    if is_printing && !override_print {
+      self.cur_frame_mut().push_intent_front(Intent::PrintValue);
+    }
+
     // Call the function
     match &func.body {
       RantFunctionInterface::Foreign(foreign_func) => {
-        // TODO: Honor sinks on native function calls
-        foreign_func(self, args)?;
+        let foreign_func = Rc::clone(foreign_func);
+        self.push_native_frame(Box::new(move |vm| foreign_func(vm, args)), is_printing, StackFrameFlavor::Original)?;
       },
-      RantFunctionInterface::User(user_func) => {        
-        let is_printing = !flag.is_sink();
-
-        // Tell frame to print output if it's available
-        if is_printing {
-          self.cur_frame_mut().push_intent_front(Intent::PrintValue);
-        }
-
+      RantFunctionInterface::User(user_func) => {
         // Push the function onto the call stack
         self.push_frame_flavored(Rc::clone(user_func), is_printing, StackFrameFlavor::FunctionBody)?;
 
@@ -815,7 +819,7 @@ impl<'rant> VM<'rant> {
             // If the separator is a function, call the function
             RantValue::Function(sep_func) => {
               self.push_val(RantValue::Function(sep_func))?;
-              self.cur_frame_mut().push_intent_front(Intent::Call { argc: 0, flag: if is_printing { PrintFlag::Hint } else { PrintFlag::Sink } });
+              self.cur_frame_mut().push_intent_front(Intent::Call { argc: 0, flag: if is_printing { PrintFlag::Hint } else { PrintFlag::Sink }, override_print: false });
             },
             // If the separator is a block, resolve it
             RantValue::Block(sep_block) => {
@@ -916,6 +920,27 @@ impl<'rant> VM<'rant> {
       use_output,
       self.call_stack.top().map(|last| last.output()).flatten()
     );
+
+    self.call_stack.push_frame(frame);
+    Ok(())
+  }
+
+  pub(crate) fn push_native_frame(&mut self, callee: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
+    // Check if this push would overflow the stack
+    if self.call_stack.len() >= MAX_STACK_SIZE {
+      runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
+    }
+
+    let last_frame = self.call_stack.top().unwrap();
+
+    let frame = StackFrame::new_native(
+      callee,
+      use_output,
+      self.call_stack.top().map(|last| last.output()).flatten(),
+      Rc::clone(last_frame.origin()),
+      last_frame.debug_pos(),
+      StackFrameFlavor::Original
+    ).with_flavor(flavor);
 
     self.call_stack.push_frame(frame);
     Ok(())
@@ -1128,6 +1153,7 @@ pub enum RuntimeErrorType {
   ArgumentError,
   /// Tried to invoke a non-function
   CannotInvokeValue,
+  TypeError,
   /// Error occurred when creating value
   ValueError(ValueError),
   /// Error occurred while indexing value
@@ -1156,6 +1182,7 @@ impl Display for RuntimeErrorType {
       RuntimeErrorType::ArgumentError => "argument error",
       RuntimeErrorType::CannotInvokeValue => "cannot invoke value",
       RuntimeErrorType::UserError => "user error",
+      RuntimeErrorType::TypeError => "type error",
       RuntimeErrorType::ValueError(_) => "value error",
       RuntimeErrorType::IndexError(_) => "index error",
       RuntimeErrorType::KeyError(_) => "key error",
