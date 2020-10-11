@@ -1273,12 +1273,6 @@ fn reset_attrs(vm: &mut VM, _: ()) -> RantStdResult {
   Ok(())
 }
 
-fn get(vm: &mut VM, key: String) -> RantStdResult {
-  let val = vm.get_var_value(key.as_str(), lang::AccessPathKind::Local, false)?;
-  vm.cur_frame_mut().write_value(val);
-  Ok(())
-}
-
 fn error(vm: &mut VM, msg: Option<String>) -> RantStdResult {
   const DEFAULT_ERROR_MESSAGE: &str = "user error";
   Err(RuntimeError {
@@ -1385,9 +1379,6 @@ pub(crate) fn load_stdlib(context: &mut Rant)
 
     // String functions
     lower, upper, seg, split, lines, indent,
-
-    // Dynamic Variable Access functions
-    get,
 
     // Error functions
     error

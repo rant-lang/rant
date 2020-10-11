@@ -2,6 +2,7 @@
 
 * Added: "Trickle-Down" function lookup: function calls will now descope until the requested variable provides a function or other callable value
 * Changed: Updated `quickscope` to 0.1.5
+* Removed: `[get]`
 
 # 4.0.0-alpha.9
 
