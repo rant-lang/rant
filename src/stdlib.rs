@@ -591,7 +591,11 @@ fn filter(vm: &mut VM, (list, predicate): (RantListRef, RantFunctionRef)) -> Ran
     // Check predicate result from last iteration
     if index > 0 {
       match vm.pop_val()? {
-        RantValue::Boolean(passed) => dest.push(src_ref.get(index - 1).cloned().unwrap_or_default()),
+        RantValue::Boolean(passed) => {
+          if passed {
+            dest.push(src_ref.get(index - 1).cloned().unwrap_or_default());
+          }
+        },
         other => runtime_error!(RuntimeErrorType::TypeError, "filter callback expected to return 'bool' value, but returned '{}' instead", other.type_name())
       }
     }
