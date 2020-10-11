@@ -72,9 +72,9 @@ pub enum Intent {
   /// Pop a value off the stack and assign it to a new variable.
   DefVar { vname: Identifier, access_kind: AccessPathKind, },
   /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `GetValue`.
-  BuildDynamicGetter { path: Rc<AccessPath>, dynamic_key_count: usize, pending_exprs: Vec<Rc<Sequence>>, override_print: bool },
+  BuildDynamicGetter { path: Rc<AccessPath>, dynamic_key_count: usize, pending_exprs: Vec<Rc<Sequence>>, override_print: bool, prefer_function: bool },
   /// Pop `dynamic_key_count` values off the stack and use them for expression fields in a getter.
-  GetValue { path: Rc<AccessPath>, dynamic_key_count: usize, override_print: bool },
+  GetValue { path: Rc<AccessPath>, dynamic_key_count: usize, override_print: bool, prefer_function: bool, },
   /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `SetValue`.
   BuildDynamicSetter { path: Rc<AccessPath>, auto_def: bool, expr_count: usize, pending_exprs: Vec<Rc<Sequence>>, val_source: SetterValueSource },
   /// Pop `expr_count` values off the stack and use them for expression fields in a setter.
@@ -163,22 +163,22 @@ impl<'rant> VM<'rant> {
             let val = self.pop_val()?;
             self.def_var_value(vname.as_str(), access_kind, val)?;
           },
-          Intent::BuildDynamicGetter { path, dynamic_key_count, mut pending_exprs, override_print } => {
+          Intent::BuildDynamicGetter { path, dynamic_key_count, mut pending_exprs, override_print, prefer_function } => {
             if let Some(key_expr) = pending_exprs.pop() {
               // Set next intent based on remaining expressions in getter
               if pending_exprs.is_empty() {
-                self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print });
+                self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print, prefer_function });
               } else {
-                self.cur_frame_mut().push_intent_front(Intent::BuildDynamicGetter { path, dynamic_key_count, pending_exprs, override_print });
+                self.cur_frame_mut().push_intent_front(Intent::BuildDynamicGetter { path, dynamic_key_count, pending_exprs, override_print, prefer_function });
               }
               self.push_frame_flavored(Rc::clone(&key_expr), true, StackFrameFlavor::DynamicKeyExpression)?;
             } else {
-              self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print });
+              self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print, prefer_function });
             }
             continue 'from_the_top;
           },
-          Intent::GetValue { path, dynamic_key_count, override_print } => {
-            self.get_value(path, dynamic_key_count, override_print)?;
+          Intent::GetValue { path, dynamic_key_count, override_print, prefer_function } => {
+            self.get_value(path, dynamic_key_count, override_print, prefer_function)?;
           },
           Intent::Invoke { arg_exprs, eval_count, flag } => {
             // First, evaluate all arguments
@@ -367,7 +367,8 @@ impl<'rant> VM<'rant> {
               self.cur_frame_mut().push_intent_front(Intent::GetValue { 
                 path: Rc::clone(path), 
                 dynamic_key_count: 0, 
-                override_print: false 
+                override_print: false,
+                prefer_function: false,
               });
             } else {
               // Build dynamic keys before running getter
@@ -376,6 +377,7 @@ impl<'rant> VM<'rant> {
                 path: Rc::clone(path),
                 pending_exprs: dynamic_keys,
                 override_print: false,
+                prefer_function: false,
               });
             }
             continue 'from_the_top;
@@ -501,7 +503,8 @@ impl<'rant> VM<'rant> {
               Intent::GetValue { 
                 path: Rc::clone(id), 
                 dynamic_key_count: 0, 
-                override_print: true 
+                override_print: true,
+                prefer_function: true,
               }
             } else {
               // Build dynamic keys before running getter
@@ -510,6 +513,7 @@ impl<'rant> VM<'rant> {
                 path: Rc::clone(id),
                 pending_exprs: dynamic_keys,
                 override_print: true,
+                prefer_function: true,
               }
             });
 
@@ -642,8 +646,8 @@ impl<'rant> VM<'rant> {
     for accessor in path_iter {
       // Update setter target by keying off setter_key
       setter_target = match (&setter_target, &setter_key) {
-        (None, SetterKey::KeyRef(key)) => Some(self.get_var_value(key, access_kind)?),
-        (None, SetterKey::KeyString(key)) => Some(self.get_var_value(key.as_str(), access_kind)?),
+        (None, SetterKey::KeyRef(key)) => Some(self.get_var_value(key, access_kind, false)?),
+        (None, SetterKey::KeyString(key)) => Some(self.get_var_value(key.as_str(), access_kind, false)?),
         (Some(val), SetterKey::Index(index)) => Some(val.index_get(*index).into_runtime_result()?),
         (Some(val), SetterKey::KeyRef(key)) => Some(val.key_get(key).into_runtime_result()?),
         (Some(val), SetterKey::KeyString(key)) => Some(val.key_get(key.as_str()).into_runtime_result()?),
@@ -670,21 +674,23 @@ impl<'rant> VM<'rant> {
       }
     }
 
+    macro_rules! def_or_set {
+      ($vname:expr, $access_kind:expr, $value:expr) => {
+        if auto_def {          
+          self.def_var_value($vname, $access_kind, $value)?;          
+        } else {
+          self.set_var_value($vname, $access_kind, $value)?;
+        }
+      }
+    }
+
     // Finally, set the value
     match (&mut setter_target, &setter_key) {
       (None, SetterKey::KeyRef(vname)) => {
-        if auto_def {
-          self.def_var_value(vname, access_kind, setter_value)?;
-        } else {
-          self.set_var_value(vname, access_kind, setter_value)?;
-        }
+        def_or_set!(vname, access_kind, setter_value);
       },
       (None, SetterKey::KeyString(vname)) => {
-        if auto_def {
-          self.def_var_value(vname.as_str(), access_kind, setter_value)?
-        } else {
-          self.set_var_value(vname.as_str(), access_kind, setter_value)?
-        }
+        def_or_set!(vname.as_str(), access_kind, setter_value);
       },
       (Some(target), SetterKey::Index(index)) => target.index_set(*index, setter_value).into_runtime_result()?,
       (Some(target), SetterKey::KeyRef(key)) => target.key_set(key, setter_value).into_runtime_result()?,
@@ -696,7 +702,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline]
-  fn get_value(&mut self, path: Rc<AccessPath>, dynamic_key_count: usize, override_print: bool) -> RuntimeResult<()> {
+  fn get_value(&mut self, path: Rc<AccessPath>, dynamic_key_count: usize, override_print: bool, prefer_function: bool) -> RuntimeResult<()> {
     // Gather evaluated dynamic keys from stack
     let mut dynamic_keys = vec![];
     for _ in 0..dynamic_key_count {
@@ -709,11 +715,11 @@ impl<'rant> VM<'rant> {
     // Get the root variable
     let mut getter_value = match path_iter.next() {
         Some(AccessPathComponent::Name(vname)) => {
-          self.get_var_value(vname.as_str(), path.kind())?
+          self.get_var_value(vname.as_str(), path.kind(), prefer_function)?
         },
         Some(AccessPathComponent::Expression(_)) => {
           let key = dynamic_keys.next().unwrap().to_string();
-          self.get_var_value(key.as_str(), path.kind())?
+          self.get_var_value(key.as_str(), path.kind(), prefer_function)?
         },
         _ => unreachable!()
     };
@@ -855,8 +861,8 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  pub(crate) fn get_var_value(&self, varname: &str, access: AccessPathKind, ) -> RuntimeResult<RantValue> {
-    self.call_stack.get_var_value(self.engine, varname, access)
+  pub(crate) fn get_var_value(&self, varname: &str, access: AccessPathKind, prefer_function: bool) -> RuntimeResult<RantValue> {
+    self.call_stack.get_var_value(self.engine, varname, access, prefer_function)
   }
 
   #[inline(always)]

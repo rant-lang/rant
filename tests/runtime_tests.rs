@@ -224,3 +224,11 @@ fn map_with_user_callback() {
     "-1, -2, -3, -4, -5, -6, -7, -8, -9, -10"
   )
 }
+
+#[test]
+fn trickle_down_func_lookup() {
+  test_rant_file!(
+    "sources/trickle_down_func_lookup.rant",
+    "global\nlocal\nvery local"
+  );
+}

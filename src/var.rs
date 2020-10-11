@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::RefCell, mem};
+use std::{cell::RefCell, mem, ops::Deref, rc::Rc};
 
 use crate::RantValue;
 
@@ -67,13 +67,13 @@ impl RantVar {
     }
   }
   
-  // #[inline]
-  // pub fn value_ref(&self) -> impl Deref<Target = RantValue> + '_ {
-  //   match self {
-  //     RantVar::ByVal(val) => cervine::Cow::Borrowed(val),
-  //     RantVar::ByRef(val_ref) => cervine::Cow::Owned(val_ref.borrow()),
-  //   }
-  // }
+  #[inline]
+  pub fn value_ref(&self) -> impl Deref<Target = RantValue> + '_ {
+    match self {
+      RantVar::ByVal(val) => cervine::Cow::Borrowed(val),
+      RantVar::ByRef(val_ref) => cervine::Cow::Owned(val_ref.borrow()),
+    }
+  }
 
   #[inline]
   pub fn value_cloned(&self) -> RantValue {

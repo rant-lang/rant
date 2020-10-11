@@ -1,3 +1,8 @@
+# 4.0.0-alpha.10
+
+* Added: "Trickle-Down" function lookup: function calls will now descope until the requested variable provides a function or other callable value
+* Changed: Updated `quickscope` to 0.1.5
+
 # 4.0.0-alpha.9
 
 * Added: `RuntimeErrorType::TypeError`

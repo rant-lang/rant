@@ -93,6 +93,12 @@ impl RantValue {
       false
     }
   }
+
+  /// Returns true if the value is callable (e.g. a function).
+  #[inline]
+  pub fn is_callable(&self) -> bool {
+    matches!(self, RantValue::Function(..))
+  }
 }
 
 #[allow(clippy::len_without_is_empty)]

@@ -1,0 +1,21 @@
+[$/test-global] {
+  global
+}
+
+[$test-local] { 
+  local 
+}
+
+{
+  # Override parent functions with an empty
+  <$test-global; $test-local>
+
+  # Attempt to call the functions anyway
+  [test-global]\n[test-local]\n
+
+  # Now bring the test-local function into this scope
+  [$test-local] { very local }
+
+  # Call test-local again
+  [test-local]
+}

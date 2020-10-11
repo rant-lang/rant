@@ -130,15 +130,40 @@ impl CallStack {
   }
 
   #[inline]
-  pub fn get_var_value(&self, context: &Rant, id: &str, access: AccessPathKind) -> RuntimeResult<RantValue> {
+  pub fn get_var_value(&self, context: &Rant, id: &str, access: AccessPathKind, prefer_function: bool) -> RuntimeResult<RantValue> {
+
+    macro_rules! trickle_down_func_lookup {
+      ($value_iter:expr) => {
+        if let Some(mut vars) = $value_iter {
+          // Store a reference to the topmost value to use as a fallback
+          let mut var = vars.next().unwrap();
+          // If the topmost value isn't callable, check the whole pile and then globals for something that is
+          if !var.value_ref().is_callable() {
+            if let Some(func_var) = vars
+            .find(|v| v.value_ref().is_callable())
+            .or_else(|| context.get_global_var(id).filter(|v| v.value_ref().is_callable())) 
+            {
+              var = func_var;
+            }
+          }
+          return Ok(var.value_cloned())
+        }
+      }
+    }
+
     match access {
       AccessPathKind::Local => {
-        if let Some(var) = self.locals.get(id) {
+        // If the caller requested a function, perform "trickle-down" function lookup
+        if prefer_function {
+          trickle_down_func_lookup!(self.locals.get_all(id));
+        } else if let Some(var) = self.locals.get(id) {
           return Ok(var.value_cloned())
         }
       },
       AccessPathKind::Descope(n) => {
-        if let Some(var) = self.locals.get_parent(id, n) {
+        if prefer_function {
+          trickle_down_func_lookup!(self.locals.get_parents(id, n));
+        } else if let Some(var) = self.locals.get_parent(id, n) {
           return Ok(var.value_cloned())
         }
       },
