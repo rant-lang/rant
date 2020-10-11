@@ -1,5 +1,6 @@
 # 4.0.0-alpha.9
 
+* Added: `RuntimeErrorType::TypeError`
 * Added: `Rant.run_with()`, `Rant.run_into_string_with()`
 * Added: new stdlib functions:
   * `[filter]`: make a copy of a list containing only items that pass a predicate

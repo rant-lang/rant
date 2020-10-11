@@ -1153,6 +1153,7 @@ pub enum RuntimeErrorType {
   ArgumentError,
   /// Tried to invoke a non-function
   CannotInvokeValue,
+  /// Error occurred due to unexpected value type
   TypeError,
   /// Error occurred when creating value
   ValueError(ValueError),
