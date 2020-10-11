@@ -1,0 +1,6 @@
+[$arg-or-foo:arg?] {
+  [alt:<arg>;foo]
+}
+
+[arg-or-foo]\n
+[arg-or-foo:bar]

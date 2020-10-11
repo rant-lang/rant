@@ -1,0 +1,13 @@
+{
+  <$a=0>
+  [$^next-number] {
+    <$val=<a>>
+    <a=[add:<a>;1]>
+    <val>
+  }
+}
+
+[rep:4][sep:\s]
+{
+  [next-number]
+}

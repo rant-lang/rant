@@ -1,0 +1,13 @@
+[$list-args: args*] {
+  [rep:[len:<args>]]
+  [sep:\s]
+  {
+    <args/{[step-index]}>
+  }
+}
+
+[list-args]\n
+[list-args:a]\n
+[list-args:a;b]\n
+[list-args:a;b;c]\n
+[list-args:a;b;c;d]

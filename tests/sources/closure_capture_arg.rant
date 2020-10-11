@@ -1,0 +1,7 @@
+[$gen-closure:msg] {
+  [?] {
+    <msg>
+  }
+}
+
+[![gen-closure:foo]]

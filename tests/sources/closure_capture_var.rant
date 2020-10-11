@@ -1,0 +1,6 @@
+[$gen-closure] {
+  <$a = foo>
+  [?]{<a>}
+}
+
+[![gen-closure]]

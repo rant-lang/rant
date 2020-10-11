@@ -9,160 +9,218 @@
 use rant::Rant;
 use assert_matches::*;
 
-macro_rules! run_rant {
-  ($src:literal) => {{
+macro_rules! test_rant_file {
+  ($src_path:literal, $expected:literal) => {{
     let mut r = Rant::new();
-    let pgm = r.compile_quiet($src).expect("compile failed");
-    r.run_into_string(&pgm).as_ref().map(|o| o.as_str())
+    let pgm = r.compile_quiet(include_str!($src_path)).expect("failed to compile program");
+    assert_matches!(r.run_into_string(&pgm).as_ref().map(|o| o.as_str()), Ok($expected));
+  }}
+}
+
+macro_rules! test_rant {
+  ($src:literal, $expected:literal) => {{
+    let mut r = Rant::new();
+    let pgm = r.compile_quiet($src).expect("failed to compile program");
+    assert_matches!(r.run_into_string(&pgm).as_ref().map(|o| o.as_str()), Ok($expected));
   }}
 }
 
 #[test]
 fn empty_program() {
-  assert_matches!(run_rant!(""), Ok(""));
+  test_rant!("", "");
 }
 
 #[test]
 fn single_fragment() {
-  assert_matches!(run_rant!("foo"), Ok("foo"));
+  test_rant!("foo", "foo");
 }
 
 #[test]
 fn spaced_fragments() {
-  assert_matches!(run_rant!("foo bar"), Ok("foo bar"));
+  test_rant!("foo bar", "foo bar");
 }
 
 #[test]
 fn sinked_block() {
-  assert_matches!(run_rant!("_{test}"), Ok(""));
+  test_rant!("_{test}", "");
 }
 
 #[test]
 fn single_element_block() {
-  assert_matches!(run_rant!("{test}"), Ok("test"))
+  test_rant!("{test}", "test");
 }
 
 #[test]
 fn repeater() {
-  assert_matches!(run_rant!("[rep:10]{a}"), Ok("aaaaaaaaaa"));
+  test_rant!("[rep:10]{a}", "aaaaaaaaaa");
 }
 
 #[test]
 fn repeater_with_value_sep() {
-  assert_matches!(run_rant!(r#"[rep:10][sep:\s]{a}"#), Ok("a a a a a a a a a a"));
+  test_rant!(r#"[rep:10][sep:\s]{a}"#, "a a a a a a a a a a");
 }
 
 #[test]
 fn repeater_with_closure_sep() {
-  assert_matches!(run_rant!(r#"[rep:10][sep:[?]{b}]{a}"#), Ok("abababababababababa"));
+  test_rant!(r#"[rep:10][sep:[?]{b}]{a}"#, "abababababababababa");
 }
 
 #[test]
 fn selector_forward() {
-  assert_matches!(run_rant!(r#"[rep:16][sel:[mksel:forward]]{a|b|c|d|e|f|g|h}"#), Ok("abcdefghabcdefgh"));
+  test_rant!(r#"[rep:16][sel:[mksel:forward]]{a|b|c|d|e|f|g|h}"#, "abcdefghabcdefgh");
 }
 
 #[test]
 fn selector_reverse() {
-  assert_matches!(run_rant!(r#"[rep:16][sel:[mksel:reverse]]{a|b|c|d|e|f|g|h}"#), Ok("hgfedcbahgfedcba"));
+  test_rant!(r#"[rep:16][sel:[mksel:reverse]]{a|b|c|d|e|f|g|h}"#, "hgfedcbahgfedcba");
 }
 
 #[test]
 fn selector_ping() {
-  assert_matches!(run_rant!(r#"[rep:16][sel:[mksel:ping]]{a|b|c|d|e|f|g|h}"#), Ok("abcdefghgfedcbab"));
+  test_rant!(r#"[rep:16][sel:[mksel:ping]]{a|b|c|d|e|f|g|h}"#, "abcdefghgfedcbab");
 }
 
 #[test]
 fn selector_pong() {
-  assert_matches!(run_rant!(r#"[rep:16][sel:[mksel:pong]]{a|b|c|d|e|f|g|h}"#), Ok("hgfedcbabcdefghg"));
+  test_rant!(r#"[rep:16][sel:[mksel:pong]]{a|b|c|d|e|f|g|h}"#, "hgfedcbabcdefghg");
 }
 
 #[test]
 fn func_no_params() {
-  assert_matches!(run_rant!(r#"[$example-func]{test}[example-func]"#), Ok("test"));
+  test_rant!(r#"[$example-func]{test}[example-func]"#, "test");
 }
 
 #[test]
 fn func_with_required_param() {
-  assert_matches!(run_rant!(r#"[$square:x]{[mul:<x>;<x>]} [square:3]"#), Ok("9"));
+  test_rant!(r#"[$square:x]{[mul:<x>;<x>]} [square:3]"#, "9");
 }
 
 #[test]
 fn func_with_variadic_star() {
-  assert_matches!(run_rant!(r#"[$list-args: args*]{[rep:[len:<args>]][sep:\s]{<args/{[step-index]}>}} [list-args]\n[list-args:a]\n[list-args:a;b;c;d]"#), Ok("\na\na b c d"));
+  test_rant_file!(
+    "sources/func_with_variadic_star.rant",
+    "\na\na b\na b c\na b c d"
+  );
 }
 
 #[test]
 fn func_with_variadic_plus() {
-  assert_matches!(run_rant!(r#"[$list-args: args+]{[rep:[len:<args>]][sep:\s]{<args/{[step-index]}>}} [list-args:a]\n[list-args:a;b;c;d]"#), Ok("a\na b c d"));
+  test_rant_file!(
+    "sources/func_with_variadic_plus.rant",
+    "a\na b\na b c\na b c d"
+  );
 }
 
 #[test]
 fn func_with_optional_param() {
-  assert_matches!(run_rant!(r#"[$arg-or-foo:arg?]{[alt:<arg>;foo]} [arg-or-foo]\n[arg-or-foo:bar]"#), Ok("foo\nbar"));
+  test_rant_file!(
+    "sources/func_with_optional_param.rant", 
+    "foo\nbar"
+  );
 }
 
 #[test]
 fn shadowed_global() {
-  assert_matches!(run_rant!(r#"<$/test=foo><$test=bar><test>"#), Ok("bar"))
+  test_rant!(r#"<$/test=foo><$test=bar><test>"#, "bar")
 }
 
 #[test]
 fn shadowed_local() {
-  assert_matches!(run_rant!(r#"<$test=foo>{<$test=bar><test>}"#), Ok("bar"))
+  test_rant!(r#"<$test=foo>{<$test=bar><test>}"#, "bar")
 }
 
 #[test]
 fn override_shadowed_global_with_explicit_global() {
-  assert_matches!(run_rant!(r#"<$/example=foo><$example=bar></example>"#), Ok("foo"));
+  test_rant!(r#"<$/example=foo><$example=bar></example>"#, "foo");
 }
 
 #[test]
 fn override_shadowed_global_with_descope() {
-  assert_matches!(run_rant!(r#"<$/example=foo><$example=bar><^example>"#), Ok("foo"));
+  test_rant!(r#"<$/example=foo><$example=bar><^example>"#, "foo");
 }
 
 #[test]
 fn override_shadowed_local_with_descope() {
-  assert_matches!(run_rant!(r#"<$test=foo>{<$test=bar><^test>}"#), Ok("foo"))
+  test_rant!(r#"<$test=foo>{<$test=bar><^test>}"#, "foo")
 }
 
 #[test]
 fn override_shadowed_locals_with_multi_descope() {
-  assert_matches!(run_rant!(r#"<$test=foo>{<$test=bar>{<$test=baz><^^test> <^test> <test>}}"#), Ok("foo bar baz"))
+  test_rant!(r#"<$test=foo>{<$test=bar>{<$test=baz><^^test> <^test> <test>}}"#, "foo bar baz")
 }
 
 #[test]
 fn multi_accessor_empty_defs() {
-  assert_matches!(run_rant!(r#"<$foo; $bar> '[type:<foo>] '[type:<bar>]"#), Ok("empty empty"));
+  test_rant!(r#"<$foo; $bar> '[type:<foo>] '[type:<bar>]"#, "empty empty");
 }
 
 #[test]
 fn multi_accessor_defs() {
-  assert_matches!(run_rant!(r#"<$foo=8; $bar=2; $baz=[sub:<foo>;<bar>]; baz>"#), Ok("6"));
+  test_rant!(r#"<$foo=8; $bar=2; $baz=[sub:<foo>;<bar>]; baz>"#, "6");
 }
 
 #[test]
 fn multi_accessor_reassign() {
-  assert_matches!(run_rant!(r#"<$foo=bar; foo=baz; foo>"#), Ok("baz"));
+  test_rant!(r#"<$foo=bar; foo=baz; foo>"#, "baz");
 }
 
 #[test]
 fn multi_accessor_delim_term() {
-  assert_matches!(run_rant!(r#"<$foo=8; $bar=2; $baz=[add:<foo>;<bar>]; baz;>"#), Ok("10"));
+  test_rant!(r#"<$foo=8; $bar=2; $baz=[add:<foo>;<bar>]; baz;>"#, "10");
 }
 
 #[test]
 fn closure_capture_var() {
-  assert_matches!(run_rant!(r#"[$gen-closure]{<$a=foo>[?]{<a>}}[![gen-closure]]"#), Ok("foo"));
+  test_rant_file!(
+    "sources/closure_capture_var.rant",
+    "foo"
+  );
 }
 
 #[test]
 fn closure_capture_arg() {
-  assert_matches!(run_rant!(r#"[$gen-closure:msg]{[?]{<msg>}}[![gen-closure:foo]]"#), Ok("foo"));
+  test_rant_file!(
+    "sources/closure_capture_arg.rant",
+    "foo"
+  );
 }
 
 #[test]
 fn closure_mutate_captured_value() {
-  assert_matches!(run_rant!(r#"{<$a=0>[$^next-number]{<$val=<a>><a=[add:<a>;1]><val>}}[rep:4][sep:\s]{[next-number]}"#), Ok("0 1 2 3"));
+  test_rant_file!(
+    "sources/closure_mutate_captured_value.rant",
+    "0 1 2 3"
+  );
+}
+
+#[test]
+fn filter_with_native_predicate() {
+  test_rant_file!(
+    "sources/filter_with_native_predicate.rant",
+    "1, 3, 5, 7, 9"
+  );
+}
+
+#[test]
+fn filter_with_user_predicate() {
+  test_rant_file!(
+    "sources/filter_with_user_predicate.rant",
+    "1, 3, 5, 7, 9"
+  );
+}
+
+#[test]
+fn map_with_native_callback() {
+  test_rant_file!(
+    "sources/map_with_native_callback.rant",
+    "-1, -2, -3, -4, -5, -6, -7, -8, -9, -10"
+  )
+}
+
+#[test]
+fn map_with_user_callback() {
+  test_rant_file!(
+    "sources/map_with_user_callback.rant",
+    "-1, -2, -3, -4, -5, -6, -7, -8, -9, -10"
+  )
 }
