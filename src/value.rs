@@ -193,25 +193,37 @@ impl RantValue {
     self.get_type().name()
   }
 
+  #[inline]
+  fn get_uindex(&self, index: i64) -> i64 {
+    if index < 0 {
+      self.len() as i64 + index
+    } else {
+      index
+    }
+  }
+
   /// Attempts to get a value by index.
   pub fn index_get(&self, index: i64) -> ValueIndexResult {
-    if index < 0 {
+    let uindex = self.get_uindex(index);
+
+    if uindex < 0 {
       return Err(IndexError::OutOfRange)
     }
-    let index = index as usize;
+
+    let uindex = uindex as usize;
 
     match self {
       RantValue::String(s) => {
-        if index < s.len() {
-          Ok(RantValue::String(s[index..index + 1].to_owned()))
+        if uindex < s.len() {
+          Ok(RantValue::String(s[uindex..uindex + 1].to_owned()))
         } else {
           Err(IndexError::OutOfRange)
         }
       },
       RantValue::List(list) => {
         let list = list.borrow();
-        if index < list.len() {
-          Ok(list[index].clone())
+        if uindex < list.len() {
+          Ok(list[uindex].clone())
         } else {
           Err(IndexError::OutOfRange)
         }
@@ -222,18 +234,20 @@ impl RantValue {
 
   /// Attempts to set a value by index.
   pub fn index_set(&mut self, index: i64, val: RantValue) -> ValueIndexSetResult {
-    if index < 0 {
+    let uindex = self.get_uindex(index);
+
+    if uindex < 0 {
       return Err(IndexError::OutOfRange)
     }
 
-    let index = index as usize;
+    let uindex = uindex as usize;
 
     match self {
       RantValue::List(list) => {
         let mut list = list.borrow_mut();
 
-        if index < list.len() {
-          list[index] = val;
+        if uindex < list.len() {
+          list[uindex] = val;
           Ok(())
         } else {
           Err(IndexError::OutOfRange)
@@ -241,7 +255,7 @@ impl RantValue {
       },
       RantValue::Map(map) => {
         let mut map = map.borrow_mut();
-        map.raw_set(index.to_string().as_str(), val);
+        map.raw_set(uindex.to_string().as_str(), val);
         Ok(())
       },
       _ => Err(IndexError::CannotSetIndexOnType(self.get_type()))

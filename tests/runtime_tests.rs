@@ -286,3 +286,19 @@ fn dynamic_anon_setter() {
     "7"
   );
 }
+
+#[test]
+fn inv_index_get() {
+  test_rant_file!(
+    "sources/inv_index_get.rant",
+    "3, 2, 1"
+  );
+}
+
+#[test]
+fn inv_index_set() {
+  test_rant_file!(
+    "sources/inv_index_set.rant",
+    "4, 5, 6"
+  );
+}
