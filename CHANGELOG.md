@@ -6,6 +6,7 @@
 * Changed: Compiler now consolidates adjacent fragments/escape sequences into single AST node
 * Changed: Updated `quickscope` to 0.1.5
 * Removed: `[get]`
+* Fixed: Dynamically-keyed setters have wrong value stack insertion order 
 
 # 4.0.0-alpha.9
 
