@@ -263,6 +263,18 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           whitespace!(ignore next);
         };
       }
+
+      macro_rules! consume_fragments {
+        ($s:ident) => {
+          while let Some((token, _)) = self.reader.take_where(|t| matches!(t, Some((RantToken::Escape(..), ..)) | Some((RantToken::Fragment, ..)))) {
+            match token {
+              RantToken::Fragment => $s.push_str(&self.reader.last_token_string()),
+              RantToken::Escape(ch) => $s.push(ch),
+              _ => unreachable!()
+            }
+          }
+        }
+      }
       
       // Parse next sequence item
       match token {
@@ -478,7 +490,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         RantToken::Fragment => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
-          let frag = self.reader.last_token_string();
+          let mut frag = self.reader.last_token_string();
+          consume_fragments!(frag);
           Rst::Fragment(frag)
         }),
         
@@ -492,13 +505,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Escape sequences
-        // TODO: Combine these with adjacent fragments somehow
         RantToken::Escape(ch) => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
-          let mut s = RantString::new();
-          s.push(ch);
-          Rst::Fragment(s)
+          let mut frag = RantString::new();
+          frag.push(ch);
+          consume_fragments!(frag);
+          Rst::Fragment(frag)
         }),
         
         // Integers

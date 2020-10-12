@@ -2,6 +2,7 @@
 
 * Added: Anonymous getters/setters
 * Added: "Trickle-Down" function lookup: function calls will now descope until the requested variable provides a function or other callable value
+* Changed: Compiler now consolidates adjacent fragments/escape sequences into single AST node
 * Changed: Updated `quickscope` to 0.1.5
 * Removed: `[get]`
 
