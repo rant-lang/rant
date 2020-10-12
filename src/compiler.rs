@@ -111,6 +111,7 @@ pub enum Problem {
   UnclosedVariableAccess,
   UnclosedList,
   UnclosedMap,
+  AnonValueAssignment,
   MultipleVariadicParams,
   MissingFunctionBody,
   UnclosedFunctionBody,
@@ -152,6 +153,7 @@ impl Problem {
       Problem::UnclosedMap =>                                     "R-0014",
       Problem::DynamicKeyBlockMultiElement =>                     "R-0015",
       Problem::FunctionBodyBlockMultiElement =>                   "R-0016",
+      Problem::AnonValueAssignment =>                        "R-0017",
       
       // Access path errors (0020 - 0029)
       Problem::MissingIdentifier =>                               "R-0020",
@@ -204,6 +206,7 @@ impl Problem {
       Problem::UnclosedMap => "unclosed map initializer; expected ')'".to_owned(),
       Problem::DynamicKeyBlockMultiElement => "dynamic key blocks can't have more than one element; if branching is desired, create an inner block".to_owned(),
       Problem::FunctionBodyBlockMultiElement => "function body blocks can't have more than one element; if branching is desired, create an inner block".to_owned(),
+      Problem::AnonValueAssignment => "can't assign directly to anonymous value; try assigning to a key or index instead".to_owned(),
     }
   }
   
@@ -231,6 +234,7 @@ impl Problem {
       Problem::UnclosedMap => "no matching ')' found".to_owned(),
       Problem::FunctionBodyBlockMultiElement => "multiple elements not allowed here".to_owned(),
       Problem::DynamicKeyBlockMultiElement => "multiple elements not allowed here".to_owned(),
+      Problem::AnonValueAssignment => "direct assignment impossible".to_owned(),
       _ => return None
     })
   }

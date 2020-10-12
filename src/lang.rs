@@ -73,7 +73,9 @@ pub enum AccessPathComponent {
   /// List index
   Index(i64),
   /// Dynamic key
-  Expression(Rc<Sequence>),
+  DynamicKey(Rc<Sequence>),
+  /// Anonymous value
+  AnonymousValue(Rc<Sequence>),
 }
 
 impl Display for AccessPathComponent {
@@ -81,7 +83,8 @@ impl Display for AccessPathComponent {
     match self {
       AccessPathComponent::Name(name) => write!(f, "{}", name),
       AccessPathComponent::Index(i) => write!(f, "{}", i),
-      AccessPathComponent::Expression(expr) => write!(f, "{{{}...}}", expr.name().map(|name| name.as_str()).unwrap_or("")),
+      AccessPathComponent::DynamicKey(expr) => write!(f, "{{{}...}}", expr.name().map(|name| name.as_str()).unwrap_or("")),
+      AccessPathComponent::AnonymousValue(expr) => write!(f, "!{{{}...}}", expr.name().map(|name| name.as_str()).unwrap_or("")),
     }
   }
 }
@@ -135,16 +138,22 @@ impl AccessPath {
   }
 
   #[inline]
+  pub fn is_anonymous(&self) -> bool {
+    matches!(self.first().unwrap(), AccessPathComponent::AnonymousValue(..))
+  }
+
+  #[inline]
   pub fn kind(&self) -> AccessPathKind {
     self.kind
   }
 
   /// Returns a list of dynamic keys used by the path in order.
   #[inline]
-  pub fn dynamic_keys(&self) -> Vec<Rc<Sequence>> {
+  pub fn dynamic_exprs(&self) -> Vec<Rc<Sequence>> {
+    use AccessPathComponent::*;
     self.iter().filter_map(|c| {
       match c {
-        AccessPathComponent::Expression(expr) => Some(Rc::clone(expr)),
+        DynamicKey(expr) | AnonymousValue(expr) => Some(Rc::clone(expr)),
         _ => None
       }
     }).collect()

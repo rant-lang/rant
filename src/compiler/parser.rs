@@ -12,6 +12,7 @@ type ParseResult<T> = Result<T, ()>;
 
 const MAIN_PROGRAM_SCOPE_NAME: &str = "main scope";
 
+#[derive(PartialEq)]
 enum SequenceParseMode {
   /// Parse a sequence like a top-level program.
   ///
@@ -49,6 +50,10 @@ enum SequenceParseMode {
   ///
   /// Breaks on `Semi` and `RightParen`.
   CollectionInit,
+  /// Parses a single item only.
+  ///
+  /// Breaks automatically or on EOF.
+  SingleItem,
 }
 
 /// What type of collection initializer to parse?
@@ -89,6 +94,8 @@ enum SequenceEndType {
   CollectionInitEnd,
   /// Collection initializer was termianted by `Semi`.
   CollectionInitDelim,
+  /// A single item was parsed using `SingleItem` mode.
+  SingleItemEnd,
 }
 
 /// Makes a range that encompasses both input ranges.
@@ -522,8 +529,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           Rst::Boolean(false)
         }),
         
-        // None
-        RantToken::NoneValue => no_flags!(on {
+        // Empty
+        RantToken::EmptyValue => no_flags!(on {
           Rst::EmptyVal
         }),
         
@@ -562,6 +569,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           return Err(())
         },
         _ => unexpected_token_error!(),
+      }
+
+      // If in Single Item mode, return the sequence immediately without looping
+      if mode == SequenceParseMode::SingleItem {
+        return Ok((sequence, SequenceEndType::SingleItemEnd, is_seq_printing))
       }
       
       // Clear flag
@@ -827,7 +839,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Function definition
         RantToken::Dollar => {
           // Name of variable function will be stored in
-          let func_id = self.parse_access_path()?;
+          let func_id = self.parse_access_path(false)?;
           // Function params
           let params = self.parse_func_params(&start_span)?;
           // Read function body
@@ -897,7 +909,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         Ok(Rst::AnonFuncCall(afcall))
       } else {
         // Named function call
-        let func_name = self.parse_access_path()?;
+        let func_name = self.parse_access_path(false)?;
         if let Some((token, _)) = self.reader.next_solid() {
           match token {
             RantToken::RightBracket => {
@@ -973,45 +985,61 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       AccessPathKind::Local
     }
   }
-    
-  // TODO: Anonymous getters/setters
-  /// Parses an accessor.
+  
+  /// Parses an access path.
   #[inline]
-  fn parse_access_path(&mut self) -> ParseResult<AccessPath> {
+  fn parse_access_path(&mut self, allow_anonymous: bool) -> ParseResult<AccessPath> {
     self.reader.skip_ws();
     let mut idparts = vec![];
     let preceding_span = self.reader.last_token_span();
-    
-    // Check for global/descope specifiers
-    let access_kind = self.parse_access_path_kind();
-    
-    let first_part = self.reader.next_solid();
-    
-    // Parse the first part of the path
-    match first_part {
-      // The first part of the path may only be a variable name (for now)
-      Some((RantToken::Fragment, span)) => {
-        let varname = Identifier::new(self.reader.last_token_string());
-        if is_valid_ident(varname.as_str()) {
-          idparts.push(AccessPathComponent::Name(varname));
-        } else {
-          self.syntax_error(Problem::InvalidIdentifier(varname.to_string()), &span);
+
+    let mut access_kind = AccessPathKind::Local;
+
+    if allow_anonymous && self.reader.eat_where(|t| matches!(t, Some((RantToken::Bang, ..)))) {
+      self.reader.skip_ws();
+      let (anon_expr, anon_end_type, ..) = self.parse_sequence(SequenceParseMode::SingleItem)?;
+      match anon_end_type {
+        SequenceEndType::SingleItemEnd => {
+          idparts.push(AccessPathComponent::AnonymousValue(Rc::new(anon_expr)));
+        },
+        SequenceEndType::ProgramEnd => {
+          self.syntax_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+          return Err(())
+        },
+        _ => unreachable!(),
+      }
+    } else {
+      // Check for global/descope specifiers
+      access_kind = self.parse_access_path_kind();
+      
+      let first_part = self.reader.next_solid();
+      
+      // Parse the first part of the path
+      match first_part {
+        // The first part of the path may only be a variable name (for now)
+        Some((RantToken::Fragment, span)) => {
+          let varname = Identifier::new(self.reader.last_token_string());
+          if is_valid_ident(varname.as_str()) {
+            idparts.push(AccessPathComponent::Name(varname));
+          } else {
+            self.syntax_error(Problem::InvalidIdentifier(varname.to_string()), &span);
+          }
+        },
+        // An expression can also be used to provide the variable
+        Some((RantToken::LeftBrace, _)) => {
+          let dynamic_key_expr = self.parse_dynamic_key(false)?;
+          idparts.push(AccessPathComponent::DynamicKey(Rc::new(dynamic_key_expr)));
+        },
+        Some((RantToken::Integer(_), span)) => {
+          self.syntax_error(Problem::LocalPathStartsWithIndex, &span);
+        },
+        Some((.., span)) => {
+          self.syntax_error(Problem::MissingIdentifier, &span);
+        },
+        None => {
+          self.syntax_error(Problem::MissingIdentifier, &preceding_span);
+          return Err(())
         }
-      },
-      // An expression can also be used to provide the variable
-      Some((RantToken::LeftBrace, _)) => {
-        let dynamic_key_expr = self.parse_dynamic_key(false)?;
-        idparts.push(AccessPathComponent::Expression(Rc::new(dynamic_key_expr)));
-      },
-      Some((RantToken::Integer(_), span)) => {
-        self.syntax_error(Problem::LocalPathStartsWithIndex, &span);
-      },
-      Some((.., span)) => {
-        self.syntax_error(Problem::MissingIdentifier, &span);
-      },
-      None => {
-        self.syntax_error(Problem::MissingIdentifier, &preceding_span);
-        return Err(())
       }
     }
     
@@ -1041,7 +1069,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Dynamic key
           Some((RantToken::LeftBrace, _)) => {
             let dynamic_key_expr = self.parse_dynamic_key(false)?;
-            idparts.push(AccessPathComponent::Expression(Rc::new(dynamic_key_expr)));
+            idparts.push(AccessPathComponent::DynamicKey(Rc::new(dynamic_key_expr)));
           },
           Some((.., span)) => {
             // error
@@ -1249,6 +1277,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
     
     'read: loop {
+      let access_start_span = self.reader.last_token_span();
       self.reader.skip_ws();
 
       // Check if the accessor ends here as long as there's at least one component
@@ -1310,7 +1339,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }
       } else {
         // Read the path to what we're accessing
-        let var_path = self.parse_access_path()?;
+        let var_path = self.parse_access_path(true)?;
         
         if let Some((token, _)) = self.reader.next_solid() {
           match token {
@@ -1328,6 +1357,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             RantToken::Equals => {
               self.reader.skip_ws();
               let (var_assign_rhs, end_type, _) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
+              let assign_end_span = self.reader.last_token_span();
+
+              // Don't allow setters directly on anonymous values
+              if var_path.is_anonymous() && var_path.len() == 1 {
+                self.syntax_error(Problem::AnonValueAssignment, &super_range(&access_start_span, &assign_end_span));
+              }
+
               add_accessor!(Rst::VarSet(Rc::new(var_path), Rc::new(var_assign_rhs)));
               match end_type {
                 // Accessor was terminated

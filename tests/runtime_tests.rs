@@ -6,12 +6,15 @@
 
 */
 
-use rant::Rant;
+use rant::*;
 use assert_matches::*;
 
 macro_rules! test_rant_file {
   ($src_path:literal, $expected:literal) => {{
-    let mut r = Rant::new();
+    let mut r = Rant::with_options(RantOptions {
+      debug_mode: true,
+      .. Default::default()
+    });
     let pgm = r.compile_quiet(include_str!($src_path)).expect("failed to compile program");
     assert_matches!(r.run_into_string(&pgm).as_ref().map(|o| o.as_str()), Ok($expected));
   }}
@@ -146,7 +149,10 @@ fn override_shadowed_local_with_descope() {
 
 #[test]
 fn override_shadowed_locals_with_multi_descope() {
-  test_rant!(r#"<$test=foo>{<$test=bar>{<$test=baz><^^test> <^test> <test>}}"#, "foo bar baz")
+  test_rant_file!(
+    "sources/override_shadowed_locals_with_multi_descope.rant",
+    "foo bar baz"
+  );
 }
 
 #[test]
@@ -167,6 +173,22 @@ fn multi_accessor_reassign() {
 #[test]
 fn multi_accessor_delim_term() {
   test_rant!(r#"<$foo=8; $bar=2; $baz=[add:<foo>;<bar>]; baz;>"#, "10");
+}
+
+#[test]
+fn dynamic_index_setter() {
+  test_rant_file!(
+    "sources/dynamic_index_setter.rant",
+    "1, 2, 4"
+  );
+}
+
+#[test]
+fn dynamic_multi_index_setter() {
+  test_rant_file!(
+    "sources/dynamic_multi_index_setter.rant",
+    "1, 2, 4, 4, 5, 6"
+  )
 }
 
 #[test]
@@ -230,5 +252,37 @@ fn trickle_down_func_lookup() {
   test_rant_file!(
     "sources/trickle_down_func_lookup.rant",
     "global\nlocal\nvery local"
+  );
+}
+
+#[test]
+fn anon_getter() {
+  test_rant_file!(
+    "sources/anon_getter.rant",
+    "foo bar"
+  );
+}
+
+#[test]
+fn dynamic_anon_getter() {
+  test_rant_file!(
+    "sources/dynamic_anon_getter.rant",
+    "6"
+  );
+}
+
+#[test]
+fn anon_setter() {
+  test_rant_file!(
+    "sources/anon_setter.rant",
+    "baz qux"
+  );
+}
+
+#[test]
+fn dynamic_anon_setter() {
+  test_rant_file!(
+    "sources/dynamic_anon_setter.rant",
+    "7"
   );
 }

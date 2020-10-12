@@ -29,7 +29,7 @@ pub enum RantToken {
   RightParen,
 
   #[token("<>")]
-  NoneValue,
+  EmptyValue,
 
   #[token("<")]
   LeftAngle,

@@ -97,13 +97,18 @@ pub enum Intent {
 enum SetterKey<'a> {
   Index(i64),
   KeyRef(&'a str),
-  KeyString(RantString)
+  KeyString(RantString),
 }
 
+/// Describes where a setter gets its RHS value.
 #[derive(Debug)]
 pub enum SetterValueSource {
+  /// Setter RHS is evaluated from an expression.
   FromExpression(Rc<Sequence>),
+  /// Setter RHS is a value.
   FromValue(RantValue),
+  /// Setter RHS was already consumed.
+  Consumed
 }
 
 impl<'rant> VM<'rant> {
@@ -227,30 +232,36 @@ impl<'rant> VM<'rant> {
             continue 'from_the_top;
           },
           Intent::BuildDynamicSetter { path, auto_def, expr_count, mut pending_exprs, val_source } => {
+            // Prepare setter value
+            match val_source {
+              // Value must be evaluated from an expression
+              SetterValueSource::FromExpression(expr) => {
+                self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, auto_def, expr_count, pending_exprs, val_source: SetterValueSource::Consumed });
+                self.push_frame(Rc::clone(&expr), true)?;
+                continue 'from_the_top;
+              },
+              // Value can be pushed directly onto the stack
+              SetterValueSource::FromValue(val) => {
+                self.push_val(val)?;
+              },
+              // Do nothing, it's already taken care of
+              SetterValueSource::Consumed => {}
+            }
+            
             if let Some(key_expr) = pending_exprs.pop() {
               // Set next intent based on remaining expressions in setter
               if pending_exprs.is_empty() {
                 // Set value once this frame is active again
                 self.cur_frame_mut().push_intent_front(Intent::SetValue { path, auto_def, expr_count });
-                self.push_frame_flavored(Rc::clone(&key_expr), true, StackFrameFlavor::DynamicKeyExpression)?;
               } else {
-                self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, auto_def, expr_count, pending_exprs, val_source });
-                self.push_frame_flavored(Rc::clone(&key_expr), true, StackFrameFlavor::DynamicKeyExpression)?;
-                continue 'from_the_top;
+                // Continue building setter
+                self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, auto_def, expr_count, pending_exprs, val_source: SetterValueSource::Consumed });                
               }
+              self.push_frame_flavored(Rc::clone(&key_expr), true, StackFrameFlavor::DynamicKeyExpression)?;
             } else {
               self.cur_frame_mut().push_intent_front(Intent::SetValue { path, auto_def, expr_count });
             }
-  
-            // Prepare setter value
-            match val_source {
-              SetterValueSource::FromExpression(expr) => {
-                self.push_frame(Rc::clone(&expr), true)?;
-              }
-              SetterValueSource::FromValue(val) => {
-                self.push_val(val)?;
-              }
-            }
+            
             continue 'from_the_top;
           },
           Intent::SetValue { path, auto_def, expr_count } => {
@@ -360,7 +371,7 @@ impl<'rant> VM<'rant> {
           },
           Rst::VarGet(path) => {
             // Get list of dynamic keys in path
-            let dynamic_keys = path.dynamic_keys();
+            let dynamic_keys = path.dynamic_exprs();
 
             if dynamic_keys.is_empty() {
               // Getter is static, so run it directly
@@ -383,8 +394,8 @@ impl<'rant> VM<'rant> {
             continue 'from_the_top;
           },
           Rst::VarSet(path, val_expr) => {
-            // Get list of dynamic keys in path
-            let exprs = path.dynamic_keys();
+            // Get list of dynamic expressions in path
+            let exprs = path.dynamic_exprs();
 
             if exprs.is_empty() {
               // Setter is static, so run it directly
@@ -429,7 +440,7 @@ impl<'rant> VM<'rant> {
                 .unwrap_or_else(|| params.len()),
             }));
 
-            let dynamic_keys = id.dynamic_keys();
+            let dynamic_keys = id.dynamic_exprs();
 
             self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter {
               expr_count: dynamic_keys.len(),
@@ -495,7 +506,7 @@ impl<'rant> VM<'rant> {
               flag,
             } = fcall;
 
-            let dynamic_keys = id.dynamic_keys();
+            let dynamic_keys = id.dynamic_exprs();
 
             // Run the getter to retrieve the function we're calling first...
             self.cur_frame_mut().push_intent_front(if dynamic_keys.is_empty() {
@@ -613,55 +624,60 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline]
-  fn set_value(&mut self, path: Rc<AccessPath>, auto_def: bool, dynamic_key_count: usize) -> RuntimeResult<()> {
-    // The setter value should be at the top of the value stack, so pop that first
-    let setter_value = self.pop_val()?;
-
-    // Gather evaluated dynamic keys from stack
-    let mut dynamic_keys = vec![];
-    for _ in 0..dynamic_key_count {
-      dynamic_keys.push(self.pop_val()?);
+  fn set_value(&mut self, path: Rc<AccessPath>, auto_def: bool, dynamic_value_count: usize) -> RuntimeResult<()> {
+    // Gather evaluated dynamic path components from stack
+    let mut dynamic_values = vec![];
+    for _ in 0..dynamic_value_count {
+      dynamic_values.push(self.pop_val()?);
     }
 
+    // Setter RHS should be last value to pop
+    let setter_value = self.pop_val()?;
+    
     let access_kind = path.kind();
     let mut path_iter = path.iter();
-    let mut dynamic_keys = dynamic_keys.drain(..).rev();
-         
+    let mut dynamic_values = dynamic_values.drain(..);
+    
+    // The setter target is the value that will be modified. If None, setter_key refers to a variable.
+    let mut setter_target: Option<RantValue> = None;
+
     // The setter key is the location on the setter target that will be written to.
     let mut setter_key = match path_iter.next() {
       Some(AccessPathComponent::Name(vname)) => {
-        SetterKey::KeyRef(vname.as_str())
+        Some(SetterKey::KeyRef(vname.as_str()))
       },
-      Some(AccessPathComponent::Expression(_)) => {
-        let key = RantString::from(dynamic_keys.next().unwrap().to_string());
-        SetterKey::KeyString(key)
+      Some(AccessPathComponent::DynamicKey(_)) => {
+        let key = RantString::from(dynamic_values.next().unwrap().to_string());
+        Some(SetterKey::KeyString(key))
+      },
+      Some(AccessPathComponent::AnonymousValue(_)) => {
+        setter_target = Some(dynamic_values.next().unwrap());
+        None
       },
       _ => unreachable!()
     };
 
-    // The setter target is the value that will be modified. If None, the setter key is a variable.
-    let mut setter_target: Option<RantValue> = None;
-
     // Evaluate the path
     for accessor in path_iter {
       // Update setter target by keying off setter_key
-      setter_target = match (&setter_target, &setter_key) {
-        (None, SetterKey::KeyRef(key)) => Some(self.get_var_value(key, access_kind, false)?),
-        (None, SetterKey::KeyString(key)) => Some(self.get_var_value(key.as_str(), access_kind, false)?),
-        (Some(val), SetterKey::Index(index)) => Some(val.index_get(*index).into_runtime_result()?),
-        (Some(val), SetterKey::KeyRef(key)) => Some(val.key_get(key).into_runtime_result()?),
-        (Some(val), SetterKey::KeyString(key)) => Some(val.key_get(key.as_str()).into_runtime_result()?),
+      setter_target = match (&setter_target, &mut setter_key) {
+        (None, Some(SetterKey::KeyRef(key))) => Some(self.get_var_value(key, access_kind, false)?),
+        (None, Some(SetterKey::KeyString(key))) => Some(self.get_var_value(key.as_str(), access_kind, false)?),
+        (Some(_), None) => setter_target,
+        (Some(val), Some(SetterKey::Index(index))) => Some(val.index_get(*index).into_runtime_result()?),
+        (Some(val), Some(SetterKey::KeyRef(key))) => Some(val.key_get(key).into_runtime_result()?),
+        (Some(val), Some(SetterKey::KeyString(key))) => Some(val.key_get(key.as_str()).into_runtime_result()?),
         _ => unreachable!()
       };
 
-      setter_key = match accessor {
+      setter_key = Some(match accessor {
         // Static key
         AccessPathComponent::Name(key) => SetterKey::KeyRef(key.as_str()),
         // Index
         AccessPathComponent::Index(index) => SetterKey::Index(*index),
         // Dynamic key
-        AccessPathComponent::Expression(_) => {
-          match dynamic_keys.next().unwrap() {
+        AccessPathComponent::DynamicKey(_) => {
+          match dynamic_values.next().unwrap() {
             RantValue::Integer(index) => {
               SetterKey::Index(index)
             },
@@ -670,8 +686,12 @@ impl<'rant> VM<'rant> {
               SetterKey::KeyString(key)
             }
           }
+        },
+        // Anonymous value (not allowed)
+        AccessPathComponent::AnonymousValue(_) => {
+          runtime_error!(RuntimeErrorType::InvalidOperation, "anonymous values may only appear as the first component in an access path")
         }
-      }
+      })
     }
 
     macro_rules! def_or_set {
@@ -686,15 +706,15 @@ impl<'rant> VM<'rant> {
 
     // Finally, set the value
     match (&mut setter_target, &setter_key) {
-      (None, SetterKey::KeyRef(vname)) => {
+      (None, Some(SetterKey::KeyRef(vname))) => {
         def_or_set!(vname, access_kind, setter_value);
       },
-      (None, SetterKey::KeyString(vname)) => {
+      (None, Some(SetterKey::KeyString(vname))) => {
         def_or_set!(vname.as_str(), access_kind, setter_value);
       },
-      (Some(target), SetterKey::Index(index)) => target.index_set(*index, setter_value).into_runtime_result()?,
-      (Some(target), SetterKey::KeyRef(key)) => target.key_set(key, setter_value).into_runtime_result()?,
-      (Some(target), SetterKey::KeyString(key)) => target.key_set(key.as_str(), setter_value).into_runtime_result()?,
+      (Some(target), Some(SetterKey::Index(index))) => target.index_set(*index, setter_value).into_runtime_result()?,
+      (Some(target), Some(SetterKey::KeyRef(key))) => target.key_set(key, setter_value).into_runtime_result()?,
+      (Some(target), Some(SetterKey::KeyString(key))) => target.key_set(key.as_str(), setter_value).into_runtime_result()?,
       _ => unreachable!()
     }
 
@@ -712,14 +732,17 @@ impl<'rant> VM<'rant> {
     let mut path_iter = path.iter();
     let mut dynamic_keys = dynamic_keys.drain(..);
 
-    // Get the root variable
+    // Get the root variable or anon value
     let mut getter_value = match path_iter.next() {
         Some(AccessPathComponent::Name(vname)) => {
           self.get_var_value(vname.as_str(), path.kind(), prefer_function)?
         },
-        Some(AccessPathComponent::Expression(_)) => {
+        Some(AccessPathComponent::DynamicKey(_)) => {
           let key = dynamic_keys.next().unwrap().to_string();
           self.get_var_value(key.as_str(), path.kind(), prefer_function)?
+        },
+        Some(AccessPathComponent::AnonymousValue(_)) => {
+          dynamic_keys.next().unwrap()
         },
         _ => unreachable!()
     };
@@ -742,7 +765,7 @@ impl<'rant> VM<'rant> {
           }
         },
         // Dynamic key
-        AccessPathComponent::Expression(_) => {
+        AccessPathComponent::DynamicKey(_) => {
           let key = dynamic_keys.next().unwrap();
           match key {
             RantValue::Integer(index) => {
@@ -758,7 +781,11 @@ impl<'rant> VM<'rant> {
               };
             }
           }
-        }
+        },
+        // Anonymous value (not allowed)
+        AccessPathComponent::AnonymousValue(_) => {
+          runtime_error!(RuntimeErrorType::InvalidOperation, "anonymous values may only appear as the first component in an access path")
+        },
       }
     }
 
