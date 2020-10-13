@@ -25,31 +25,31 @@
 #![allow(dead_code)]
 #![allow(unused_macros)]
 
-mod runtime;
-mod lang;
-mod convert;
-mod random;
-mod util;
+pub mod compiler;
 mod collections;
+mod convert;
+mod lang;
+mod random;
+mod runtime;
 mod stdlib;
+mod util;
 mod value;
 mod var;
-pub mod compiler;
 
 pub use collections::*;
-pub use value::*;
 pub use convert::*;
+pub use value::*;
 pub use var::*;
 
 use crate::compiler::CompilerMessage;
-use crate::lang::{Sequence};
+use crate::lang::Sequence;
 use crate::compiler::{RantCompiler, Reporter, ErrorKind as CompilerErrorKind};
 use crate::runtime::*;
 use crate::random::RantRng;
 
 use std::{path::Path, rc::Rc, cell::RefCell, fmt::Display, path::PathBuf, io::ErrorKind, collections::HashMap};
-use fnv::FnvBuildHasher;
 use std::env;
+use fnv::FnvBuildHasher;
 use rand::Rng;
 
 type IOErrorKind = std::io::ErrorKind;

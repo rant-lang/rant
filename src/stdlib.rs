@@ -630,8 +630,7 @@ fn filter(vm: &mut VM, (list, predicate): (RantListRef, RantFunctionRef)) -> Ran
 
   let list_clone = Rc::clone(&list);
   vm.cur_frame_mut().push_intent_front(Intent::RuntimeCall(Box::new(move |vm| {
-    _iterate_filter(vm, list_clone, RantList::new(), 0, predicate)?;
-    Ok(())
+    _iterate_filter(vm, list_clone, RantList::new(), 0, predicate)
   })));
 
   Ok(())
@@ -682,8 +681,54 @@ fn map(vm: &mut VM, (list, map_func): (RantListRef, RantFunctionRef)) -> RantStd
 
   let list_clone = Rc::clone(&list);
   vm.cur_frame_mut().push_intent_front(Intent::RuntimeCall(Box::new(move |vm| {
-    _iterate_map(vm, list_clone, RantList::new(), 0, map_func)?;
+    _iterate_map(vm, list_clone, RantList::new(), 0, map_func)
+  })));
+
+  Ok(())
+}
+
+fn zip(vm: &mut VM, (list_a, list_b, zip_func): (RantListRef, RantListRef, RantFunctionRef)) -> RantStdResult {
+  let (list_a_ref, list_b_ref) = (list_a.borrow(), list_b.borrow());
+  let max_len = list_a_ref.len().max(list_b_ref.len());
+
+  fn _iterate_zip(vm: &mut VM, src_a: RantListRef, src_b: RantListRef, mut dest: RantList, index: usize, max_len: usize, zip_func: RantFunctionRef) -> RuntimeResult<()> {
+    let (src_a_ref, src_b_ref) = (src_a.borrow(), src_b.borrow());
+
+    // Add result from last iteration to destination list
+    if index > 0 {
+      dest.push(vm.pop_val()?);
+    }
+
+    // Check whether zipping finished
+    if index >= max_len {
+      vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(dest))));
+      return Ok(())
+    }
+
+    let (src_a_clone, src_b_clone) = (Rc::clone(&src_a), Rc::clone(&src_b));
+    let zip_func_clone = Rc::clone(&zip_func);
+
+    // Prepare next iteration
+    vm.cur_frame_mut().push_intent_front(Intent::RuntimeCall(Box::new(move |vm| {
+      _iterate_zip(vm, src_a_clone, src_b_clone, dest, index + 1, max_len, zip_func_clone)
+    })));
+
+    // Prepare predicate call for current iteration
+    vm.push_val(RantValue::Function(zip_func))?;
+    vm.push_val(src_b_ref.get(index).cloned().unwrap_or_default())?;
+    vm.push_val(src_a_ref.get(index).cloned().unwrap_or_default())?;
+    vm.cur_frame_mut().push_intent_front(Intent::Call {
+      argc: 2,
+      flag: PrintFlag::Hint,
+      override_print: true,
+    });
+
     Ok(())
+  }
+
+  let (list_a_clone, list_b_clone) = (Rc::clone(&list_a), Rc::clone(&list_b));
+  vm.cur_frame_mut().push_intent_front(Intent::RuntimeCall(Box::new(move |vm| {
+    _iterate_zip(vm, list_a_clone, list_b_clone, RantList::new(), 0, max_len, zip_func)
   })));
 
   Ok(())
@@ -1375,7 +1420,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
 
     // List functions
     pick, filter, join, map, sort, sorted, shuffle, shuffled, sum, min, max,
-    list_push as "push", list_pop as "pop", oxford_join as "oxford-join",
+    list_push as "push", list_pop as "pop", oxford_join as "oxford-join", zip,
 
     // String functions
     lower, upper, seg, split, lines, indent,

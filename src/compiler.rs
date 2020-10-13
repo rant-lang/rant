@@ -1,8 +1,8 @@
 use crate::{RantProgram, RantProgramInfo};
-use parser::RantParser;
+use self::parser::RantParser;
+use std::{error::Error, fs};
 use std::{fmt::Display, path::Path, rc::Rc};
 use std::io::ErrorKind as IOErrorKind;
-use std::{error::Error, fs};
 
 pub(crate) mod lexer;
 pub(crate) mod reader;

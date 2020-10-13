@@ -248,6 +248,22 @@ fn map_with_user_callback() {
 }
 
 #[test]
+fn zip_with_native_callback() {
+  test_rant_file!(
+    "sources/zip_with_native_callback.rant",
+    "5, 7, 9"
+  );
+}
+
+#[test]
+fn zip_with_user_callback() {
+  test_rant_file!(
+    "sources/zip_with_user_callback.rant",
+    "5, 7, 9"
+  );
+}
+
+#[test]
 fn trickle_down_func_lookup() {
   test_rant_file!(
     "sources/trickle_down_func_lookup.rant",

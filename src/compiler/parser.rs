@@ -2,11 +2,11 @@
 #![allow(clippy::ptr_arg)]
 
 use super::{reader::RantTokenReader, lexer::RantToken, message::*, Problem, Reporter};
-use std::{rc::Rc, ops::Range, collections::HashSet};
 use crate::{RantProgramInfo, RantString, lang::*};
 use fnv::FnvBuildHasher;
 use line_col::LineColLookup;
 use quickscope::ScopeSet;
+use std::{rc::Rc, ops::Range, collections::HashSet};
 
 type ParseResult<T> = Result<T, ()>;
 

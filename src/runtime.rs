@@ -1,10 +1,10 @@
+pub use output::*;
+pub use stack::*;
 use crate::*;
 use crate::lang::*;
+use crate::resolver::{SelectorError, Resolver, BlockAction};
 use std::{rc::Rc, cell::RefCell, ops::Deref, error::Error, fmt::Display};
-use resolver::{SelectorError, Resolver, BlockAction};
 use smallvec::{SmallVec, smallvec};
-pub use stack::*;
-pub use output::*;
 
 pub(crate) mod format;
 pub(crate) mod resolver;

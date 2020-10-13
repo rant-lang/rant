@@ -1,3 +1,8 @@
+# 4.0.0-alpha.11
+
+* Added: New stdlib functions:
+  * `[zip]`: combine two lists into a new list using a function
+
 # 4.0.0-alpha.10
 
 * Added: Inverse indices in accessors
