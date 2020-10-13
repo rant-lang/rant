@@ -125,6 +125,8 @@ pub enum Problem {
   InvalidHintOn(&'static str),
   InvalidSink,
   InvalidHint,
+  ComposeValueReused,
+  NothingToCompose,
   UnusedVariable(String),
   UnusedParameter(String),
   EmptyFunctionBody(String),
@@ -153,7 +155,9 @@ impl Problem {
       Problem::UnclosedMap =>                                     "R-0014",
       Problem::DynamicKeyBlockMultiElement =>                     "R-0015",
       Problem::FunctionBodyBlockMultiElement =>                   "R-0016",
-      Problem::AnonValueAssignment =>                        "R-0017",
+      Problem::AnonValueAssignment =>                             "R-0017",
+      Problem::ComposeValueReused =>                              "R-0018",
+      Problem::NothingToCompose =>                                "R-0019",
       
       // Access path errors (0020 - 0029)
       Problem::MissingIdentifier =>                               "R-0020",
@@ -207,6 +211,8 @@ impl Problem {
       Problem::DynamicKeyBlockMultiElement => "dynamic key blocks can't have more than one element; if branching is desired, create an inner block".to_owned(),
       Problem::FunctionBodyBlockMultiElement => "function body blocks can't have more than one element; if branching is desired, create an inner block".to_owned(),
       Problem::AnonValueAssignment => "can't assign directly to anonymous value; try assigning to a key or index instead".to_owned(),
+      Problem::ComposeValueReused => "composition value used more than once in the same function call".to_owned(),
+      Problem::NothingToCompose => "no function to compose".to_owned(),
     }
   }
   
@@ -235,6 +241,8 @@ impl Problem {
       Problem::FunctionBodyBlockMultiElement => "multiple elements not allowed here".to_owned(),
       Problem::DynamicKeyBlockMultiElement => "multiple elements not allowed here".to_owned(),
       Problem::AnonValueAssignment => "direct assignment impossible".to_owned(),
+      Problem::ComposeValueReused => "composition value reused here".to_owned(),
+      Problem::NothingToCompose => "composition value invalid here".to_owned(),
       _ => return None
     })
   }

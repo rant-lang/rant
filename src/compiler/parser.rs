@@ -26,9 +26,9 @@ enum SequenceParseMode {
   ///
   /// Breaks on `Pipe` and `RightBrace`.
   BlockElementRhs,
-  /// Parse a sequence like a tag (function access) element.
+  /// Parse a sequence like a function argument.
   ///
-  /// Breaks on `Semi` and `RightBracket`.
+  /// Breaks on `Semi`, `Compose`, and `RightBracket`.
   FunctionArg,
   /// Parse a sequence like a function body.
   ///
@@ -78,6 +78,8 @@ enum SequenceEndType {
   FunctionArgEndNext,
   /// Function argument sequence was terminated by `RightBracket`.
   FunctionArgEndBreak,
+  /// Function argument sequence was terminated by `Compose`.
+  FunctionArgEndToCompose,
   /// Function body sequence was terminated by `RightBrace`.
   FunctionBodyEnd,
   /// Dynamic key sequencce was terminated by `RightBrace`.
@@ -85,7 +87,9 @@ enum SequenceEndType {
   /// Anonymous function expression was terminated by `Colon`.
   AnonFunctionExprToArgs,
   /// Anonymous function expression was terminated by `RightBracket` and does not expect arguments.
-  AnonFuncctionExprNoArgs,
+  AnonFunctionExprNoArgs,
+  /// Anonymous function expression was terminated by `Compose`.
+  AnonFunctionExprToCompose,
   /// Variable accessor was terminated by `RightAngle`.
   VariableAccessEnd,
   /// Variable assignment expression was terminated by `Semi`. 
@@ -354,6 +358,20 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           
           seq_add!(Rst::Block(block));               
         },
+
+        RantToken::Compose => no_flags!({
+          // Ignore pending whitespace
+          whitespace!(ignore prev);
+          match mode {
+            SequenceParseMode::FunctionArg => {
+              return Ok((sequence.with_name_str("argument"), SequenceEndType::FunctionArgEndToCompose, is_seq_printing))
+            },
+            SequenceParseMode::AnonFunctionExpr => {
+              return Ok((sequence.with_name_str("anonymous function expression"), SequenceEndType::AnonFunctionExprToCompose, is_seq_printing))
+            },
+            _ => unexpected_token_error!()
+          }
+        }),
         
         // Block element delimiter (when in block parsing mode)
         RantToken::Pipe => no_flags!({
@@ -445,7 +463,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Can be terminator for function args and anonymous function expressions
         RantToken::RightBracket => no_flags!({
           match mode {
-            SequenceParseMode::AnonFunctionExpr => return Ok((sequence, SequenceEndType::AnonFuncctionExprNoArgs, true)),
+            SequenceParseMode::AnonFunctionExpr => return Ok((sequence, SequenceEndType::AnonFunctionExprNoArgs, true)),
             SequenceParseMode::FunctionArg => return Ok((sequence, SequenceEndType::FunctionArgEndBreak, true)),
             _ => unexpected_token_error!()
           }
@@ -883,92 +901,160 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         _ => unreachable!()
       }
     } else {
-      // Function call
-      self.reader.skip_ws();
-      let mut func_args = vec![];
-      let is_anonymous = self.reader.eat_where(|t| matches!(t, Some((RantToken::Bang, ..))));
-      self.reader.skip_ws();
-      
-      // What kind of function call is this?
-      if is_anonymous {
-        // Anonymous function call
-        let (func_expr, func_expr_end, _) = self.parse_sequence(SequenceParseMode::AnonFunctionExpr)?;
-        // Parse arguments if available
-        match func_expr_end {
-          SequenceEndType::AnonFuncctionExprNoArgs => {
-            // No args, fall through
-          },
-          SequenceEndType::AnonFunctionExprToArgs => {
+      // Function calls, both composed and otherwise
+      let mut is_composing = false;
+      let mut is_finished = false;
+      let mut composed_func: Option<Rst> = None;
+
+      // Read functions in composition
+      while !is_finished {
+        self.reader.skip_ws();
+        let mut func_args = vec![];
+        let is_anonymous = self.reader.eat_where(|t| matches!(t, Some((RantToken::Bang, ..))));
+        self.reader.skip_ws();
+
+        macro_rules! parse_args {
+          () => {{
             loop {
-              let (arg_seq, arg_end, _) = self.parse_sequence(SequenceParseMode::FunctionArg)?;
-              func_args.push(Rc::new(arg_seq));
-              match arg_end {
-                SequenceEndType::FunctionArgEndNext => continue,
-                SequenceEndType::FunctionArgEndBreak => break,
-                _ => unreachable!()
-              }
-            }
-          },
-          _ => unreachable!()
-        }
-        
-        // Create final node for anon function call
-        let afcall = AnonFunctionCall {
-          expr: Rc::new(func_expr),
-          args: Rc::new(func_args),
-          flag
-        };
-        
-        Ok(Rst::AnonFuncCall(afcall))
-      } else {
-        // Named function call
-        let func_name = self.parse_access_path(false)?;
-        if let Some((token, _)) = self.reader.next_solid() {
-          match token {
-            RantToken::RightBracket => {
-              // No args, fall through
-            },
-            RantToken::Colon => {
-              // Parse arguments
-              loop {
+              self.reader.skip_ws();
+              // Check for compose value
+              if self.reader.eat_where(|t| matches!(t, Some((RantToken::ComposeValue, ..)))) {
+                if is_composing  {
+                  if let Some(compose) = composed_func.take() {
+                    func_args.push(Rc::new(Sequence::one(compose, &self.info)));
+                  } else {
+                    // If take() fails, it means the compose value was already used
+                    // No need to push an arg since it won't be used anyway
+                    self.syntax_error(Problem::ComposeValueReused, &self.reader.last_token_span());
+                  }
+                  // Read next delimiter
+                  match self.reader.next_solid() {
+                    Some((RantToken::Compose, _)) => break,
+                    Some((RantToken::Semi, _)) => break,
+                    Some((RantToken::RightBracket, _)) => {
+                      is_finished = true;
+                      break
+                    },
+                    None => {
+                      self.syntax_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
+                      return Err(())
+                    },
+                    _ => {
+                      self.unexpected_last_token_error();
+                      return Err(())
+                    }
+                  }
+                } else {
+                  self.syntax_error(Problem::NothingToCompose, &self.reader.last_token_span());
+                }
+              } else {
+                // Parse normal argument
                 let (arg_seq, arg_end, _) = self.parse_sequence(SequenceParseMode::FunctionArg)?;
                 func_args.push(Rc::new(arg_seq));
                 match arg_end {
                   SequenceEndType::FunctionArgEndNext => continue,
-                  SequenceEndType::FunctionArgEndBreak => break,
+                  SequenceEndType::FunctionArgEndBreak => {
+                    is_finished = true;
+                    break
+                  },
+                  SequenceEndType::FunctionArgEndToCompose => {
+                    is_composing = true;
+                    break
+                  },
                   SequenceEndType::ProgramEnd => {
                     self.syntax_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
                     return Err(())
-                  }
+                  },
                   _ => unreachable!()
                 }
               }
-            },
-            _ => {
-              self.unexpected_last_token_error();
-              return Err(())
+            }
+          }}
+        }
+
+        macro_rules! fallback_compose {
+          () => {
+            // If the composition value wasn't used, insert it as the first argument
+            if let Some(compose) = composed_func.take() {
+              func_args.insert(0, Rc::new(Sequence::one(compose, &self.info)));
             }
           }
+        }
+        
+        // What kind of function call is this?
+        composed_func = if is_anonymous {
+          // Anonymous function call
+          let (func_expr, func_expr_end, _) = self.parse_sequence(SequenceParseMode::AnonFunctionExpr)?;
+          // Parse arguments if available
+          match func_expr_end {
+            // No args, fall through
+            SequenceEndType::AnonFunctionExprNoArgs => {
+              is_finished = true;
+            },
+            // Parse arguments
+            SequenceEndType::AnonFunctionExprToArgs => parse_args!(),
+            // Compose without args
+            SequenceEndType::AnonFunctionExprToCompose => {
+              is_composing = true;
+            }
+            _ => unreachable!()
+          }
+
+          fallback_compose!();
           
-          // Create final node for function call
-          let fcall = FunctionCall {
-            id: Rc::new(func_name),
-            arguments: Rc::new(func_args),
+          // Create final node for anon function call
+          let afcall = AnonFunctionCall {
+            expr: Rc::new(func_expr),
+            args: Rc::new(func_args),
             flag
           };
           
-          let func_call = Rst::FuncCall(fcall);
-
-          // Do variable capture pass on function call
-          self.do_capture_pass(&func_call);
-
-          Ok(func_call)
+          Some(Rst::AnonFuncCall(afcall))
         } else {
-          // Found EOF instead of end of function call, emit hard error
-          self.syntax_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
-          Err(())
-        }
+          // Named function call
+          let func_name = self.parse_access_path(false)?;
+          if let Some((token, _)) = self.reader.next_solid() {
+            match token {
+              // No args, fall through
+              RantToken::RightBracket => {
+                is_finished = true;
+              },
+              // Parse arguments
+              RantToken::Colon => parse_args!(),
+              // Compose without args
+              RantToken::Compose => {
+                is_composing = true;
+              }
+              _ => {
+                self.unexpected_last_token_error();
+                return Err(())
+              }
+            }
+
+            fallback_compose!();
+            
+            // Create final node for function call
+            let fcall = FunctionCall {
+              id: Rc::new(func_name),
+              arguments: Rc::new(func_args),
+              flag
+            };
+            
+            let func_call = Rst::FuncCall(fcall);
+
+            // Do variable capture pass on function call
+            self.do_capture_pass(&func_call);
+
+            Some(func_call)
+          } else {
+            // Found EOF instead of end of function call, emit hard error
+            self.syntax_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
+            return Err(())
+          }
+        };
       }
+
+      Ok(composed_func.unwrap())
     }
   }
     

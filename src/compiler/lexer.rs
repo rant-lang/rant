@@ -15,6 +15,12 @@ pub enum RantToken {
   
   #[token("}")]
   RightBrace,
+
+  #[token("&")]
+  Compose,
+
+  #[token("[]")]
+  ComposeValue,
   
   #[token("[")]
   LeftBracket,
@@ -28,7 +34,7 @@ pub enum RantToken {
   #[token(")")]
   RightParen,
 
-  #[token("<>")]
+  #[token("~")]
   EmptyValue,
 
   #[token("<")]

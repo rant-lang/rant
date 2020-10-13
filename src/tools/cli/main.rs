@@ -112,7 +112,7 @@ fn main() {
     
     match io::stdin().read_line(&mut input) {
       Ok(_) => {
-        run_rant(&mut rant, ProgramSource::Stdin(input.to_owned()), &args);
+        run_rant(&mut rant, ProgramSource::Stdin(input.trim_end().to_owned()), &args);
       },
       Err(_) => log_error!("failed to read input")
     }

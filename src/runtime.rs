@@ -365,7 +365,7 @@ impl<'rant> VM<'rant> {
               self.push_frame(Rc::clone(val_expr), true)?;
               continue 'from_the_top;
             } else {
-              // If there's no assignment, just set it to <>
+              // If there's no assignment, just set it to empty value
               self.def_var_value(vname.as_str(), *access_kind, RantValue::Empty)?;
             }
           },

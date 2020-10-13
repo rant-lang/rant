@@ -547,7 +547,7 @@ impl Debug for RantValue {
       RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
       RantValue::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
       RantValue::Special(special) => write!(f, "[special({:?})]", special),
-      RantValue::Empty => write!(f, "<>"),
+      RantValue::Empty => write!(f, "[empty]"),
     }
   }
 }

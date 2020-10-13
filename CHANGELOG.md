@@ -1,7 +1,10 @@
 # 4.0.0-alpha.11
 
+* Added: Function composition
 * Added: New stdlib functions:
   * `[zip]`: combine two lists into a new list using a function
+* Changed: Empty token `<>` is now `~`
+* Changed: CLI now trims trailing whitespace from REPL input
 
 # 4.0.0-alpha.10
 
