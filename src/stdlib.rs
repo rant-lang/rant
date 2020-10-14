@@ -350,6 +350,18 @@ fn is_number(vm: &mut VM, value: RantValue) -> RantStdResult {
   Ok(())
 }
 
+fn is_between(vm: &mut VM, (value, a, b): (RantValue, RantValue, RantValue)) -> RantStdResult {
+  let (a, b) = util::minmax(a, b);
+  let result = value >= a && value <= b;
+  vm.cur_frame_mut().write_value(RantValue::Boolean(result));
+  Ok(())
+}
+
+fn clamp(vm: &mut VM, (value, a, b): (RantValue, RantValue, RantValue)) -> RantStdResult {
+  vm.cur_frame_mut().write_value(util::clamp(value, a, b));
+  Ok(())
+}
+
 fn is_empty(vm: &mut VM, value: RantValue) -> RantStdResult {
   vm.cur_frame_mut().write_value(RantValue::Boolean(value.is_empty()));
   Ok(())
@@ -1402,9 +1414,11 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     // Verification functions
     is_string as "is-string", is_integer as "is-integer", is_float as "is-float", 
     is_number as "is-number", is_bool as "is-bool", is_empty as "is-empty", is_nan as "is-nan",
+    is_between as "is-between",
 
     // Math functions
     add, sub, mul, div, mul_add as "mul-add", mod_ as "mod", neg, recip, is_odd as "is-odd", is_even as "is-even", is_factor as "is-factor",
+    clamp,
 
     // Conversion functions
     to_int as "int", to_float as "float", to_string as "string",

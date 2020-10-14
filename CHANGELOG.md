@@ -2,6 +2,8 @@
 
 * Added: Function composition
 * Added: New stdlib functions:
+  * `[clamp]`: clamp a value between two others
+  * `[is-between]`: check if a value is between two others (inclusive)
   * `[zip]`: combine two lists into a new list using a function
 * Changed: Empty token `<>` is now `~`
 * Changed: CLI now trims trailing whitespace from REPL input

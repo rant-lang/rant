@@ -930,7 +930,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   // Read next delimiter
                   match self.reader.next_solid() {
                     Some((RantToken::Compose, _)) => break,
-                    Some((RantToken::Semi, _)) => break,
+                    Some((RantToken::Semi, _)) => continue,
                     Some((RantToken::RightBracket, _)) => {
                       is_finished = true;
                       break

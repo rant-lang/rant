@@ -318,3 +318,11 @@ fn inv_index_set() {
     "4, 5, 6"
   );
 }
+
+#[test]
+fn function_composition() {
+  test_rant_file!(
+    "sources/function_composition.rant",
+    "the fox the dog"
+  );
+}
