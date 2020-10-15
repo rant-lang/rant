@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.0.0-alpha.11 (unreleased)
+## 4.0.0-alpha.11 (latest)
 
 ### New
 * Getters can now accept an optional fallback value
@@ -15,7 +15,7 @@
 * Empty value token `<>` changed to `~`
 * CLI now trims trailing whitespace from REPL input
 
-## 4.0.0-alpha.10 (latest)
+## 4.0.0-alpha.10
 
 ### New
 * Added inverse indices in accessors
