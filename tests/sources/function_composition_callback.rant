@@ -1,0 +1,5 @@
+[$get-func:a] {
+  [?:b]{<a> <b>}
+}
+
+[get-func: foo & ![]: bar]

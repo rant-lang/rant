@@ -984,21 +984,59 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // What kind of function call is this?
         composed_func = if is_anonymous {
           // Anonymous function call
-          let (func_expr, func_expr_end, _) = self.parse_sequence(SequenceParseMode::AnonFunctionExpr)?;
-          // Parse arguments if available
-          match func_expr_end {
-            // No args, fall through
-            SequenceEndType::AnonFunctionExprNoArgs => {
-              is_finished = true;
-            },
-            // Parse arguments
-            SequenceEndType::AnonFunctionExprToArgs => parse_args!(),
-            // Compose without args
-            SequenceEndType::AnonFunctionExprToCompose => {
-              is_composing = true;
+          // See if comp value is explicitly piped into anon call          
+          let func_expr = if self.reader.eat_where(|t| matches!(t, Some((RantToken::ComposeValue, ..)))) {
+            if is_composing {
+              if let Some(func_expr) = composed_func.take() {
+                if let Some((token, _)) = self.reader.next_solid() {
+                  match token {
+                    // No args, fall through
+                    RantToken::RightBracket => {
+                      is_finished = true;
+                    },
+                    // Parse arguments
+                    RantToken::Colon => parse_args!(),
+                    // Compose without args
+                    RantToken::Compose => {
+                      is_composing = true;
+                    }
+                    _ => {
+                      self.unexpected_last_token_error();
+                      return Err(())
+                    }
+                  }
+                } else {
+                  self.syntax_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
+                  return Err(())
+                }
+  
+                Sequence::one(func_expr, &self.info)
+              } else {
+                self.syntax_error(Problem::ComposeValueReused, &self.reader.last_token_span());
+                return Err(())
+              }
+            } else {
+              self.syntax_error(Problem::NothingToCompose, &self.reader.last_token_span());
+              return Err(())
             }
-            _ => unreachable!()
-          }
+          } else {
+            let (func_expr, func_expr_end, _) = self.parse_sequence(SequenceParseMode::AnonFunctionExpr)?;
+            // Parse arguments if available
+            match func_expr_end {
+              // No args, fall through
+              SequenceEndType::AnonFunctionExprNoArgs => {
+                is_finished = true;
+              },
+              // Parse arguments
+              SequenceEndType::AnonFunctionExprToArgs => parse_args!(),
+              // Compose without args
+              SequenceEndType::AnonFunctionExprToCompose => {
+                is_composing = true;
+              }
+              _ => unreachable!()
+            }
+            func_expr
+          };
 
           fallback_compose!();
           
@@ -1133,7 +1171,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           self.syntax_error(Problem::LocalPathStartsWithIndex, &span);
         },
         Some((.., span)) => {
-          self.syntax_error(Problem::MissingIdentifier, &span);
+          self.syntax_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span);
         },
         None => {
           self.syntax_error(Problem::MissingIdentifier, &preceding_span);

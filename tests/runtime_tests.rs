@@ -326,3 +326,11 @@ fn function_composition() {
     "the fox the dog"
   );
 }
+
+#[test]
+fn function_composition_callback() {
+  test_rant_file!(
+    "sources/function_composition_callback.rant",
+    "foo bar"
+  )
+}
