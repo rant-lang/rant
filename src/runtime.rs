@@ -616,7 +616,7 @@ impl<'rant> VM<'rant> {
     match &func.body {
       RantFunctionInterface::Foreign(foreign_func) => {
         let foreign_func = Rc::clone(foreign_func);
-        self.push_native_frame(Box::new(move |vm| foreign_func(vm, args)), is_printing, StackFrameFlavor::Original)?;
+        self.push_empty_frame(Box::new(move |vm| foreign_func(vm, args)), is_printing, StackFrameFlavor::NativeCall)?;
       },
       RantFunctionInterface::User(user_func) => {
         // Push the function onto the call stack
@@ -982,7 +982,7 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
-  pub(crate) fn push_native_frame(&mut self, callee: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
+  pub(crate) fn push_empty_frame(&mut self, callee: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
@@ -990,7 +990,7 @@ impl<'rant> VM<'rant> {
 
     let last_frame = self.call_stack.top().unwrap();
 
-    let frame = StackFrame::new_native(
+    let frame = StackFrame::new_empty(
       callee,
       use_output,
       self.call_stack.top().map(|last| last.output()).flatten(),
@@ -1210,6 +1210,8 @@ pub enum RuntimeErrorType {
   ArgumentError,
   /// Tried to invoke a non-function
   CannotInvokeValue,
+  /// Assertion failed
+  AssertError,
   /// Error occurred due to unexpected value type
   TypeError,
   /// Error occurred when creating value
@@ -1240,6 +1242,7 @@ impl Display for RuntimeErrorType {
       RuntimeErrorType::ArgumentError => "argument error",
       RuntimeErrorType::CannotInvokeValue => "cannot invoke value",
       RuntimeErrorType::UserError => "user error",
+      RuntimeErrorType::AssertError => "assertion error",
       RuntimeErrorType::TypeError => "type error",
       RuntimeErrorType::ValueError(_) => "value error",
       RuntimeErrorType::IndexError(_) => "index error",

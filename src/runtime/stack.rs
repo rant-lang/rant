@@ -306,7 +306,7 @@ impl StackFrame {
     }
   }
 
-  pub fn new_native(
+  pub fn new_empty(
     func: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, 
     has_output: bool, 
     prev_output: Option<&OutputWriter>, 
@@ -474,7 +474,12 @@ impl Display for StackFrame {
       self.origin_name(), 
       self.debug_pos.0, 
       self.debug_pos.1,
-      self.sequence.as_ref().and_then(|seq| seq.name().map(|name| name.as_str())).unwrap_or("???"), 
+      self.sequence.as_ref()
+        .and_then(|seq| seq.name().map(|name| name.as_str()))
+        .unwrap_or_else(|| match self.flavor {
+          StackFrameFlavor::NativeCall => "native call",
+          _ => "?"
+        }), 
     )
   }
 }
@@ -486,6 +491,8 @@ impl Display for StackFrame {
 pub enum StackFrameFlavor {
   /// Nothing special.
   Original,
+  /// Native function call.
+  NativeCall,
   /// Frame is used for a block element.
   BlockElement,
   /// Frame is used for a repeater element.

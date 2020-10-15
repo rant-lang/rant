@@ -1,5 +1,15 @@
 # Changelog
 
+## 4.0.0-alpha.12 (unreleased)
+
+### New
+* Added `RuntimeErrorType::AssertError`
+* Added new stdlib functions:
+  * `[assert]`: raise an error if a condition is false
+  * `[assert-eq]`: raise an error if two values are not equal
+  * `[assert-neq]`: raise an error if two values are equal
+  * `[is]`: check if a value is a specific type
+
 ## 4.0.0-alpha.11 (latest)
 
 ### New

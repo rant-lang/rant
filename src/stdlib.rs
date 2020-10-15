@@ -31,6 +31,27 @@ macro_rules! runtime_error {
   };
 }
 
+fn assert(vm: &mut VM, (condition, message): (bool, Option<String>)) -> RantStdResult {
+  if !condition {
+    runtime_error!(RuntimeErrorType::AssertError, "{}", message.as_deref().unwrap_or("assertion failed: condition was false"));
+  }
+  Ok(())
+}
+
+fn assert_eq(vm: &mut VM, (expected, actual, message): (RantValue, RantValue, Option<String>)) -> RantStdResult {
+  if expected != actual {
+    runtime_error!(RuntimeErrorType::AssertError, "{}", message.unwrap_or_else(|| format!("expected: {:?}; actual: {:?}", expected, actual)));
+  }
+  Ok(())
+}
+
+fn assert_neq(vm: &mut VM, (unexpected, actual, message): (RantValue, RantValue, Option<String>)) -> RantStdResult {
+  if unexpected == actual {
+    runtime_error!(RuntimeErrorType::AssertError, "{}", message.unwrap_or_else(|| format!("unexpected value: {:?}", unexpected)));
+  }
+  Ok(())
+}
+
 /// `[$alt: a (any); b+ (any)]`
 ///
 /// Prints the first argument that isn't an `empty`.
@@ -359,6 +380,11 @@ fn is_between(vm: &mut VM, (value, a, b): (RantValue, RantValue, RantValue)) -> 
 
 fn clamp(vm: &mut VM, (value, a, b): (RantValue, RantValue, RantValue)) -> RantStdResult {
   vm.cur_frame_mut().write_value(util::clamp(value, a, b));
+  Ok(())
+}
+
+fn is(vm: &mut VM, (value, type_name): (RantValue, String)) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(value.type_name() == type_name));
   Ok(())
 }
 
@@ -1397,6 +1423,9 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     // General functions
     alt, call, either, len, get_type as "type", seed, nop, resolve, fork, unfork,
 
+    // Assertion functions
+    assert, assert_eq as "assert-eq", assert_neq as "assert-neq",
+
     // Formatting functions
     whitespace_fmt as "whitespace-fmt",
 
@@ -1419,7 +1448,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     // Verification functions
     is_string as "is-string", is_integer as "is-integer", is_float as "is-float", 
     is_number as "is-number", is_bool as "is-bool", is_empty as "is-empty", is_nan as "is-nan",
-    is_between as "is-between", is_any as "is-any",
+    is_between as "is-between", is_any as "is-any", is,
 
     // Math functions
     add, sub, mul, div, mul_add as "mul-add", mod_ as "mod", neg, recip, is_odd as "is-odd", is_even as "is-even", is_factor as "is-factor",
