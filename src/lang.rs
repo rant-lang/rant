@@ -401,7 +401,7 @@ pub enum Rst {
   /// Variable definition
   VarDef(Identifier, AccessPathKind, Option<Rc<Sequence>>),
   /// Value getter
-  VarGet(Rc<AccessPath>),
+  VarGet(Rc<AccessPath>, Option<Rc<Sequence>>),
   /// Value setter
   VarSet(Rc<AccessPath>, Rc<Sequence>),
   /// Fragment
@@ -438,9 +438,9 @@ impl Rst {
       Rst::Boolean(_) =>                      "boolean",
       Rst::EmptyVal =>                        "empty",
       Rst::Nop =>                             "nothing",
-      Rst::VarDef(..) =>                      "variable definition",
-      Rst::VarGet(_) =>                       "variable",
-      Rst::VarSet(..) =>                      "variable assignment",
+      Rst::VarDef(..) =>                      "definition",
+      Rst::VarGet(..) =>                      "getter",
+      Rst::VarSet(..) =>                      "setter",
       _ =>                                    "???"
     }
   }
@@ -455,7 +455,7 @@ impl Rst {
       Rst::Boolean(_) |
       Rst::Fragment(_) |
       Rst::Whitespace(_) |
-      Rst::VarGet(_)
+      Rst::VarGet(..)
     )
   }
 }

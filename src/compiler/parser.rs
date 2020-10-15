@@ -46,6 +46,10 @@ enum SequenceParseMode {
   ///
   /// Breaks on `RightAngle` and `Semi`.
   VariableAssignment,
+  /// Parse a sequence like an accessor fallback value.
+  ///
+  /// Breaks on `RightAngle` and `Semi`.
+  AccessorFallbackValue,
   /// Parse a sequence like a collection initializer element.
   ///
   /// Breaks on `Semi` and `RightParen`.
@@ -94,6 +98,10 @@ enum SequenceEndType {
   VariableAccessEnd,
   /// Variable assignment expression was terminated by `Semi`. 
   VariableAssignDelim,
+  /// Accessor fallback value was termianted by `RightAngle`.
+  AccessorFallbackValueToEnd,
+  /// Accessor fallback value was terminated by `Semi`.
+  AccessorFallbackValueToDelim,
   /// Collection initializer was terminated by `RightParen`.
   CollectionInitEnd,
   /// Collection initializer was termianted by `Semi`.
@@ -463,8 +471,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Can be terminator for function args and anonymous function expressions
         RantToken::RightBracket => no_flags!({
           match mode {
-            SequenceParseMode::AnonFunctionExpr => return Ok((sequence, SequenceEndType::AnonFunctionExprNoArgs, true)),
-            SequenceParseMode::FunctionArg => return Ok((sequence, SequenceEndType::FunctionArgEndBreak, true)),
+            SequenceParseMode::AnonFunctionExpr => return Ok((sequence.with_name_str("anonymous function expression"), SequenceEndType::AnonFunctionExprNoArgs, true)),
+            SequenceParseMode::FunctionArg => return Ok((sequence.with_name_str("argument"), SequenceEndType::FunctionArgEndBreak, true)),
             _ => unexpected_token_error!()
           }
         }),
@@ -490,7 +498,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Variable access end
         RantToken::RightAngle => no_flags!({
           match mode {
-            SequenceParseMode::VariableAssignment => return Ok((sequence, SequenceEndType::VariableAccessEnd, true)),
+            SequenceParseMode::VariableAssignment => return Ok((sequence.with_name_str("setter value"), SequenceEndType::VariableAccessEnd, true)),
+            SequenceParseMode::AccessorFallbackValue => return Ok((sequence.with_name_str("fallback value"), SequenceEndType::AccessorFallbackValueToEnd, true)),
             _ => unexpected_token_error!()
           }
         }),
@@ -589,6 +598,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             SequenceParseMode::CollectionInit => return Ok((sequence.with_name_str("collection item"), SequenceEndType::CollectionInitDelim, true)),
             // Variable assignment expression
             SequenceParseMode::VariableAssignment => return Ok((sequence.with_name_str("variable assignment"), SequenceEndType::VariableAssignDelim, true)),
+            // Accessor fallback value
+            SequenceParseMode::AccessorFallbackValue => return Ok((sequence.with_name_str("fallback value"), SequenceEndType::AccessorFallbackValueToDelim, true)),
             // If we're anywhere else, just print the semicolon like normal text
             _ => seq_add!(Rst::Fragment(RantString::from(";")))
           }
@@ -1379,7 +1390,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           AccessPathKind::ExplicitGlobal => {},
         }
       },
-      Rst::VarGet(path) | 
+      Rst::VarGet(path, ..) | 
       Rst::VarSet(path, ..) | 
       Rst::FuncCall(FunctionCall { id: path, .. }, ..) => {
         // Only local getters can capture variables
@@ -1480,15 +1491,31 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         
         if let Some((token, _)) = self.reader.next_solid() {
           match token {
-            // If we hit a '>' here, it's a getter
+            // If we hit a '>', it's a getter
             RantToken::RightAngle => {
-              add_accessor!(Rst::VarGet(Rc::new(var_path)));
+              add_accessor!(Rst::VarGet(Rc::new(var_path), None));
               break 'read;
             },
-            // If we hit a ';' here, it's a getter with a continuation
+            // If we hit a ';', it's a getter with another accessor chained after it
             RantToken::Semi => {
-              add_accessor!(Rst::VarGet(Rc::new(var_path)));
+              add_accessor!(Rst::VarGet(Rc::new(var_path), None));
               continue 'read;
+            },
+            // If we hit a `?`, it's a getter with a fallback
+            RantToken::Question => {
+              self.reader.skip_ws();
+              let (fallback, end_type, ..) = self.parse_sequence(SequenceParseMode::AccessorFallbackValue)?;
+              add_accessor!(Rst::VarGet(Rc::new(var_path), Some(Rc::new(fallback))));
+              match end_type {
+                SequenceEndType::AccessorFallbackValueToDelim => continue 'read,
+                SequenceEndType::AccessorFallbackValueToEnd => break 'read,
+                // Error
+                SequenceEndType::ProgramEnd => {
+                  self.syntax_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+                  return Err(())
+                },
+                _ => unreachable!()
+              }
             },
             // If we hit a '=' here, it's a setter
             RantToken::Equals => {

@@ -334,3 +334,27 @@ fn function_composition_callback() {
     "foo bar"
   )
 }
+
+#[test]
+fn getter_fallback_from_var() {
+  test_rant_file!(
+    "sources/getter_fallback_from_var.rant",
+    "123, fallback"
+  )
+}
+
+#[test]
+fn getter_fallback_from_index() {
+  test_rant_file!(
+    "sources/getter_fallback_from_index.rant",
+    "foo, bar, baz, oops"
+  )
+}
+
+#[test]
+fn getter_fallback_from_key() {
+  test_rant_file!(
+    "sources/getter_fallback_from_key.rant",
+    "foo, bar, baz, oops"
+  )
+}

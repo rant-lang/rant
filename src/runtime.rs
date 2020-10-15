@@ -72,9 +72,12 @@ pub enum Intent {
   /// Pop a value off the stack and assign it to a new variable.
   DefVar { vname: Identifier, access_kind: AccessPathKind, },
   /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `GetValue`.
-  BuildDynamicGetter { path: Rc<AccessPath>, dynamic_key_count: usize, pending_exprs: Vec<Rc<Sequence>>, override_print: bool, prefer_function: bool },
+  BuildDynamicGetter { 
+    path: Rc<AccessPath>, dynamic_key_count: usize, pending_exprs: Vec<Rc<Sequence>>, 
+    override_print: bool, prefer_function: bool, fallback: Option<Rc<Sequence>> 
+  },
   /// Pop `dynamic_key_count` values off the stack and use them for expression fields in a getter.
-  GetValue { path: Rc<AccessPath>, dynamic_key_count: usize, override_print: bool, prefer_function: bool, },
+  GetValue { path: Rc<AccessPath>, dynamic_key_count: usize, override_print: bool, prefer_function: bool, fallback: Option<Rc<Sequence>> },
   /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `SetValue`.
   BuildDynamicSetter { path: Rc<AccessPath>, auto_def: bool, expr_count: usize, pending_exprs: Vec<Rc<Sequence>>, val_source: SetterValueSource },
   /// Pop `expr_count` values off the stack and use them for expression fields in a setter.
@@ -168,22 +171,39 @@ impl<'rant> VM<'rant> {
             let val = self.pop_val()?;
             self.def_var_value(vname.as_str(), access_kind, val)?;
           },
-          Intent::BuildDynamicGetter { path, dynamic_key_count, mut pending_exprs, override_print, prefer_function } => {
+          Intent::BuildDynamicGetter { 
+            path, dynamic_key_count, mut pending_exprs, 
+            override_print, prefer_function, fallback 
+          } => {
             if let Some(key_expr) = pending_exprs.pop() {
               // Set next intent based on remaining expressions in getter
               if pending_exprs.is_empty() {
-                self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print, prefer_function });
+                self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print, prefer_function, fallback });
               } else {
-                self.cur_frame_mut().push_intent_front(Intent::BuildDynamicGetter { path, dynamic_key_count, pending_exprs, override_print, prefer_function });
+                self.cur_frame_mut().push_intent_front(Intent::BuildDynamicGetter { path, dynamic_key_count, pending_exprs, override_print, prefer_function, fallback });
               }
               self.push_frame_flavored(Rc::clone(&key_expr), true, StackFrameFlavor::DynamicKeyExpression)?;
             } else {
-              self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print, prefer_function });
+              self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print, prefer_function, fallback });
             }
             continue 'from_the_top;
           },
-          Intent::GetValue { path, dynamic_key_count, override_print, prefer_function } => {
-            self.get_value(path, dynamic_key_count, override_print, prefer_function)?;
+          Intent::GetValue { path, dynamic_key_count, override_print, prefer_function, fallback } => {
+            let getter_result = self.get_value(path, dynamic_key_count, override_print, prefer_function);
+            match (getter_result, fallback) {
+              // If it worked, do nothing
+              (Ok(()), _) => {},
+              // If no fallback, raise error
+              (Err(err), None) => return Err(err),
+              // Run fallback if available
+              (Err(_), Some(fallback)) => {
+                if !override_print {
+                  self.cur_frame_mut().push_intent_front(Intent::PrintValue);
+                }
+                self.push_frame(fallback, true)?;
+                continue 'from_the_top;
+              }
+            }
           },
           Intent::Invoke { arg_exprs, eval_count, flag } => {
             // First, evaluate all arguments
@@ -369,7 +389,7 @@ impl<'rant> VM<'rant> {
               self.def_var_value(vname.as_str(), *access_kind, RantValue::Empty)?;
             }
           },
-          Rst::VarGet(path) => {
+          Rst::VarGet(path, fallback) => {
             // Get list of dynamic keys in path
             let dynamic_keys = path.dynamic_exprs();
 
@@ -380,6 +400,7 @@ impl<'rant> VM<'rant> {
                 dynamic_key_count: 0, 
                 override_print: false,
                 prefer_function: false,
+                fallback: fallback.as_ref().map(Rc::clone)
               });
             } else {
               // Build dynamic keys before running getter
@@ -389,6 +410,7 @@ impl<'rant> VM<'rant> {
                 pending_exprs: dynamic_keys,
                 override_print: false,
                 prefer_function: false,
+                fallback: fallback.as_ref().map(Rc::clone)
               });
             }
             continue 'from_the_top;
@@ -516,6 +538,7 @@ impl<'rant> VM<'rant> {
                 dynamic_key_count: 0, 
                 override_print: true,
                 prefer_function: true,
+                fallback: None
               }
             } else {
               // Build dynamic keys before running getter
@@ -525,6 +548,7 @@ impl<'rant> VM<'rant> {
                 pending_exprs: dynamic_keys,
                 override_print: true,
                 prefer_function: true,
+                fallback: None
               }
             });
 

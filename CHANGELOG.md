@@ -3,6 +3,7 @@
 ## 4.0.0-alpha.11 (unreleased)
 
 ### New
+* Getters can now accept an optional fallback value
 * Added function composition
 * Added new stdlib functions:
   * `[clamp]`: clamp a value between two others

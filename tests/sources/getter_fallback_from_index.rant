@@ -1,0 +1,5 @@
+<$list = (foo; bar; baz)>
+<list/0 ? oops>,\s
+<list/1 ? oops>,\s
+<list/2 ? oops>,\s
+<list/3 ? oops>
