@@ -1014,6 +1014,30 @@ fn insert(vm: &mut VM, (collection, value, pos): (RantValue, RantValue, RantValu
   Ok(())
 }
 
+fn index_of(vm: &mut VM, (list, value): (RantListRef, RantValue)) -> RantStdResult {
+  let index = list
+    .borrow()
+    .iter()
+    .position(|v| v == &value)
+    .map(|i| RantValue::Integer(i as i64))
+    .unwrap_or(RantValue::Empty);
+
+    vm.cur_frame_mut().write_value(index);
+    Ok(())
+}
+
+fn last_index_of(vm: &mut VM, (list, value): (RantListRef, RantValue)) -> RantStdResult {
+  let index = list
+    .borrow()
+    .iter()
+    .rposition(|v| v == &value)
+    .map(|i| RantValue::Integer(i as i64))
+    .unwrap_or(RantValue::Empty);
+
+    vm.cur_frame_mut().write_value(index);
+    Ok(())
+}
+
 fn remove(vm: &mut VM, (collection, pos): (RantValue, RantValue)) -> RantStdResult {
   match (collection, pos) {
     // Remove from list by index
@@ -1176,8 +1200,19 @@ fn set_proto(vm: &mut VM, (map, proto): (RantMapRef, Option<RantMapRef>)) -> Ran
   Ok(())
 }
 
-fn has_key(vm: &mut VM, (map, key): (RantMapRef, String)) -> RantStdResult {
-  let result = map.borrow().raw_has_key(key.as_str());
+fn has(vm: &mut VM, (value, key): (RantValue, RantValue)) -> RantStdResult {
+  let result = match (value, key) {
+    (RantValue::Map(map), RantValue::String(key)) => {
+      map.borrow().raw_has_key(key.as_str())
+    },
+    (RantValue::List(list), element) => {
+      list.borrow().contains(&element)
+    },
+    (value, key) => {
+      runtime_error!(RuntimeErrorType::ArgumentError, "unable to check if value of type '{}' contains element of type '{}'", value.type_name(), key.type_name())
+    }
+  };
+
   vm.cur_frame_mut().write_value(RantValue::Boolean(result));
   Ok(())
 }
@@ -1464,7 +1499,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     proto, set_proto as "set-proto",
 
     // Collection functions
-    assoc, clear, keys, has_key as "has-key", insert, remove, sift, sifted, squish, squished, take, translate,
+    assoc, clear, has, keys, index_of as "index-of", insert, last_index_of as "last-index-of", remove, sift, sifted, squish, squished, take, translate,
 
     // List functions
     pick, filter, join, map, sort, sorted, shuffle, shuffled, sum, min, max,

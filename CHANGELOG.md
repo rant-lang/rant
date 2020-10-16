@@ -8,7 +8,13 @@
   * `[assert]`: raise an error if a condition is false
   * `[assert-eq]`: raise an error if two values are not equal
   * `[assert-neq]`: raise an error if two values are equal
+  * `[has]`: check if a collection contains a specific value
+  * `[index-of]`: return the index of the first occurrence of a value in a list, or `~` if it's not found
   * `[is]`: check if a value is a specific type
+  * `[last-index-of]`: return the index of the last occurrence of a value in a list, or `~` if it's not found
+
+### Removed
+  * Removed `[has-key]` from stdlib
 
 ## 4.0.0-alpha.11 (latest)
 
