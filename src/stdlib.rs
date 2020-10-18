@@ -8,7 +8,7 @@ use crate::runtime::*;
 use crate::convert::*;
 use crate::convert::ToRant;
 
-mod assert;
+mod assertion;
 mod block;
 mod boolean;
 mod collections;
@@ -24,7 +24,7 @@ mod strings;
 mod verify;
 
 use self::{
-  assert::*, block::*, boolean::*, collections::*, 
+  assertion::*, block::*, boolean::*, collections::*, 
   compare::*, control::*, convert::*, format::*, 
   general::*, generate::*, math::*, proto::*, 
   strings::*, verify::*
@@ -74,7 +74,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     alt, call, either, len, get_type as "type", seed, nop, resolve, fork, unfork,
 
     // Assertion functions
-    _assert as "assert", _assert_eq as "assert-eq", _assert_neq as "assert-neq",
+    assert as "assert", assert_eq as "assert-eq", assert_neq as "assert-neq",
 
     // Formatting functions
     whitespace_fmt as "whitespace-fmt",
