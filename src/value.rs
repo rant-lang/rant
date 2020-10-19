@@ -104,6 +104,7 @@ impl RantValue {
 
 #[allow(clippy::len_without_is_empty)]
 impl RantValue {
+  /// Converts to a Rant `int` value (or `empty` if the conversion fails).
   #[inline]
   pub fn into_rant_int(self) -> RantValue {
     match self {
@@ -120,6 +121,7 @@ impl RantValue {
     }
   }
 
+  /// Converts to a Rant `float` value (or `empty` if the conversion fails).
   #[inline]
   pub fn into_rant_float(self) -> RantValue {
     match self {
@@ -136,6 +138,7 @@ impl RantValue {
     }
   }
 
+  /// Converts to a Rant `string` value.
   #[inline]
   pub fn into_rant_string(self) -> RantValue {
     match self {
@@ -144,6 +147,7 @@ impl RantValue {
     }
   }
 
+  /// Gets the length of the value.
   #[inline]
   pub fn len(&self) -> usize {
     match self {
@@ -737,10 +741,10 @@ impl Rem for RantValue {
 }
 
 impl RantValue {
-  /// Raises `lhs` to the `rhs` power.
+  /// Raises `self` to the `exponent` power.
   #[inline]
-  pub fn pow(self, rhs: RantValue) -> ValueResult<Self> {
-    match (self, rhs) {
+  pub fn pow(self, exponent: RantValue) -> ValueResult<Self> {
+    match (self, exponent) {
       (RantValue::Int(lhs), RantValue::Int(rhs)) => {
         if rhs >= 0 {
           cast::u32(rhs)
@@ -768,6 +772,7 @@ impl RantValue {
     }
   }
 
+  /// Calculates the absolute value.
   #[inline]
   pub fn abs(self) -> ValueResult<Self> {
     match self {

@@ -22,23 +22,26 @@ impl Default for CallStack {
 
 impl CallStack {
   #[inline]
-  pub fn new() -> Self {
+  pub(crate) fn new() -> Self {
     Self {
       frames: Default::default(),
       locals: Default::default(),
     }
   }
 
+  /// Returns `true` if the stack is empty.
   #[inline]
   pub fn is_empty(&self) -> bool {
     self.frames.is_empty()
   }
 
+  /// Gets the number of frames in the stack.
   #[inline]
   pub fn len(&self) -> usize {
     self.frames.len()
   }
 
+  /// Removes the topmost frame from the stack and returns it.
   #[inline]
   pub fn pop_frame(&mut self) -> Option<StackFrame> {
     if let Some(frame) = self.frames.pop() {
@@ -48,22 +51,26 @@ impl CallStack {
     None
   }
 
+  /// Adds a frame to the top of the stack.
   #[inline]
   pub fn push_frame(&mut self, frame: StackFrame) {
     self.locals.push_layer();
     self.frames.push(frame);
   }
 
+  /// Returns a mutable reference to the topmost frame in the stack.
   #[inline]
   pub fn top_mut(&mut self) -> Option<&mut StackFrame> {
     self.frames.last_mut()
   }
 
+  /// Returna reference to the topmost frame in the stack.
   #[inline]
   pub fn top(&self) -> Option<&StackFrame> {
     self.frames.last()
   }
 
+  /// Generates a stack trace string from the current state of the stack.
   pub fn gen_stack_trace(&self) -> String {
     let mut trace = String::new();
     let mut last_frame_info: Option<(String, usize)> = None;
@@ -97,6 +104,7 @@ impl CallStack {
     trace
   }
 
+  /// Sets a variable's value using the specified access type.
   #[inline]
   pub fn set_var_value(&mut self, context: &mut Rant, id: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
     match access {
@@ -129,6 +137,7 @@ impl CallStack {
     })
   }
 
+  /// Gets a variable's value using the specified access type.
   #[inline]
   pub fn get_var_value(&self, context: &Rant, id: &str, access: AccessPathKind, prefer_function: bool) -> RuntimeResult<RantValue> {
 
@@ -153,7 +162,7 @@ impl CallStack {
 
     match access {
       AccessPathKind::Local => {
-        // If the caller requested a function, perform "trickle-down" function lookup
+        // If the caller requested a function, perform function percolation
         if prefer_function {
           trickle_down_func_lookup!(self.locals.get_all(id));
         } else if let Some(var) = self.locals.get(id) {
@@ -182,6 +191,7 @@ impl CallStack {
     })
   }
 
+  /// Gets a mutable reference to a variable.
   pub fn get_var_mut<'a>(&'a mut self, context: &'a mut Rant, id: &str, access: AccessPathKind) -> RuntimeResult<&'a mut RantVar> {
     match access {
       AccessPathKind::Local => {
@@ -209,6 +219,11 @@ impl CallStack {
     })
   }
 
+  /// Defines a variable of the specified name.
+  ///
+  /// ## Notes
+  ///
+  /// This function does not perform any identifier validation.
   pub fn def_var(&mut self, context: &mut Rant, id: &str, access: AccessPathKind, var: RantVar) -> RuntimeResult<()> {
     match access {
       AccessPathKind::Local => {
@@ -226,6 +241,11 @@ impl CallStack {
     Ok(())
   }
 
+  /// Defines a variable of the specified name by-value.
+  ///
+  /// ## Notes
+  ///
+  /// This function does not perform any identifier validation.
   #[inline]
   pub fn def_var_value(&mut self, context: &mut Rant, id: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
     match access {
@@ -293,7 +313,7 @@ pub struct StackFrame {
 
 impl StackFrame {
   #[inline]
-  pub fn new(sequence: Rc<Sequence>, has_output: bool, prev_output: Option<&OutputWriter>) -> Self {
+  pub(crate) fn new(sequence: Rc<Sequence>, has_output: bool, prev_output: Option<&OutputWriter>) -> Self {
     Self {
       origin: Rc::clone(&sequence.origin),
       sequence: Some(sequence),
@@ -306,7 +326,7 @@ impl StackFrame {
     }
   }
 
-  pub fn new_empty(
+  pub(crate) fn new_empty(
     func: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, 
     has_output: bool, 
     prev_output: Option<&OutputWriter>, 
@@ -331,7 +351,7 @@ impl StackFrame {
   }
 
   #[inline(always)]
-  pub fn with_flavor(self, flavor: StackFrameFlavor) -> Self {
+  pub(crate) fn with_flavor(self, flavor: StackFrameFlavor) -> Self {
     let mut frame = self;
     frame.flavor = flavor;
     frame
@@ -340,7 +360,7 @@ impl StackFrame {
 
 impl StackFrame {
   #[inline]
-  pub fn seq_next(&mut self) -> Option<Rc<Rst>> {
+  pub(crate) fn seq_next(&mut self) -> Option<Rc<Rst>> {
     if self.is_done() {
       return None
     }
@@ -395,7 +415,7 @@ impl StackFrame {
 
   /// Takes the next intent to be handled.
   #[inline]
-  pub fn take_intent(&mut self) -> Option<Intent> {
+  pub(crate) fn take_intent(&mut self) -> Option<Intent> {
     self.intents.pop_front()
   }
 
@@ -411,6 +431,7 @@ impl StackFrame {
     self.intents.push_back(intent);
   }
 
+  /// If the frame has output, runs `func` on a mutable reference to the output; otherwise, does nothing.
   #[inline]
   pub fn use_output_mut<F: FnOnce(&mut OutputWriter)>(&mut self, func: F) {
     if let Some(output) = self.output.as_mut() {
@@ -418,6 +439,7 @@ impl StackFrame {
     }
   }
 
+  /// If the frame has output, runs `func` on a reference to the output; otherwise, does nothing.
   #[inline]
   pub fn use_output<'a, F: FnOnce(&'a OutputWriter) -> R, R>(&'a self, func: F) -> Option<R> {
     self.output.as_ref().map(|output| func(output))
@@ -438,6 +460,7 @@ impl StackFrame {
     self.sequence.is_none() || self.pc >= self.sequence.as_ref().unwrap().len()
   }
   
+  /// Writes a fragment to the frame's output.
   #[inline]
   pub fn write_frag(&mut self, frag: &str) {
     if let Some(output) = self.output.as_mut() {
@@ -445,6 +468,7 @@ impl StackFrame {
     }
   }
   
+  /// Writes a whitespace string to the frame's output.
   #[inline]
   pub fn write_ws(&mut self, ws: &str) {
     if let Some(output) = self.output.as_mut() {
@@ -452,6 +476,7 @@ impl StackFrame {
     }
   }
 
+  /// Writes a value to the frame's output.
   #[inline]
   pub fn write_value(&mut self, val: RantValue) {
     if val.is_empty() {
@@ -462,6 +487,7 @@ impl StackFrame {
     }
   }
 
+  /// Consumes the frame's output and returns the final value generated by it.
   #[inline]
   pub fn render_output_value(&mut self) -> Option<RantValue> {
     self.output.take().map(|o| o.render_value())
