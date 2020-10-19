@@ -50,12 +50,12 @@ pub(crate) fn either(vm: &mut VM, (cond, a, b): (bool, RantValue, RantValue)) ->
   Ok(())
 }
 
-/// `$[fork: seed? (string|integer)]`
+/// `$[fork: seed? (string|int)]`
 ///
 /// Forks the RNG with the specified seed.
 pub(crate) fn fork(vm: &mut VM, seed: Option<RantValue>) -> RantStdResult {
   let rng = match seed {
-    Some(RantValue::Integer(i)) => vm.rng().fork_i64(i),
+    Some(RantValue::Int(i)) => vm.rng().fork_i64(i),
     Some(RantValue::String(s)) => vm.rng().fork_str(&s),
     Some(other) => runtime_error!(RuntimeErrorType::ArgumentError, "seeding fork with '{}' value is not supported", other.type_name()),
     None => vm.rng().fork_random(),
@@ -94,12 +94,12 @@ pub(crate) fn seed(vm: &mut VM, _: ()) -> RantStdResult {
     mem::transmute::<u64, i64>(vm.rng().seed())
   };
   let frame = vm.cur_frame_mut();
-  frame.write_value(RantValue::Integer(signed_seed));
+  frame.write_value(RantValue::Int(signed_seed));
   Ok(())
 }
 
 pub(crate) fn len(vm: &mut VM, val: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value(RantValue::Integer(val.len() as i64));
+  vm.cur_frame_mut().write_value(RantValue::Int(val.len() as i64));
   Ok(())
 }
 

@@ -1,3 +1,5 @@
+use crate::RantValue;
+
 /// Sorts `a` and `b` in ascending order and returns them as a `(min, max)` tuple.
 #[inline]
 pub fn minmax<T: PartialEq + PartialOrd>(a: T, b: T) -> (T, T) {
@@ -48,4 +50,32 @@ pub fn bf64(val: bool) -> f64 {
 #[inline(always)]
 pub fn bstr(val: bool) -> &'static str {
   if val { "true" } else { "false" }
+}
+
+#[inline]
+pub fn max_rant_value<'a>(mut iter: impl Iterator<Item = &'a RantValue>) -> Option<&'a RantValue> {
+  if let Some(mut max) = iter.next() {
+    for val in iter {
+      if val >= max {
+        max = val;
+      }
+    }
+    Some(max)
+  } else {
+    None
+  }
+}
+
+#[inline]
+pub fn min_rant_value<'a>(mut iter: impl Iterator<Item = &'a RantValue>) -> Option<&'a RantValue> {
+  if let Some(mut min) = iter.next() {
+    for val in iter {
+      if val < min {
+        min = val;
+      }
+    }
+    Some(min)
+  } else {
+    None
+  }
 }

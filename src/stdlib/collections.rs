@@ -260,46 +260,6 @@ pub(crate) fn sum(vm: &mut VM, list: RantListRef) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn min(vm: &mut VM, list: RantListRef) -> RantStdResult {
-  let list = list.borrow();
-  if list.is_empty() {
-    return Ok(());
-  }
-
-  let mut iter = list.iter();
-  let mut min = iter.next().unwrap();
-
-  for val in iter {
-    if val < min {
-      min = val;
-    }
-  }
-
-  vm.cur_frame_mut().write_value(min.clone());
-
-  Ok(())
-}
-
-pub(crate) fn max(vm: &mut VM, list: RantListRef) -> RantStdResult {
-  let list = list.borrow();
-  if list.is_empty() {
-    return Ok(());
-  }
-
-  let mut iter = list.iter();
-  let mut max = iter.next().unwrap();
-
-  for val in iter {
-    if val > max {
-      max = val;
-    }
-  }
-
-  vm.cur_frame_mut().write_value(max.clone());
-
-  Ok(())
-}
-
 pub(crate) fn shuffled(vm: &mut VM, list: RantListRef) -> RantStdResult {
   let mut list = list.borrow().clone();
   if list.is_empty() {
@@ -409,7 +369,7 @@ pub(crate) fn sifted(vm: &mut VM, (list, size): (RantListRef, usize)) -> RantStd
 pub(crate) fn insert(vm: &mut VM, (collection, value, pos): (RantValue, RantValue, RantValue)) -> RantStdResult {
   match (collection, pos) {
     // Insert into list by index
-    (RantValue::List(list), RantValue::Integer(index)) => {
+    (RantValue::List(list), RantValue::Int(index)) => {
       let mut list = list.borrow_mut();
       // Bounds check
       if index < 0 || index as usize > list.len() {
@@ -441,7 +401,7 @@ pub(crate) fn index_of(vm: &mut VM, (list, value): (RantListRef, RantValue)) -> 
     .borrow()
     .iter()
     .position(|v| v == &value)
-    .map(|i| RantValue::Integer(i as i64))
+    .map(|i| RantValue::Int(i as i64))
     .unwrap_or(RantValue::Empty);
 
     vm.cur_frame_mut().write_value(index);
@@ -453,7 +413,7 @@ pub(crate) fn last_index_of(vm: &mut VM, (list, value): (RantListRef, RantValue)
     .borrow()
     .iter()
     .rposition(|v| v == &value)
-    .map(|i| RantValue::Integer(i as i64))
+    .map(|i| RantValue::Int(i as i64))
     .unwrap_or(RantValue::Empty);
 
     vm.cur_frame_mut().write_value(index);
@@ -463,7 +423,7 @@ pub(crate) fn last_index_of(vm: &mut VM, (list, value): (RantListRef, RantValue)
 pub(crate) fn remove(vm: &mut VM, (collection, pos): (RantValue, RantValue)) -> RantStdResult {
   match (collection, pos) {
     // Remove from list by index
-    (RantValue::List(list), RantValue::Integer(index)) => {
+    (RantValue::List(list), RantValue::Int(index)) => {
       let mut list = list.borrow_mut();
       // Bounds check
       if index < 0 || index as usize >= list.len() {
@@ -493,7 +453,7 @@ pub(crate) fn remove(vm: &mut VM, (collection, pos): (RantValue, RantValue)) -> 
 pub(crate) fn take(vm: &mut VM, (collection, pos): (RantValue, RantValue)) -> RantStdResult {
   match (collection, pos) {
     // Take from list by index
-    (RantValue::List(list), RantValue::Integer(index)) => {
+    (RantValue::List(list), RantValue::Int(index)) => {
       let mut list = list.borrow_mut();
       // Bounds check
       if index < 0 || index as usize >= list.len() {

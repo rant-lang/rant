@@ -60,10 +60,10 @@ macro_rules! rant_int_conversions {
     impl ToRant for $int_type {
       fn to_rant(self) -> ValueResult<RantValue> {
         match i64(self).to_cast_result() {
-          Ok(i) => Ok(RantValue::Integer(i)),
+          Ok(i) => Ok(RantValue::Int(i)),
           Err(err) => Err(rant_cast_error(
             stringify!($int_type), 
-            stringify!(RantValue::Integer), 
+            stringify!(RantValue::Int), 
             err
           ))
         }
@@ -92,7 +92,7 @@ macro_rules! rant_int_conversions {
           };
         }
         match val {
-          RantValue::Integer(i) => {
+          RantValue::Int(i) => {
             let result: Result<$int_type, CastError> = cast_int!($int_type, i);
             match result {
               Ok(i) => Ok(i),
@@ -164,7 +164,7 @@ impl FromRant for bool {
   fn from_rant(val: RantValue) -> Result<Self, ValueError> {
     match val {
       RantValue::Boolean(b) => Ok(b),
-      RantValue::Integer(n) => Ok(n != 0),
+      RantValue::Int(n) => Ok(n != 0),
       other => Err(ValueError::InvalidConversion {
         from: other.type_name(),
         to: "bool",
@@ -181,7 +181,7 @@ impl FromRant for bool {
 impl FromRant for f32 {
   fn from_rant(val: RantValue) -> ValueResult<Self> {
     match val {
-      RantValue::Integer(i) => Ok(f32(i)),
+      RantValue::Int(i) => Ok(f32(i)),
       RantValue::Float(f) => match f32(f) {
         Ok(f) => Ok(f),
         Err(err) => Err(rant_cast_error(val.type_name(), "f32", err))
@@ -202,7 +202,7 @@ impl FromRant for f32 {
 impl FromRant for f64 {
   fn from_rant(val: RantValue) -> ValueResult<Self> {
     match val {
-      RantValue::Integer(i) => Ok(f64(i)),
+      RantValue::Int(i) => Ok(f64(i)),
       RantValue::Float(f) => Ok(f),
       _ => Err(ValueError::InvalidConversion {
         from: val.type_name(),

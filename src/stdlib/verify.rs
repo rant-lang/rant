@@ -2,7 +2,7 @@ use super::*;
 use crate::util;
 
 
-/// `[$is-odd: val (integer)]`
+/// `[$is-odd: val (int)]`
 ///
 /// Returns true if `val` is odd.
 pub(crate) fn is_odd(vm: &mut VM, val: i64) -> RantStdResult {
@@ -10,7 +10,7 @@ pub(crate) fn is_odd(vm: &mut VM, val: i64) -> RantStdResult {
   Ok(())
 }
 
-/// `[$is-even: val (integer)]`
+/// `[$is-even: val (int)]`
 ///
 /// Returns true if `val` is even.
 pub(crate) fn is_even(vm: &mut VM, val: i64) -> RantStdResult {
@@ -18,7 +18,7 @@ pub(crate) fn is_even(vm: &mut VM, val: i64) -> RantStdResult {
   Ok(())
 }
 
-/// `[$is-factor: value (integer); factor (integer)]`
+/// `[$is-factor: value (int); factor (int)]`
 ///
 /// Returns true if `value` is divisible by `factor`.
 pub(crate) fn is_factor(vm: &mut VM, (value, factor): (i64, i64)) -> RantStdResult {
@@ -31,8 +31,8 @@ pub(crate) fn is_string(vm: &mut VM, value: RantValue) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn is_integer(vm: &mut VM, value: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value(RantValue::Boolean(value.get_type() == RantValueType::Integer));
+pub(crate) fn is_int(vm: &mut VM, value: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Boolean(value.get_type() == RantValueType::Int));
   Ok(())
 }
 
@@ -42,7 +42,7 @@ pub(crate) fn is_float(vm: &mut VM, value: RantValue) -> RantStdResult {
 }
 
 pub(crate) fn is_number(vm: &mut VM, value: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value(RantValue::Boolean(matches!(value.get_type(), RantValueType::Integer | RantValueType::Float)));
+  vm.cur_frame_mut().write_value(RantValue::Boolean(matches!(value.get_type(), RantValueType::Int | RantValueType::Float)));
   Ok(())
 }
 

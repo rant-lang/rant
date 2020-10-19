@@ -1,12 +1,14 @@
 use crate::{lang::{Block, Parameter, Sequence}, lang::Identifier, RantVar};
+use crate::collections::*;
+use crate::resolver::*;
 use crate::runtime::*;
-use crate::{collections::*, util::*, IntoRuntimeResult, RuntimeResult, RuntimeError, RuntimeErrorType, stdlib::RantStdResult};
-use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div, Rem}, cmp, cell::RefCell};
-use std::mem;
+use crate::util::*;
+use crate::{IntoRuntimeResult, RuntimeResult, RuntimeError, RuntimeErrorType, stdlib::RantStdResult};
+use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div, Rem}, cell::RefCell};
 use std::error::Error;
+use std::mem;
+use std::cmp::Ordering;
 use cast::*;
-use resolver::SelectorRef;
-use cmp::Ordering;
 
 /// Adds a barebones `Error` implementation to the specified type.
 macro_rules! impl_error_default {
@@ -53,8 +55,8 @@ pub enum RantValue {
   String(String),
   /// A Rant value of type `float`. Passed by-value.
   Float(f64),
-  /// A Rant value of type `integer`. Passed by-value.
-  Integer(i64),
+  /// A Rant value of type `int`. Passed by-value.
+  Int(i64),
   /// A Rant value of type `bool`. Passed by-value.
   Boolean(bool),
   /// A Rant value of type `function`. Passed by-reference.
@@ -106,15 +108,15 @@ impl RantValue {
   #[inline]
   pub fn into_rant_int(self) -> RantValue {
     match self {
-      RantValue::Integer(_) => self,
-      RantValue::Float(n) => RantValue::Integer(n as i64),
+      RantValue::Int(_) => self,
+      RantValue::Float(n) => RantValue::Int(n as i64),
       RantValue::String(s) => {
         match s.parse() {
-          Ok(n) => RantValue::Integer(n),
+          Ok(n) => RantValue::Int(n),
           Err(_) => RantValue::Empty,
         }
       },
-      RantValue::Boolean(b) => RantValue::Integer(bi64(b)),
+      RantValue::Boolean(b) => RantValue::Int(bi64(b)),
       _ => RantValue::Empty
     }
   }
@@ -123,7 +125,7 @@ impl RantValue {
   pub fn into_rant_float(self) -> RantValue {
     match self {
       RantValue::Float(_) => self,
-      RantValue::Integer(n) => RantValue::Float(n as f64),
+      RantValue::Int(n) => RantValue::Float(n as f64),
       RantValue::String(s) => {
         match s.parse() {
           Ok(n) => RantValue::Float(n),
@@ -176,7 +178,7 @@ impl RantValue {
     match self {
       RantValue::String(_) =>     RantValueType::String,
       RantValue::Float(_) =>      RantValueType::Float,
-      RantValue::Integer(_) =>    RantValueType::Integer,
+      RantValue::Int(_) =>    RantValueType::Int,
       RantValue::Boolean(_) =>    RantValueType::Boolean,
       RantValue::Function(_) =>   RantValueType::Function,
       RantValue::List(_) =>       RantValueType::List,
@@ -307,8 +309,8 @@ pub enum RantValueType {
   String,
   /// The `float` type.
   Float,
-  /// The `integer` type.
-  Integer,
+  /// The `int` type.
+  Int,
   /// The `bool` type.
   Boolean,
   /// The `function` type.
@@ -331,7 +333,7 @@ impl RantValueType {
     match self {
       RantValueType::String =>      "string",
       RantValueType::Float =>       "float",
-      RantValueType::Integer =>     "integer",
+      RantValueType::Int =>         "int",
       RantValueType::Boolean =>     "bool",
       RantValueType::Function =>    "function",
       RantValueType::Block =>       "block",
@@ -360,6 +362,8 @@ pub enum ValueError {
   },
   /// Attempted to divide by zero.
   DivideByZero,
+  /// An arithmetic operation overflowed.
+  Overflow,
 }
 
 impl_error_default!(ValueError);
@@ -375,6 +379,7 @@ impl Display for ValueError {
         }
       },
       ValueError::DivideByZero => write!(f, "attempted to divide by zero"),
+      ValueError::Overflow => write!(f, "arithmetic overflow"),
     }
   }
 }
@@ -491,6 +496,13 @@ impl PartialEq for RantSpecial {
   }
 }
 
+// TODO: Use `RantNumber` to accept any number type in stdlib functions
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
+pub(crate) enum RantNumber {
+  Int(i64),
+  Float(f64)
+}
+
 /// A function callable from Rant.
 #[derive(Debug)]
 pub struct RantFunction {
@@ -540,7 +552,7 @@ impl Debug for RantValue {
     match self {
       RantValue::String(s) => write!(f, "{}", s),
       RantValue::Float(n) => write!(f, "{}", n),
-      RantValue::Integer(n) => write!(f, "{}", n),
+      RantValue::Int(n) => write!(f, "{}", n),
       RantValue::Boolean(b) => write!(f, "{}", bstr(*b)),
       RantValue::Function(func) => write!(f, "[function({:?})]", func.body),
       RantValue::Block(block) => write!(f, "[block({})]", block.elements.len()),
@@ -556,7 +568,7 @@ impl Display for RantValue {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       RantValue::String(s) => write!(f, "{}", s),
-      RantValue::Integer(n) => write!(f, "{}", n),
+      RantValue::Int(n) => write!(f, "{}", n),
       RantValue::Float(n) => write!(f, "{}", n),
       RantValue::Boolean(b) => write!(f, "{}", bstr(*b)),
       RantValue::Function(func) => write!(f, "[function({:?})]", func.body),
@@ -574,10 +586,10 @@ impl PartialEq for RantValue {
     match (self, other) {
       (RantValue::Empty, RantValue::Empty) => true,
       (RantValue::String(a), RantValue::String(b)) => a == b,
-      (RantValue::Integer(a), RantValue::Integer(b)) => a == b,
-      (RantValue::Integer(a), RantValue::Float(b)) => *a as f64 == *b,
+      (RantValue::Int(a), RantValue::Int(b)) => a == b,
+      (RantValue::Int(a), RantValue::Float(b)) => *a as f64 == *b,
       (RantValue::Float(a), RantValue::Float(b)) => a == b,
-      (RantValue::Float(a), RantValue::Integer(b)) => *a == *b as f64,
+      (RantValue::Float(a), RantValue::Int(b)) => *a == *b as f64,
       (RantValue::Boolean(a), RantValue::Boolean(b)) => a == b,
       (RantValue::List(a), RantValue::List(b)) => Rc::as_ptr(a) == Rc::as_ptr(b),
       (RantValue::Map(a), RantValue::Map(b)) => Rc::as_ptr(a) == Rc::as_ptr(b),
@@ -593,12 +605,12 @@ impl PartialOrd for RantValue {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     match (self, other) {
       (RantValue::Empty, _) | (_, RantValue::Empty) => None,
-      (RantValue::Integer(a), RantValue::Integer(b)) => a.partial_cmp(b),
+      (RantValue::Int(a), RantValue::Int(b)) => a.partial_cmp(b),
       (RantValue::Float(a), RantValue::Float(b)) => a.partial_cmp(b),
-      (RantValue::Float(a), RantValue::Integer(b)) => a.partial_cmp(&(*b as f64)),
-      (RantValue::Integer(a), RantValue::Float(b)) => (&(*a as f64)).partial_cmp(b),
+      (RantValue::Float(a), RantValue::Int(b)) => a.partial_cmp(&(*b as f64)),
+      (RantValue::Int(a), RantValue::Float(b)) => (&(*a as f64)).partial_cmp(b),
       (RantValue::String(a), RantValue::String(b)) => a.partial_cmp(b),
-      (_, _) => None
+      (a, b) => if a == b { Some(Ordering::Equal) } else { None }
     }
   }
 }
@@ -618,9 +630,9 @@ impl Neg for RantValue {
   type Output = RantValue;
   fn neg(self) -> Self::Output {
     match self {
-      RantValue::Integer(a) => RantValue::Integer(a.saturating_neg()),
+      RantValue::Int(a) => RantValue::Int(a.saturating_neg()),
       RantValue::Float(a) => RantValue::Float(-a),
-      RantValue::Boolean(a) => RantValue::Integer(-bi64(a)),
+      RantValue::Boolean(a) => RantValue::Int(-bi64(a)),
       _ => self
     }
   }
@@ -633,16 +645,16 @@ impl Add for RantValue {
       (RantValue::Empty, RantValue::Empty) => RantValue::Empty,
       (lhs, RantValue::Empty) => lhs,
       (RantValue::Empty, rhs) => rhs,
-      (RantValue::Integer(a), RantValue::Integer(b)) => RantValue::Integer(a.saturating_add(b)),
-      (RantValue::Integer(a), RantValue::Float(b)) => RantValue::Float(f64(a) + b),
-      (RantValue::Integer(a), RantValue::Boolean(b)) => RantValue::Integer(a.saturating_add(bi64(b))),
+      (RantValue::Int(a), RantValue::Int(b)) => RantValue::Int(a.saturating_add(b)),
+      (RantValue::Int(a), RantValue::Float(b)) => RantValue::Float(f64(a) + b),
+      (RantValue::Int(a), RantValue::Boolean(b)) => RantValue::Int(a.saturating_add(bi64(b))),
       (RantValue::Float(a), RantValue::Float(b)) => RantValue::Float(a + b),
-      (RantValue::Float(a), RantValue::Integer(b)) => RantValue::Float(a + f64(b)),
+      (RantValue::Float(a), RantValue::Int(b)) => RantValue::Float(a + f64(b)),
       (RantValue::Float(a), RantValue::Boolean(b)) => RantValue::Float(a + bf64(b)),
       (RantValue::String(a), RantValue::String(b)) => RantValue::String(format!("{}{}", a, b)),
       (RantValue::String(a), rhs) => RantValue::String(format!("{}{}", a, rhs)),
-      (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Integer(bi64(a) + bi64(b)),
-      (RantValue::Boolean(a), RantValue::Integer(b)) => RantValue::Integer(bi64(a).saturating_add(b)),
+      (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Int(bi64(a) + bi64(b)),
+      (RantValue::Boolean(a), RantValue::Int(b)) => RantValue::Int(bi64(a).saturating_add(b)),
       (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) + b),
       (RantValue::List(a), RantValue::List(b)) => RantValue::List(Rc::new(RefCell::new(a.borrow().iter().cloned().chain(b.borrow().iter().cloned()).collect()))),
       (lhs, rhs) => RantValue::String(format!("{}{}", lhs, rhs))
@@ -657,14 +669,14 @@ impl Sub for RantValue {
       (RantValue::Empty, RantValue::Empty) => RantValue::Empty,
       (lhs, RantValue::Empty) => lhs,
       (RantValue::Empty, rhs) => -rhs,
-      (RantValue::Integer(a), RantValue::Integer(b)) => RantValue::Integer(a.saturating_sub(b)),
-      (RantValue::Integer(a), RantValue::Float(b)) => RantValue::Float((a as f64) - b),
-      (RantValue::Integer(a), RantValue::Boolean(b)) => RantValue::Integer(a - bi64(b)),
+      (RantValue::Int(a), RantValue::Int(b)) => RantValue::Int(a.saturating_sub(b)),
+      (RantValue::Int(a), RantValue::Float(b)) => RantValue::Float((a as f64) - b),
+      (RantValue::Int(a), RantValue::Boolean(b)) => RantValue::Int(a - bi64(b)),
       (RantValue::Float(a), RantValue::Float(b)) => RantValue::Float(a - b),
-      (RantValue::Float(a), RantValue::Integer(b)) => RantValue::Float(a - (b as f64)),
+      (RantValue::Float(a), RantValue::Int(b)) => RantValue::Float(a - (b as f64)),
       (RantValue::Float(a), RantValue::Boolean(b)) => RantValue::Float(a - bf64(b)),
-      (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Integer(bi64(a) - bi64(b)),
-      (RantValue::Boolean(a), RantValue::Integer(b)) => RantValue::Integer(bi64(a).saturating_sub(b)),
+      (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Int(bi64(a) - bi64(b)),
+      (RantValue::Boolean(a), RantValue::Int(b)) => RantValue::Int(bi64(a).saturating_sub(b)),
       (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) - b),
       _ => RantValue::nan()
     }
@@ -676,16 +688,16 @@ impl Mul for RantValue {
   fn mul(self, rhs: Self) -> Self::Output {
     match (self, rhs) {
       (RantValue::Empty, _) | (_, RantValue::Empty) => RantValue::Empty,
-      (RantValue::Integer(a), RantValue::Integer(b)) => RantValue::Integer(a.saturating_mul(b)),
-      (RantValue::Integer(a), RantValue::Float(b)) => RantValue::Float((a as f64) * b),
-      (RantValue::Integer(a), RantValue::Boolean(b)) => RantValue::Integer(a * bi64(b)),
+      (RantValue::Int(a), RantValue::Int(b)) => RantValue::Int(a.saturating_mul(b)),
+      (RantValue::Int(a), RantValue::Float(b)) => RantValue::Float((a as f64) * b),
+      (RantValue::Int(a), RantValue::Boolean(b)) => RantValue::Int(a * bi64(b)),
       (RantValue::Float(a), RantValue::Float(b)) => RantValue::Float(a * b),
-      (RantValue::Float(a), RantValue::Integer(b)) => RantValue::Float(a * (b as f64)),
+      (RantValue::Float(a), RantValue::Int(b)) => RantValue::Float(a * (b as f64)),
       (RantValue::Float(a), RantValue::Boolean(b)) => RantValue::Float(a * bf64(b)),
-      (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Integer(bi64(a) * bi64(b)),
-      (RantValue::Boolean(a), RantValue::Integer(b)) => RantValue::Integer(bi64(a) * b),
+      (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Int(bi64(a) * bi64(b)),
+      (RantValue::Boolean(a), RantValue::Int(b)) => RantValue::Int(bi64(a) * b),
       (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) * b),
-      (RantValue::String(a), RantValue::Integer(b)) => RantValue::String(a.as_str().repeat(clamp(b, 0, i64::MAX) as usize)),
+      (RantValue::String(a), RantValue::Int(b)) => RantValue::String(a.as_str().repeat(clamp(b, 0, i64::MAX) as usize)),
       _ => RantValue::nan()
     }
   }
@@ -696,15 +708,15 @@ impl Div for RantValue {
   fn div(self, rhs: Self) -> Self::Output {
     Ok(match (self, rhs) {
       (RantValue::Empty, _) | (_, RantValue::Empty) => RantValue::Empty,
-      (_, RantValue::Integer(0)) | (_, RantValue::Boolean(false)) => return Err(ValueError::DivideByZero),
-      (RantValue::Integer(a), RantValue::Integer(b)) => RantValue::Integer(a / b),
-      (RantValue::Integer(a), RantValue::Float(b)) => RantValue::Float((a as f64) / b),
-      (RantValue::Integer(a), RantValue::Boolean(b)) => RantValue::Integer(a / bi64(b)),
+      (_, RantValue::Int(0)) | (_, RantValue::Boolean(false)) => return Err(ValueError::DivideByZero),
+      (RantValue::Int(a), RantValue::Int(b)) => RantValue::Int(a / b),
+      (RantValue::Int(a), RantValue::Float(b)) => RantValue::Float((a as f64) / b),
+      (RantValue::Int(a), RantValue::Boolean(b)) => RantValue::Int(a / bi64(b)),
       (RantValue::Float(a), RantValue::Float(b)) => RantValue::Float(a / b),
-      (RantValue::Float(a), RantValue::Integer(b)) => RantValue::Float(a / (b as f64)),
+      (RantValue::Float(a), RantValue::Int(b)) => RantValue::Float(a / (b as f64)),
       (RantValue::Float(a), RantValue::Boolean(b)) => RantValue::Float(a / bf64(b)),
-      (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Integer(bi64(a) / bi64(b)),
-      (RantValue::Boolean(a), RantValue::Integer(b)) => RantValue::Integer(bi64(a) / b),
+      (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Int(bi64(a) / bi64(b)),
+      (RantValue::Boolean(a), RantValue::Int(b)) => RantValue::Int(bi64(a) / b),
       (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) / b),
       _ => RantValue::nan()
     })
@@ -716,11 +728,53 @@ impl Rem for RantValue {
   fn rem(self, rhs: Self) -> Self::Output {
     Ok(match (self, rhs) {
       (RantValue::Empty, _) | (_, RantValue::Empty) => RantValue::Empty,
-      (_, RantValue::Integer(0)) | (_, RantValue::Boolean(false)) => return Err(ValueError::DivideByZero),
-      (RantValue::Integer(a), RantValue::Integer(b)) => RantValue::Integer(a % b),
-      (RantValue::Integer(a), RantValue::Float(b)) => RantValue::Float((a as f64) % b),
-      (RantValue::Integer(a), RantValue::Boolean(b)) => RantValue::Integer(a % bi64(b)),
+      (_, RantValue::Int(0)) | (_, RantValue::Boolean(false)) => return Err(ValueError::DivideByZero),
+      (RantValue::Int(a), RantValue::Int(b)) => RantValue::Int(a % b),
+      (RantValue::Int(a), RantValue::Float(b)) => RantValue::Float((a as f64) % b),
+      (RantValue::Int(a), RantValue::Boolean(b)) => RantValue::Int(a % bi64(b)),
       _ => RantValue::nan()
     })
+  }
+}
+
+impl RantValue {
+  /// Raises `lhs` to the `rhs` power.
+  #[inline]
+  pub fn pow(self, rhs: RantValue) -> ValueResult<Self> {
+    match (self, rhs) {
+      (RantValue::Int(lhs), RantValue::Int(rhs)) => {
+        if rhs >= 0 {
+          cast::u32(rhs)
+            .map_err(|_| ValueError::Overflow)
+            .and_then(|rhs| 
+              lhs
+              .checked_pow(rhs)
+              .ok_or(ValueError::Overflow)
+            )
+            .map(RantValue::Int)
+        } else {
+          Ok(RantValue::Float((lhs as f64).powf(rhs as f64)))
+        }
+      },
+      (RantValue::Int(lhs), RantValue::Float(rhs)) => {
+        Ok(RantValue::Float((lhs as f64).powf(rhs)))
+      },
+      (RantValue::Float(lhs), RantValue::Int(rhs)) => {
+        Ok(RantValue::Float(lhs.powf(rhs as f64)))
+      },
+      (RantValue::Float(lhs), RantValue::Float(rhs)) => {
+        Ok(RantValue::Float(lhs.powf(rhs)))
+      },
+      _ => Ok(RantValue::Empty)
+    }
+  }
+
+  #[inline]
+  pub fn abs(self) -> ValueResult<Self> {
+    match self {
+      RantValue::Int(i) => i.checked_abs().map(RantValue::Int).ok_or(ValueError::Overflow),
+      RantValue::Float(f) => Ok(RantValue::Float(f.abs())),
+      _ => Ok(self)
+    }
   }
 }

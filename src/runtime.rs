@@ -361,7 +361,7 @@ impl<'rant> VM<'rant> {
           },
           Rst::Fragment(frag) => self.cur_frame_mut().write_frag(frag),
           Rst::Whitespace(ws) => self.cur_frame_mut().write_ws(ws),
-          Rst::Integer(n) => self.cur_frame_mut().write_value(RantValue::Integer(*n)),
+          Rst::Integer(n) => self.cur_frame_mut().write_value(RantValue::Int(*n)),
           Rst::Float(n) => self.cur_frame_mut().write_value(RantValue::Float(*n)),
           Rst::EmptyVal => self.cur_frame_mut().write_value(RantValue::Empty),
           Rst::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
@@ -702,7 +702,7 @@ impl<'rant> VM<'rant> {
         // Dynamic key
         AccessPathComponent::DynamicKey(_) => {
           match dynamic_values.next().unwrap() {
-            RantValue::Integer(index) => {
+            RantValue::Int(index) => {
               SetterKey::Index(index)
             },
             key_val => {
@@ -792,7 +792,7 @@ impl<'rant> VM<'rant> {
         AccessPathComponent::DynamicKey(_) => {
           let key = dynamic_keys.next().unwrap();
           match key {
-            RantValue::Integer(index) => {
+            RantValue::Int(index) => {
               getter_value = match getter_value.index_get(index) {
                 Ok(val) => val,
                 Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))

@@ -2,7 +2,7 @@ use super::*;
 
 pub(crate) fn rand(vm: &mut VM, (a, b): (i64, i64)) -> RantStdResult {
   let n = vm.rng().next_i64(a, b);
-  vm.cur_frame_mut().write_value(RantValue::Integer(n));
+  vm.cur_frame_mut().write_value(RantValue::Int(n));
   Ok(())
 }
 
@@ -16,7 +16,7 @@ pub(crate) fn rand_list(vm: &mut VM, (a, b, n): (i64, i64, usize)) -> RantStdRes
   let mut list = RantList::new();
   let rng = vm.rng();
   for _ in 0..n {
-    list.push(RantValue::Integer(rng.next_i64(a, b)));
+    list.push(RantValue::Int(rng.next_i64(a, b)));
   }
   vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list))));
   Ok(())
@@ -96,7 +96,7 @@ pub(crate) fn shred(vm: &mut VM, (value, n, variance): (RantValue, i64, Option<f
   let rng = vm.rng();
   
   match value {
-    RantValue::Integer(m) => {
+    RantValue::Int(m) => {
       let mut shreds = vec![];
       let variance = variance.unwrap_or_default().abs() as i64;
       let quotient = m / n;

@@ -4,14 +4,31 @@
 
 ### New
 * Added `RuntimeErrorType::AssertError`
+* Added `ValueError::Overflow`
 * Added new stdlib functions:
-  * `[assert]`: raise an error if a condition is false
+  * `[abs]`: calculate the absolute value of a number
+  * `[acos]`: calculate the arccosine of a number
+  * `[asin]`: calculate the arcsine of a number
   * `[assert-eq]`: raise an error if two values are not equal
   * `[assert-neq]`: raise an error if two values are equal
+  * `[assert]`: raise an error if a condition is false
+  * `[atan]`: calculate the arctangent of a number
+  * `[atan2]`: calculate the four-quadrant arctangent of a number
+  * `[cos]`: calculate the cosine of an angle
   * `[has]`: check if a collection contains a specific value
   * `[index-of]`: return the index of the first occurrence of a value in a list, or `~` if it's not found
   * `[is]`: check if a value is a specific type
   * `[last-index-of]`: return the index of the last occurrence of a value in a list, or `~` if it's not found
+  * `[pow]`: raise x to y power
+  * `[sin]`: calculate the sine of an angle
+  * `[sqrt]`: calculate the square root of a number
+  * `[tan]`: calculate the tangent of an angle
+
+### Changes
+* Renamed Rant's `integer` type to `int`
+* Renamed stdlib functions:
+  * `[is-integer]` &rarr; `[is-int]`
+* Changed `[min]` and `[max]` to accept varargs+; lists are replaced with their min/max values respectively
 
 ### Removed
   * Removed `[has-key]` from stdlib

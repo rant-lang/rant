@@ -22,7 +22,7 @@ pub(crate) fn resolve(vm: &mut VM, value: RantValue) -> RantStdResult {
 
 pub(crate) fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
   vm.resolver_mut().attrs_mut().reps = match reps {
-    RantValue::Integer(n) => Reps::Repeat(n.max(0) as usize),
+    RantValue::Int(n) => Reps::Repeat(n.max(0) as usize),
     RantValue::String(s) => match s.as_str() {
       "once" => Reps::Once,
       "all" => Reps::All,
@@ -49,19 +49,19 @@ pub(crate) fn sep(vm: &mut VM, separator: RantValue) -> RantStdResult {
 
 pub(crate) fn step_index(vm: &mut VM, _: ()) -> RantStdResult {
   let n = vm.resolver().active_block().map_or(0, |block| block.step_index());
-  vm.cur_frame_mut().write_value(RantValue::Integer(n as i64));
+  vm.cur_frame_mut().write_value(RantValue::Int(n as i64));
   Ok(())
 }
 
 pub(crate) fn step(vm: &mut VM, _: ()) -> RantStdResult {
   let n = vm.resolver().active_block().map_or(0, |block| block.step());
-  vm.cur_frame_mut().write_value(RantValue::Integer(n as i64));
+  vm.cur_frame_mut().write_value(RantValue::Int(n as i64));
   Ok(())
 }
 
 pub(crate) fn step_count(vm: &mut VM, _: ()) -> RantStdResult {
   let n = vm.resolver().active_block().map_or(0, |block| block.step_count());
-  vm.cur_frame_mut().write_value(RantValue::Integer(n as i64));
+  vm.cur_frame_mut().write_value(RantValue::Int(n as i64));
   Ok(())
 }
 

@@ -96,13 +96,13 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     eq, neq, gt, lt, ge, le,
 
     // Verification functions
-    is_string as "is-string", is_integer as "is-integer", is_float as "is-float", 
+    is_string as "is-string", is_int as "is-int", is_float as "is-float", 
     is_number as "is-number", is_bool as "is-bool", is_empty as "is-empty", is_nan as "is-nan",
+    is_odd as "is-odd", is_even as "is-even", is_factor as "is-factor",
     is_between as "is-between", is_any as "is-any", is,
 
     // Math functions
-    add, sub, mul, div, mul_add as "mul-add", mod_ as "mod", neg, recip, is_odd as "is-odd", is_even as "is-even", is_factor as "is-factor",
-    clamp,
+    add, sub, mul, div, mul_add as "mul-add", mod_ as "mod", neg, pow, recip, clamp, min, max,
 
     // Conversion functions
     to_int as "int", to_float as "float", to_string as "string",
@@ -117,7 +117,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     assoc, clear, has, keys, index_of as "index-of", insert, last_index_of as "last-index-of", remove, sift, sifted, squish, squished, take, translate,
 
     // List functions
-    pick, filter, join, map, sort, sorted, shuffle, shuffled, sum, min, max,
+    pick, filter, join, map, sort, sorted, shuffle, shuffled, sum,
     list_push as "push", list_pop as "pop", oxford_join as "oxford-join", zip,
 
     // String functions
