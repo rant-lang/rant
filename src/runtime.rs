@@ -1,8 +1,10 @@
-pub use output::*;
 pub use stack::*;
+pub(crate) use output::*;
+
 use crate::*;
 use crate::lang::*;
 use crate::runtime::resolver::{SelectorError, Resolver, BlockAction};
+
 use std::{rc::Rc, cell::RefCell, ops::Deref, error::Error, fmt::Display};
 use smallvec::{SmallVec, smallvec};
 
@@ -581,6 +583,7 @@ impl<'rant> VM<'rant> {
     Ok(self.pop_val().unwrap_or_default())
   }
 
+  /// Calls a function with the specified arguments.
   #[inline]
   fn call_func(&mut self, func: RantFunctionRef, mut args: Vec<RantValue>, flag: PrintFlag, override_print: bool) -> RuntimeResult<()> {
     let argc = args.len();
@@ -649,6 +652,7 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
+  /// Runs a setter.
   #[inline]
   fn set_value(&mut self, path: Rc<AccessPath>, auto_def: bool, dynamic_value_count: usize) -> RuntimeResult<()> {
     // Gather evaluated dynamic path components from stack
@@ -747,6 +751,7 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
+  /// Runs a getter.
   #[inline]
   fn get_value(&mut self, path: Rc<AccessPath>, dynamic_key_count: usize, override_print: bool, prefer_function: bool) -> RuntimeResult<()> {
     // Gather evaluated dynamic keys from stack
@@ -896,6 +901,7 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
+  /// Consumes attributes and pushes a block onto the resolver stack.
   #[inline(always)]
   pub fn push_block(&mut self, block: &Block, flag: PrintFlag) -> RuntimeResult<()> {
     // Push a new state onto the block stack
@@ -908,26 +914,31 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
+  /// Sets the value of an existing variable.
   #[inline(always)]
   pub(crate) fn set_var_value(&mut self, varname: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
     self.call_stack.set_var_value(self.engine, varname, access, val)
   }
 
+  /// Gets the value of an existing variable.
   #[inline(always)]
   pub fn get_var_value(&self, varname: &str, access: AccessPathKind, prefer_function: bool) -> RuntimeResult<RantValue> {
     self.call_stack.get_var_value(self.engine, varname, access, prefer_function)
   }
 
+  /// Defines a new variable in the current scope.
   #[inline(always)]
   pub fn def_var_value(&mut self, varname: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
     self.call_stack.def_var_value(self.engine, varname, access, val)
   }
   
+  /// Returns `true` if the call stack is currently empty.
   #[inline(always)]
   fn is_stack_empty(&self) -> bool {
     self.call_stack.is_empty()
   }
 
+  /// Pushes a value onto the value stack.
   #[inline(always)]
   pub fn push_val(&mut self, val: RantValue) -> RuntimeResult<usize> {
     if self.val_stack.len() < MAX_STACK_SIZE {
@@ -938,6 +949,7 @@ impl<'rant> VM<'rant> {
     }
   }
 
+  /// Removes the topmost value from the value stack and returns it.
   #[inline(always)]
   pub fn pop_val(&mut self) -> RuntimeResult<RantValue> {
     if let Some(val) = self.val_stack.pop() {
@@ -947,6 +959,7 @@ impl<'rant> VM<'rant> {
     }
   }
 
+  /// Removes the topmost frame from the call stack and returns it.
   #[inline(always)]
   pub fn pop_frame(&mut self) -> RuntimeResult<StackFrame> {
     if let Some(frame) = self.call_stack.pop_frame() {
@@ -956,6 +969,7 @@ impl<'rant> VM<'rant> {
     }
   }
 
+  /// Pushes a frame onto the call stack without overflow checks.
   #[inline(always)]
   fn push_frame_unchecked(&mut self, callee: Rc<Sequence>, use_output: bool, flavor: StackFrameFlavor) {
     let frame = StackFrame::new(
@@ -967,6 +981,7 @@ impl<'rant> VM<'rant> {
     self.call_stack.push_frame(frame);
   }
   
+  /// Pushes a frame onto the call stack.
   #[inline(always)]
   pub fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool) -> RuntimeResult<()> {
     // Check if this push would overflow the stack
@@ -984,6 +999,7 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
+  /// Pushes an empty frame onto the call stack with a single `RuntimeCall` intent.
   pub fn push_empty_frame(&mut self, callee: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
@@ -1005,6 +1021,7 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
+  /// Pushes a flavored frame onto the call stak.
   #[inline(always)]
   pub fn push_frame_flavored(&mut self, callee: Rc<Sequence>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
     // Check if this push would overflow the stack
@@ -1022,6 +1039,7 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
+  /// Interrupts execution of a repeater and either continues the next iteration or exits the block.
   #[inline]
   pub fn interrupt_repeater(&mut self, break_val: Option<RantValue>, should_continue: bool) -> RuntimeResult<()> {
     if let Some(block_depth) = self.call_stack.taste_for_first(StackFrameFlavor::RepeaterElement) {
@@ -1060,6 +1078,7 @@ impl<'rant> VM<'rant> {
     }
   }
 
+  /// Returns from the currently running function.
   #[inline]
   pub fn func_return(&mut self, ret_val: Option<RantValue>) -> RuntimeResult<()> {
     if let Some(block_depth) = self.call_stack.taste_for_first(StackFrameFlavor::FunctionBody) {
@@ -1098,31 +1117,37 @@ impl<'rant> VM<'rant> {
     }
   }
 
+  /// Gets a mutable reference to the topmost frame on the call stack.
   #[inline(always)]
   pub fn cur_frame_mut(&mut self) -> &mut StackFrame {
     self.call_stack.top_mut().unwrap()
   }
 
+  /// Gets a reference to the topmost frame on the call stack.
   #[inline(always)]
   pub fn cur_frame(&self) -> &StackFrame {
     self.call_stack.top().unwrap()
   }
 
+  /// Gets a reference to the topmost RNG on the RNG stack.
   #[inline(always)]
   pub fn rng(&self) -> &RantRng {
     self.rng_stack.last().unwrap().as_ref()
   }
 
+  /// Gets a copy of the topmost RNG on the RNG stack.
   #[inline(always)]
   pub fn rng_clone(&self) -> Rc<RantRng> {
     Rc::clone(self.rng_stack.last().unwrap())
   }
 
+  /// Adds a new RNG to the top of the RNG stack.
   #[inline]
   pub fn push_rng(&mut self, rng: Rc<RantRng>) {
     self.rng_stack.push(rng);
   }
 
+  /// Removes the topmost RNG from the RNG stack and returns it.
   #[inline]
   pub fn pop_rng(&mut self) -> Option<Rc<RantRng>> {
     if self.rng_stack.len() <= 1 {
@@ -1132,26 +1157,31 @@ impl<'rant> VM<'rant> {
     self.rng_stack.pop()
   }
 
+  /// Gets a reference to the Rant context that created the VM.
   #[inline(always)]
   pub fn context(&self) -> &Rant {
     &self.engine
   }
 
+  /// Gets a mutable reference to the Rant context that created the VM.
   #[inline(always)]
   pub fn context_mut(&mut self) -> &mut Rant {
     &mut self.engine
   }
 
+  /// Gets a reference to the resolver associated with the VM.
   #[inline(always)]
   pub fn resolver(&self) -> &Resolver {
     &self.resolver
   }
 
+  /// Gets a mutable reference to the resolver associated with the VM.
   #[inline(always)]
   pub fn resolver_mut(&mut self) -> &mut Resolver {
     &mut self.resolver
   }
 
+  /// Gets a reference to the program being executed by the VM.
   #[inline(always)]
   pub fn program(&self) -> &RantProgram {
     self.program
