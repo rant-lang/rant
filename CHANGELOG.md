@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.0.0-alpha.12 (unreleased)
+## 4.0.0-alpha.12 (latest)
 
 ### New
 * Added `RuntimeErrorType::AssertError`
@@ -33,7 +33,7 @@
 ### Removed
   * Removed `[has-key]` from stdlib
 
-## 4.0.0-alpha.11 (latest)
+## 4.0.0-alpha.11
 
 ### New
 * Getters can now accept an optional fallback value
