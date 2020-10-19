@@ -2,7 +2,7 @@ pub use output::*;
 pub use stack::*;
 use crate::*;
 use crate::lang::*;
-use crate::resolver::{SelectorError, Resolver, BlockAction};
+use crate::runtime::resolver::{SelectorError, Resolver, BlockAction};
 use std::{rc::Rc, cell::RefCell, ops::Deref, error::Error, fmt::Display};
 use smallvec::{SmallVec, smallvec};
 

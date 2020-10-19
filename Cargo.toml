@@ -1,6 +1,6 @@
 [package]
 name = "rant"
-version = "4.0.0-alpha.13"
+version = "4.0.0-alpha.14"
 authors = ["Nicholas Fleck <TheBerkin@users.noreply.github.com>"]
 edition = "2018"
 description = "The Rant procedural templating language"
@@ -20,6 +20,7 @@ include = [
   "!tests/unincluded_*.rs"
 ]
 default-run = "rant"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

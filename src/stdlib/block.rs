@@ -1,5 +1,5 @@
 use super::*;
-use crate::resolver::{SelectorMode, Reps, Selector};
+use crate::runtime::resolver::{SelectorMode, Reps, Selector};
 
 pub(crate) fn resolve(vm: &mut VM, value: RantValue) -> RantStdResult {
   if let RantValue::Block(block) = value {

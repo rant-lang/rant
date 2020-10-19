@@ -1,5 +1,5 @@
 use super::*;
-use crate::format::WhitespaceNormalizationMode;
+use crate::runtime::format::WhitespaceNormalizationMode;
 
 /// `[$whitespace-fmt: mode? (string); custom-value? (any)]`
 ///

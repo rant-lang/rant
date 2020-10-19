@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.0.0-alpha.14
+
+### Fixes
+  * Fixed some unintended module re-exports
+
 ## 4.0.0-alpha.13 (latest)
 
 ### New
@@ -9,7 +14,7 @@
   * Exposed the `rant::runtime` module and several types inside
     * More runtime types will be exposed over time as they are documented. 
 
-### Fixed
+### Fixes
   * Fixed several stdlib functions not being registered
 
 ## 4.0.0-alpha.12 (yanked)

@@ -38,13 +38,15 @@ mod var;
 
 pub use collections::*;
 pub use convert::*;
+use runtime::{IntoRuntimeResult, RuntimeError, RuntimeErrorType, VM};
 pub use value::*;
 pub use var::*;
 
 use crate::compiler::*;
-use crate::lang::Sequence;
 use crate::compiler::{RantCompiler, Reporter};
-use crate::runtime::*;
+use crate::lang::Sequence;
+use crate::runtime::RuntimeResult;
+
 use crate::random::RantRng;
 
 use std::{path::Path, rc::Rc, cell::RefCell, fmt::Display, path::PathBuf, io::ErrorKind, collections::HashMap};
