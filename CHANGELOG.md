@@ -2,6 +2,9 @@
 
 ## 4.0.0-alpha.14
 
+### Changes
+  * Make some unnecessarily public runtime/compiler APIs crate-visible
+
 ### Fixes
   * Fixed some unintended module re-exports
 

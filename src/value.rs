@@ -35,7 +35,7 @@ pub type ValueIndexSetResult = Result<(), IndexError>;
 /// The result type used by Rant value key write operations.
 pub type ValueKeySetResult = Result<(), KeyError>;
 
-/// A reference-counting handle to a Rant function.
+/// Type alias for `Rc<RantFunction>`
 pub type RantFunctionRef = Rc<RantFunction>;
 
 /// Rant's "empty" value.
@@ -60,7 +60,7 @@ pub enum RantValue {
   Boolean(bool),
   /// A Rant value of type `function`. Passed by-reference.
   Function(RantFunctionRef),
-  /// A rant value of type `block`. Passed by-reference.
+  /// A Rant value of type `block`. Passed by-reference.
   Block(Rc<Block>),
   /// A Rant value of type `list`. Passed by-reference.
   List(RantListRef),
@@ -481,7 +481,7 @@ impl IntoRuntimeResult<()> for ValueKeySetResult {
   }
 }
 
-/// Represents "special" values; opaque data structures for various internal runtime uses.
+/// Represents Rant's `special` type: an opaque data structure for any of various internal runtime uses.
 #[derive(Debug, Clone)]
 pub enum RantSpecial {
   Selector(SelectorRef),
@@ -513,13 +513,13 @@ pub struct RantFunction {
 }
 
 impl RantFunction {
-  /// Returns true if the function should be treated as variadic
+  /// Returns true if the function should be treated as variadic.
   #[inline]
   pub fn is_variadic(&self) -> bool {
     self.vararg_start_index < self.params.len() || self.vararg_start_index < self.min_arg_count
   }
 
-  /// Returns true if the function is native
+  /// Returns true if the function is native.
   #[inline]
   pub fn is_native(&self) -> bool {
     matches!(self.body, RantFunctionInterface::Foreign(_))

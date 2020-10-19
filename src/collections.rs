@@ -5,7 +5,10 @@ use fnv::FnvHashMap;
 const DEFAULT_MAP_CAPACITY: usize = 16;
 const DEFAULT_LIST_CAPACITY: usize = 16;
 
+/// Type alias for `Rc<RefCell<RantMap>>`
 pub type RantMapRef = Rc<RefCell<RantMap>>;
+
+/// Type alias for `Rc<RefCell<RantMap>>`
 pub type RantListRef = Rc<RefCell<RantList>>;
 
 /// Represents Rant's `list` type, which stores an ordered collection of values.

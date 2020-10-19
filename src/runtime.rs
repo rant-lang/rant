@@ -11,12 +11,16 @@ pub(crate) mod resolver;
 mod output;
 mod stack;
 
+/// Type alias for `Result<T, RuntimeError>`
 pub type RuntimeResult<T> = Result<T, RuntimeError>;
 
+/// The largest possible stack size before a stack overflow error is raised by the runtime.
 pub const MAX_STACK_SIZE: usize = 20000;
+
 pub(crate) const CALL_STACK_INLINE_COUNT: usize = 4;
 pub(crate) const VALUE_STACK_INLINE_COUNT: usize = 4;
 
+/// The Rant Virtual Machine.
 pub struct VM<'rant> {
   rng_stack: SmallVec<[Rc<RantRng>; 1]>,
   engine: &'rant mut Rant,
@@ -28,7 +32,7 @@ pub struct VM<'rant> {
 
 impl<'rant> VM<'rant> {
   #[inline]
-  pub fn new(rng: Rc<RantRng>, engine: &'rant mut Rant, program: &'rant RantProgram) -> Self {
+  pub(crate) fn new(rng: Rc<RantRng>, engine: &'rant mut Rant, program: &'rant RantProgram) -> Self {
     Self {
       resolver: Resolver::new(&rng),
       rng_stack: smallvec![rng],
@@ -114,7 +118,7 @@ pub enum SetterValueSource {
 
 impl<'rant> VM<'rant> {
   /// Runs the program.
-  pub fn run(&mut self) -> RuntimeResult<RantValue> {
+  pub(crate) fn run(&mut self) -> RuntimeResult<RantValue> {
     let mut result = self.run_inner();
     // On error, generate stack trace
     if let Err(err) = result.as_mut() {
@@ -124,7 +128,7 @@ impl<'rant> VM<'rant> {
   }
 
   /// Runs the program with arguments.
-  pub fn run_with<A>(&mut self, args: A) -> RuntimeResult<RantValue> 
+  pub(crate) fn run_with<A>(&mut self, args: A) -> RuntimeResult<RantValue> 
   where A: Into<Option<HashMap<String, RantValue>>>
   {
     if let Some(args) = args.into() {
@@ -1158,6 +1162,7 @@ pub(crate) trait IntoRuntimeResult<T> {
   fn into_runtime_result(self) -> RuntimeResult<T>;
 }
 
+/// A runtime error raised by a Rant program.
 #[derive(Debug)]
 pub struct RuntimeError {
   /// The type of runtime error.

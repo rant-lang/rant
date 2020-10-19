@@ -11,6 +11,7 @@ pub(crate) mod message;
 
 pub use message::*;
 
+/// Type alias for `Result<RantProgram, CompilerErrorKind>`
 pub type CompileResult = Result<RantProgram, CompilerErrorKind>;
 
 /// Describes why a compilation failed.
@@ -57,7 +58,7 @@ impl Reporter for Vec<CompilerMessage> {
 }
 
 // TODO: Seriously consider replacing this struct with just a set of functions unless configuration is needed
-pub struct RantCompiler {
+pub(crate) struct RantCompiler {
 }
 
 impl RantCompiler {
