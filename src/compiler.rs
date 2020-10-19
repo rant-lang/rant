@@ -11,27 +11,27 @@ pub(crate) mod message;
 
 pub use message::*;
 
-pub type CompileResult = Result<RantProgram, ErrorKind>;
+pub type CompileResult = Result<RantProgram, CompilerErrorKind>;
 
 /// Describes why a compilation failed.
 #[derive(Debug)]
-pub enum ErrorKind {
+pub enum CompilerErrorKind {
   /// Compilation failed due to one or more syntax errors.
   SyntaxError,
   /// Compilation failed due to a file I/O error.
   IOError(IOErrorKind),
 }
 
-impl Display for ErrorKind {
+impl Display for CompilerErrorKind {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-        ErrorKind::SyntaxError => write!(f, "syntax error"),
-        ErrorKind::IOError(_) => write!(f, "I/O error"),
+        CompilerErrorKind::SyntaxError => write!(f, "syntax error"),
+        CompilerErrorKind::IOError(_) => write!(f, "I/O error"),
     }
   }
 }
 
-impl Error for ErrorKind {
+impl Error for CompilerErrorKind {
   fn source(&self) -> Option<&(dyn Error + 'static)> {
     None
   }
@@ -69,7 +69,7 @@ impl RantCompiler {
     // Return compilation result
     match parser.parse() {
       Ok(seq) => Ok(RantProgram::new(seq, info)),
-      Err(()) => Err(ErrorKind::SyntaxError),
+      Err(()) => Err(CompilerErrorKind::SyntaxError),
     }
   }
   
@@ -91,7 +91,7 @@ impl RantCompiler {
             _ => Problem::FileIOError(err.to_string())
         };
         reporter.report(CompilerMessage::new(problem, Severity::Error, None));
-        Err(ErrorKind::IOError(err.kind()))
+        Err(CompilerErrorKind::IOError(err.kind()))
       }
     }
   }

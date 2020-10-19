@@ -7,9 +7,27 @@
 */
 
 use rant::*;
+
 use assert_matches::*;
 
 macro_rules! test_rant_file {
+  ($src_path:literal raises $runtime_err_variant:pat) => {{
+    use rant::runtime::{RuntimeError, RuntimeErrorType::*};
+    let mut r = Rant::with_options(RantOptions {
+      debug_mode: true,
+      .. Default::default()
+    });
+    let pgm = r.compile_quiet(include_str!($src_path)).expect("failed to compile program");
+    assert_matches!(r.run_into_string(&pgm).as_ref().map(|o| o.as_str()), Err(RuntimeError { error_type: $runtime_err_variant, ..}));
+  }};
+  ($src_path:literal) => {{
+    let mut r = Rant::with_options(RantOptions {
+      debug_mode: true,
+      .. Default::default()
+    });
+    let pgm = r.compile_quiet(include_str!($src_path)).expect("failed to compile program");
+    assert_matches!(r.run_into_string(&pgm).as_ref().map(|o| o.as_str()), Ok(_));
+  }};
   ($src_path:literal, $expected:literal) => {{
     let mut r = Rant::with_options(RantOptions {
       debug_mode: true,
@@ -17,7 +35,7 @@ macro_rules! test_rant_file {
     });
     let pgm = r.compile_quiet(include_str!($src_path)).expect("failed to compile program");
     assert_matches!(r.run_into_string(&pgm).as_ref().map(|o| o.as_str()), Ok($expected));
-  }}
+  }};
 }
 
 macro_rules! test_rant {
@@ -357,4 +375,24 @@ fn getter_fallback_from_key() {
     "sources/getter_fallback_from_key.rant",
     "foo, bar, baz, oops"
   )
+}
+
+#[test]
+fn assert_pass() {
+  test_rant_file!("sources/assert/assert_pass.rant");
+}
+
+#[test]
+fn assert_fail() {
+  test_rant_file!("sources/assert/assert_fail.rant" raises AssertError);
+}
+
+#[test]
+fn math_min() {
+  test_rant_file!("sources/math/min.rant");
+}
+
+#[test]
+fn math_max() {
+  test_rant_file!("sources/math/max.rant");
 }

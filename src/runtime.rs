@@ -59,9 +59,7 @@ macro_rules! runtime_error {
   };
 }
 
-/// RSTs can assign intents to the current stack frame
-/// to override its usual behavior next time it's active.
-
+/// Intents are actions queued on a stack frame that are performed before the frame runs.
 pub enum Intent {
   /// Take the pending output from last frame and print it.
   PrintValue,
@@ -823,7 +821,7 @@ impl<'rant> VM<'rant> {
   }
 
   /// Checks for an active block and attempts to iterate it. If a valid element is returned, it is pushed onto the call stack.
-  pub(crate) fn check_block(&mut self) -> RuntimeResult<()> {
+  pub fn check_block(&mut self) -> RuntimeResult<()> {
     let mut is_printing = false;
     let mut is_repeater = false;
 
@@ -895,7 +893,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  pub(crate) fn push_block(&mut self, block: &Block, flag: PrintFlag) -> RuntimeResult<()> {
+  pub fn push_block(&mut self, block: &Block, flag: PrintFlag) -> RuntimeResult<()> {
     // Push a new state onto the block stack
     self.resolver.push_block(block, flag);
 
@@ -912,12 +910,12 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  pub(crate) fn get_var_value(&self, varname: &str, access: AccessPathKind, prefer_function: bool) -> RuntimeResult<RantValue> {
+  pub fn get_var_value(&self, varname: &str, access: AccessPathKind, prefer_function: bool) -> RuntimeResult<RantValue> {
     self.call_stack.get_var_value(self.engine, varname, access, prefer_function)
   }
 
   #[inline(always)]
-  pub(crate) fn def_var_value(&mut self, varname: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
+  pub fn def_var_value(&mut self, varname: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
     self.call_stack.def_var_value(self.engine, varname, access, val)
   }
   
@@ -927,7 +925,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  pub(crate) fn push_val(&mut self, val: RantValue) -> RuntimeResult<usize> {
+  pub fn push_val(&mut self, val: RantValue) -> RuntimeResult<usize> {
     if self.val_stack.len() < MAX_STACK_SIZE {
       self.val_stack.push(val);
       Ok(self.val_stack.len())
@@ -937,7 +935,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  pub(crate) fn pop_val(&mut self) -> RuntimeResult<RantValue> {
+  pub fn pop_val(&mut self) -> RuntimeResult<RantValue> {
     if let Some(val) = self.val_stack.pop() {
       Ok(val)
     } else {
@@ -946,7 +944,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  pub(crate) fn pop_frame(&mut self) -> RuntimeResult<StackFrame> {
+  pub fn pop_frame(&mut self) -> RuntimeResult<StackFrame> {
     if let Some(frame) = self.call_stack.pop_frame() {
       Ok(frame)
     } else {
@@ -966,7 +964,7 @@ impl<'rant> VM<'rant> {
   }
   
   #[inline(always)]
-  pub(crate) fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool) -> RuntimeResult<()> {
+  pub fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool) -> RuntimeResult<()> {
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
@@ -982,7 +980,7 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
-  pub(crate) fn push_empty_frame(&mut self, callee: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
+  pub fn push_empty_frame(&mut self, callee: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
@@ -1004,7 +1002,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  pub(crate) fn push_frame_flavored(&mut self, callee: Rc<Sequence>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
+  pub fn push_frame_flavored(&mut self, callee: Rc<Sequence>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");

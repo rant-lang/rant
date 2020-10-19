@@ -1,6 +1,18 @@
 # Changelog
 
-## 4.0.0-alpha.12 (latest)
+## 4.0.0-alpha.13 (latest)
+
+### New
+
+### Changes
+  * Renamed `ErrorKind` to `CompilerErrorKind` in `rant::compiler`
+  * Exposed the `rant::runtime` module and several types inside
+    * More runtime types will be exposed over time as they are documented. 
+
+### Fixed
+  * Fixed several stdlib functions not being registered
+
+## 4.0.0-alpha.12 (yanked)
 
 ### New
 * Added `RuntimeErrorType::AssertError`

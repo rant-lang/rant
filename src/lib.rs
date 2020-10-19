@@ -26,11 +26,11 @@
 #![allow(unused_macros)]
 
 pub mod compiler;
+pub mod runtime;
 mod collections;
 mod convert;
 mod lang;
 mod random;
-mod runtime;
 mod stdlib;
 mod util;
 mod value;
@@ -41,9 +41,9 @@ pub use convert::*;
 pub use value::*;
 pub use var::*;
 
-use crate::compiler::CompilerMessage;
+use crate::compiler::*;
 use crate::lang::Sequence;
-use crate::compiler::{RantCompiler, Reporter, ErrorKind as CompilerErrorKind};
+use crate::compiler::{RantCompiler, Reporter};
 use crate::runtime::*;
 use crate::random::RantRng;
 
