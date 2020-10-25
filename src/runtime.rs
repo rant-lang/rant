@@ -103,6 +103,7 @@ pub enum Intent {
 #[derive(Debug)]
 enum SetterKey<'a> {
   Index(i64),
+  Slice(Slice),
   KeyRef(&'a str),
   KeyString(RantString),
 }
@@ -697,6 +698,7 @@ impl<'rant> VM<'rant> {
         (Some(val), Some(SetterKey::Index(index))) => Some(val.index_get(*index).into_runtime_result()?),
         (Some(val), Some(SetterKey::KeyRef(key))) => Some(val.key_get(key).into_runtime_result()?),
         (Some(val), Some(SetterKey::KeyString(key))) => Some(val.key_get(key.as_str()).into_runtime_result()?),
+        (Some(val), Some(SetterKey::Slice(slice))) => Some(val.slice_get(slice).into_runtime_result()?),
         _ => unreachable!()
       };
 
@@ -705,6 +707,14 @@ impl<'rant> VM<'rant> {
         AccessPathComponent::Name(key) => SetterKey::KeyRef(key.as_str()),
         // Index
         AccessPathComponent::Index(index) => SetterKey::Index(*index),
+        // Slice
+        AccessPathComponent::Slice(slice) => {
+          let slice = match slice.as_static_slice(|_di| dynamic_values.next().unwrap()) {
+            Ok(slice) => slice,
+            Err(bad_bound_type) => runtime_error!(RuntimeErrorType::SliceError(SliceError::UnsupportedSliceBoundType(bad_bound_type))),
+          };
+          SetterKey::Slice(slice)
+        },
         // Dynamic key
         AccessPathComponent::DynamicKey(_) => {
           match dynamic_values.next().unwrap() {
@@ -745,6 +755,7 @@ impl<'rant> VM<'rant> {
       (Some(target), Some(SetterKey::Index(index))) => target.index_set(*index, setter_value).into_runtime_result()?,
       (Some(target), Some(SetterKey::KeyRef(key))) => target.key_set(key, setter_value).into_runtime_result()?,
       (Some(target), Some(SetterKey::KeyString(key))) => target.key_set(key.as_str(), setter_value).into_runtime_result()?,
+      (Some(target), Some(SetterKey::Slice(slice))) => target.slice_set(slice, setter_value).into_runtime_result()?,
       _ => unreachable!()
     }
 
@@ -812,6 +823,13 @@ impl<'rant> VM<'rant> {
               };
             }
           }
+        },
+        AccessPathComponent::Slice(slice) => {
+          let static_slice = match slice.as_static_slice(|_di| dynamic_keys.next().unwrap()) {
+            Ok(slice) => slice,
+            Err(bad_bound_type) => runtime_error!(RuntimeErrorType::SliceError(SliceError::UnsupportedSliceBoundType(bad_bound_type))),
+          };
+          getter_value = getter_value.slice_get(&static_slice).into_runtime_result()?;
         },
         // Anonymous value (not allowed)
         AccessPathComponent::AnonymousValue(_) => {
@@ -1253,6 +1271,8 @@ pub enum RuntimeErrorType {
   IndexError(IndexError),
   /// Error occurred while keying value
   KeyError(KeyError),
+  /// Error occurred while slicing value
+  SliceError(SliceError),
   /// Error occurred while iterating selector
   SelectorError(SelectorError),
   /// Error occurred while trying to load a module
@@ -1280,6 +1300,7 @@ impl Display for RuntimeErrorType {
       RuntimeErrorType::ValueError(_) => "value error",
       RuntimeErrorType::IndexError(_) => "index error",
       RuntimeErrorType::KeyError(_) => "key error",
+      RuntimeErrorType::SliceError(_) => "slice error",
       RuntimeErrorType::SelectorError(_) => "selector error",
       RuntimeErrorType::ModuleLoadError(_) => "module load error",
       RuntimeErrorType::ControlFlowError => "control flow error",

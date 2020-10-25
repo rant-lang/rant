@@ -1,6 +1,9 @@
 # Changelog
 
-## 4.0.0-alpha.14
+## 4.0.0-alpha.14 (unreleased)
+
+### New
+  * Add support for slice notation in getters and setters
 
 ### Changes
   * Make some unnecessarily public runtime/compiler APIs crate-visible
@@ -9,8 +12,6 @@
   * Fixed some unintended module re-exports
 
 ## 4.0.0-alpha.13 (latest)
-
-### New
 
 ### Changes
   * Renamed `ErrorKind` to `CompilerErrorKind` in `rant::compiler`

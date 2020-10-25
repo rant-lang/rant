@@ -686,7 +686,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let key_expr = match self.reader.next_solid() {
             // Allow blocks as dynamic keys
             Some((RantToken::LeftBrace, _)) => {
-              MapKeyExpr::Dynamic(Rc::new(self.parse_dynamic_key(false)?))
+              MapKeyExpr::Dynamic(Rc::new(self.parse_dynamic_expr(false)?))
             },
             // Allow fragments as keys if they are valid identifiers
             Some((RantToken::Fragment, span)) => {
@@ -1175,11 +1175,23 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         },
         // An expression can also be used to provide the variable
         Some((RantToken::LeftBrace, _)) => {
-          let dynamic_key_expr = self.parse_dynamic_key(false)?;
+          let dynamic_key_expr = self.parse_dynamic_expr(false)?;
           idparts.push(AccessPathComponent::DynamicKey(Rc::new(dynamic_key_expr)));
         },
+        // TODO: Check for dynamic slices here too!
+        // First path part can't be a slice
+        Some((RantToken::Colon, span)) => {
+          self.reader.take_where(|t| matches!(t, Some((RantToken::Integer(_), ..))));
+          self.syntax_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
+        }
+        // Prevent other slice forms
         Some((RantToken::Integer(_), span)) => {
-          self.syntax_error(Problem::LocalPathStartsWithIndex, &span);
+          self.reader.skip_ws();
+          if self.reader.eat_where(|t| matches!(t, Some((RantToken::Colon, ..)))) {
+            self.syntax_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
+          } else {
+            self.syntax_error(Problem::AccessPathStartsWithIndex, &span);
+          }
         },
         Some((.., span)) => {
           self.syntax_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span);
@@ -1210,14 +1222,125 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               self.syntax_error(Problem::InvalidIdentifier(varname.to_string()), &span);
             }
           },
-          // Index
-          Some((RantToken::Integer(index), _)) => {
-            idparts.push(AccessPathComponent::Index(index));
+          // Index or slice with static from-bound
+          Some((RantToken::Integer(i), _)) => {
+            self.reader.skip_ws();
+            // Look for a colon to see if it's a slice
+            if self.reader.eat_where(|t| matches!(t, Some((RantToken::Colon, ..)))) {
+              self.reader.skip_ws();
+              match self.reader.peek() {
+                // Between-slice with static from- + to-bounds
+                Some((RantToken::Integer(j), ..)) => {
+                  let j = *j;
+                  self.reader.skip_one();
+                  idparts.push(AccessPathComponent::Slice(SliceExpr::Between(SliceIndex::Static(i), SliceIndex::Static(j))));
+                },
+                // Between-slice with static from-bound + dynamic to-bound
+                Some((RantToken::LeftBrace, ..)) => {
+                  let to_expr = Rc::new(self.parse_dynamic_expr(true)?);
+                  idparts.push(AccessPathComponent::Slice(SliceExpr::Between(SliceIndex::Static(i), SliceIndex::Dynamic(to_expr))));
+                },
+                // From-slice with static from-bound
+                Some((RantToken::Slash, ..)) | 
+                Some((RantToken::RightAngle, ..)) | 
+                Some((RantToken::Equals, ..)) | 
+                Some((RantToken::Question, ..)) |
+                Some((RantToken::Semi, ..)) => {
+                  idparts.push(AccessPathComponent::Slice(SliceExpr::From(SliceIndex::Static(i))));
+                },
+                // Found something weird as the to-bound, emit an error
+                Some(_) => {
+                  self.reader.next();
+                  let token = self.reader.last_token_string().to_string();
+                  self.syntax_error(Problem::InvalidSliceBound(token), &self.reader.last_token_span());
+                },
+                None => {
+                  self.syntax_error(Problem::UnclosedVariableAccess, &super_range(&preceding_span, &self.reader.last_token_span()));
+                  return Err(())
+                }
+              }
+            } else {
+              // No colon, so it's an index
+              idparts.push(AccessPathComponent::Index(i));
+            }
           },
-          // Dynamic key
+          // Full- or to-slice
+          Some((RantToken::Colon, _)) => {
+            self.reader.skip_ws();
+            match self.reader.peek() {
+              // To-slice with static bound
+              Some((RantToken::Integer(to), ..)) => {
+                let to = *to;
+                self.reader.skip_one();
+                idparts.push(AccessPathComponent::Slice(SliceExpr::To(SliceIndex::Static(to))));
+              },
+              // To-slice with dynamic bound
+              Some((RantToken::LeftBrace, ..)) => {
+                let to_expr = Rc::new(self.parse_dynamic_expr(true)?);
+                idparts.push(AccessPathComponent::Slice(SliceExpr::To(SliceIndex::Dynamic(to_expr))));
+              },
+              // Full-slice
+              Some((RantToken::Slash, ..)) | 
+              Some((RantToken::RightAngle, ..)) | 
+              Some((RantToken::Equals, ..)) | 
+              Some((RantToken::Question, ..)) |
+              Some((RantToken::Semi, ..)) => {
+                idparts.push(AccessPathComponent::Slice(SliceExpr::Full));
+              },
+              // Found something weird as the to-bound, emit an error
+              Some(_) => {
+                self.reader.next();
+                let token = self.reader.last_token_string().to_string();
+                self.syntax_error(Problem::InvalidSliceBound(token), &self.reader.last_token_span());
+              },
+              None => {
+                self.syntax_error(Problem::UnclosedVariableAccess, &super_range(&preceding_span, &self.reader.last_token_span()));
+                return Err(())
+              }
+            }
+          },
+          // Dynamic key or slice with dynamic from-bound
           Some((RantToken::LeftBrace, _)) => {
-            let dynamic_key_expr = self.parse_dynamic_key(false)?;
-            idparts.push(AccessPathComponent::DynamicKey(Rc::new(dynamic_key_expr)));
+            let expr = Rc::new(self.parse_dynamic_expr(false)?);
+            self.reader.skip_ws();
+            // Look for a colon to see if it's a slice
+            if self.reader.eat_where(|t| matches!(t, Some((RantToken::Colon, ..)))) {
+              self.reader.skip_ws();
+              match self.reader.peek() {
+                // Between-slice with a dynamic from-bound + static to-bound
+                Some((RantToken::Integer(to), ..)) => {
+                  let to = *to;
+                  self.reader.skip_one();
+                  idparts.push(AccessPathComponent::Slice(SliceExpr::Between(SliceIndex::Dynamic(expr), SliceIndex::Static(to))));
+                },
+                // Between-slice with dynamic from- + to-bounds
+                Some((RantToken::LeftBrace, ..)) => {
+                  let to_expr = Rc::new(self.parse_dynamic_expr(true)?);
+                  idparts.push(AccessPathComponent::Slice(SliceExpr::Between(SliceIndex::Dynamic(expr), SliceIndex::Dynamic(to_expr))));
+                },
+                // From-slice with dynamic bound
+                Some((RantToken::Slash, ..)) |
+                Some((RantToken::RightAngle, ..)) | 
+                Some((RantToken::Equals, ..)) | 
+                Some((RantToken::Question, ..)) |
+                Some((RantToken::Semi, ..)) => {
+                  idparts.push(AccessPathComponent::Slice(SliceExpr::From(SliceIndex::Dynamic(expr))));
+                },
+                // Found something weird as the to-bound, emit an error
+                Some(_) => {
+                  self.reader.next();
+                  let token = self.reader.last_token_string().to_string();
+                  self.syntax_error(Problem::InvalidSliceBound(token), &self.reader.last_token_span());
+                },
+                None => {
+                  self.syntax_error(Problem::UnclosedVariableAccess, &super_range(&preceding_span, &self.reader.last_token_span()));
+                  return Err(())
+                }
+              }
+            } else {
+              // No colon, so it's an dynamic key
+              idparts.push(AccessPathComponent::DynamicKey(expr));
+            }
           },
           Some((.., span)) => {
             // error
@@ -1234,8 +1357,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
   }
     
-  /// Parses a dynamic key.
-  fn parse_dynamic_key(&mut self, expect_opening_brace: bool) -> ParseResult<Sequence> {
+  /// Parses a dynamic expression (a flat block).
+  fn parse_dynamic_expr(&mut self, expect_opening_brace: bool) -> ParseResult<Sequence> {
     if expect_opening_brace && !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
       self.syntax_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
       return Err(())

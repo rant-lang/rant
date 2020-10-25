@@ -396,3 +396,38 @@ fn math_min() {
 fn math_max() {
   test_rant_file!("sources/math/max.rant");
 }
+
+#[test]
+fn slice_full() {
+  test_rant_file!("sources/slice/full.rant");
+}
+
+#[test]
+fn slice_between_static() {
+  test_rant_file!("sources/slice/between_static.rant");
+}
+
+#[test]
+fn slice_from_static() {
+  test_rant_file!("sources/slice/from_static.rant");
+}
+
+#[test]
+fn slice_to_static() {
+  test_rant_file!("sources/slice/to_static.rant");
+}
+
+#[test]
+fn slice_between_dynamic() {
+  test_rant_file!("sources/slice/between_dynamic.rant");
+}
+
+#[test]
+fn slice_from_dynamic() {
+  test_rant_file!("sources/slice/from_dynamic.rant");
+}
+
+#[test]
+fn slice_to_dynamic() {
+  test_rant_file!("sources/slice/to_dynamic.rant");
+}

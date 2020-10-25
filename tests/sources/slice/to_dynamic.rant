@@ -1,0 +1,13 @@
+<$a = (a; b; c; d; e; f; g; h)>
+
+[assert-eq: <$i = 8; a/:{<i>}>; (a; b; c; d; e; f; g; h)]
+[assert-eq: <$i = 8; a/ : {<i>} >; (a; b; c; d; e; f; g; h)]
+
+[assert-eq: <$i = 1; a/:{<i>}>; (a)]
+[assert-eq: <$i = 1; a/ : {<i>} >; (a)]
+
+[assert-eq: <$i = 4; a/:{<i>}>; (a; b; c; d)]
+[assert-eq: <$i = 4; a/ : {<i>} >; (a; b; c; d)]
+
+[assert-eq: <$i = -1; a/:{<i>}>; (a; b; c; d; e; f; g)]
+[assert-eq: <$i = -1; a/ : {<i>} >; (a; b; c; d; e; f; g)]

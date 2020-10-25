@@ -1,7 +1,7 @@
 //! Contains Rant's syntax tree implementation and supporting data structures.
 
 use std::{ops::{DerefMut, Deref}, fmt::Display, rc::Rc};
-use crate::{RantProgramInfo, RantString};
+use crate::{RantProgramInfo, RantString, RantValue, RantValueType};
 
 /// Printflags indicate to the compiler whether a given program element is likely to print something or not.
 #[repr(u8)]
@@ -65,6 +65,76 @@ pub(crate) fn is_valid_ident(name: &str) -> bool {
   has_non_digit && is_valid_chars
 }
 
+#[derive(Debug)]
+pub enum SliceIndex {
+  Static(i64),
+  Dynamic(Rc<Sequence>)
+}
+
+impl Display for SliceIndex {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      SliceIndex::Static(i) => write!(f, "{}", i),
+      SliceIndex::Dynamic(_expr) => write!(f, "{{...}}"),
+    }
+  }
+}
+
+#[derive(Debug)]
+pub enum SliceExpr {
+  Full,
+  From(SliceIndex),
+  To(SliceIndex),
+  Between(SliceIndex, SliceIndex),
+}
+
+impl SliceExpr {
+  /// Creates a static slice from a dynamic slice, using a callback to retrieve a static index for each dynamic index.
+  ///
+  /// If any of the dynamic indices evaluate to a non-integer, function returns `Err` with the incompatible type.
+  pub(crate) fn as_static_slice<F: FnMut(&Rc<Sequence>) -> RantValue>(&self, mut index_converter: F) -> Result<Slice, RantValueType> {
+    macro_rules! convert_index {
+      ($index:expr) => {
+        match $index {
+          SliceIndex::Static(i) => *i,
+          SliceIndex::Dynamic(expr) => {
+            match index_converter(expr) {
+              RantValue::Int(i) => i,
+              other => return Err(other.get_type())
+            }
+          }
+        }
+      }
+    }
+
+    Ok(match self {
+      SliceExpr::Full => Slice::Full,
+      SliceExpr::From(from) => Slice::From(convert_index!(from)),
+      SliceExpr::To(to) => Slice::To(convert_index!(to)),
+      SliceExpr::Between(from, to) => Slice::Between(convert_index!(from), convert_index!(to)),
+    })
+  }
+}
+
+impl Display for SliceExpr {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      SliceExpr::Full => write!(f, ":"),
+      SliceExpr::From(i) => write!(f, "{}:", i),
+      SliceExpr::To(i) => write!(f, ":{}", i),
+      SliceExpr::Between(l, r) => write!(f, "{}:{}", l, r),
+    }
+  }
+}
+
+#[derive(Debug)]
+pub enum Slice {
+  Full,
+  From(i64),
+  To(i64),
+  Between(i64, i64),
+}
+
 /// Component in an accessor path.
 #[derive(Debug)]
 pub enum AccessPathComponent {
@@ -72,6 +142,8 @@ pub enum AccessPathComponent {
   Name(Identifier),
   /// List index
   Index(i64),
+  /// Slice
+  Slice(SliceExpr),
   /// Dynamic key
   DynamicKey(Rc<Sequence>),
   /// Anonymous value
@@ -83,6 +155,7 @@ impl Display for AccessPathComponent {
     match self {
       AccessPathComponent::Name(name) => write!(f, "{}", name),
       AccessPathComponent::Index(i) => write!(f, "{}", i),
+      AccessPathComponent::Slice(slice_expr) => write!(f, "{}", slice_expr),
       AccessPathComponent::DynamicKey(expr) => write!(f, "{{{}...}}", expr.name().map(|name| name.as_str()).unwrap_or("")),
       AccessPathComponent::AnonymousValue(expr) => write!(f, "!{{{}...}}", expr.name().map(|name| name.as_str()).unwrap_or("")),
     }
@@ -139,7 +212,7 @@ impl AccessPath {
 
   #[inline]
   pub fn is_anonymous(&self) -> bool {
-    matches!(self.first().unwrap(), AccessPathComponent::AnonymousValue(..))
+    matches!(self.first(), Some(AccessPathComponent::AnonymousValue(..)))
   }
 
   #[inline]
@@ -151,12 +224,22 @@ impl AccessPath {
   #[inline]
   pub fn dynamic_exprs(&self) -> Vec<Rc<Sequence>> {
     use AccessPathComponent::*;
-    self.iter().filter_map(|c| {
-      match c {
-        DynamicKey(expr) | AnonymousValue(expr) => Some(Rc::clone(expr)),
-        _ => None
+    let mut exprs = vec![];
+    for component in self.iter() {
+      match component {
+        DynamicKey(expr) | AnonymousValue(expr) => exprs.push(Rc::clone(expr)),
+        Slice(SliceExpr::From(SliceIndex::Dynamic(expr)))
+        | Slice(SliceExpr::To(SliceIndex::Dynamic(expr))) 
+        | Slice(SliceExpr::Between(SliceIndex::Static(_), SliceIndex::Dynamic(expr)))
+        | Slice(SliceExpr::Between(SliceIndex::Dynamic(expr), SliceIndex::Static(_))) => exprs.push(Rc::clone(expr)),
+        Slice(SliceExpr::Between(SliceIndex::Dynamic(expr_from), SliceIndex::Dynamic(expr_to))) => {
+          exprs.push(Rc::clone(expr_from));
+          exprs.push(Rc::clone(expr_to));
+        },
+        _ => {}
       }
-    }).collect()
+    }
+    exprs
   }
 
   /// If the path statically accesses a variable, returns the name of the variable accessed; otherwise, returns `None`.

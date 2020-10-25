@@ -12,7 +12,7 @@ pub type RantMapRef = Rc<RefCell<RantMap>>;
 pub type RantListRef = Rc<RefCell<RantList>>;
 
 /// Represents Rant's `list` type, which stores an ordered collection of values.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RantList(Vec<RantValue>);
 
 impl RantList {

@@ -1,4 +1,4 @@
-use crate::{RantVar, lang::{Block, Parameter, Sequence}, lang::Identifier, stdlib::RantStdResult};
+use crate::{RantVar, lang::{Block, Parameter, Sequence}, lang::Identifier, lang::Slice, stdlib::RantStdResult, util};
 use crate::collections::*;
 use crate::runtime::resolver::*;
 use crate::runtime::*;
@@ -24,6 +24,22 @@ macro_rules! impl_error_default {
   }
 }
 
+/// Implements `IntoRuntimeResult<T>` for a type.
+macro_rules! impl_into_runtime_result {
+  ($src_result_type:ty, $ok_type:ty, $err_type_variant:ident) => {
+    impl IntoRuntimeResult<$ok_type> for $src_result_type {
+      #[inline]
+      fn into_runtime_result(self) -> RuntimeResult<$ok_type> {
+        self.map_err(|err| RuntimeError {
+          description: err.to_string(),
+          error_type: RuntimeErrorType::$err_type_variant(err),
+          stack_trace: None,
+        })
+      }
+    }
+  };
+}
+
 /// The result type used by Rant value operators and conversion.
 pub type ValueResult<T> = Result<T, ValueError>;
 /// The result type used by Rant value index read operations.
@@ -34,6 +50,10 @@ pub type ValueKeyResult = Result<RantValue, KeyError>;
 pub type ValueIndexSetResult = Result<(), IndexError>;
 /// The result type used by Rant value key write operations.
 pub type ValueKeySetResult = Result<(), KeyError>;
+/// The result type used by Rant value slice read operations.
+pub type ValueSliceResult = Result<RantValue, SliceError>;
+/// The result type used by Rant value slice write operations.
+pub type ValueSliceSetResult = Result<(), SliceError>;
 
 /// Type alias for `Rc<RantFunction>`
 pub type RantFunctionRef = Rc<RantFunction>;
@@ -199,23 +219,100 @@ impl RantValue {
   }
 
   #[inline]
-  fn get_uindex(&self, index: i64) -> i64 {
-    if index < 0 {
+  fn get_uindex(&self, index: i64) -> Option<usize> {
+    let uindex = if index < 0 {
       self.len() as i64 + index
     } else {
       index
+    };
+
+    if uindex < 0 || uindex >= self.len() as i64 {
+      None
+    } else {
+      Some(uindex as usize)
+    }
+  }
+
+  #[inline]
+  fn get_ubound(&self, index: i64) -> Option<usize> {
+    let uindex = if index < 0 {
+      self.len() as i64 + index
+    } else {
+      index
+    };
+
+    if uindex < 0 || uindex > self.len() as i64 {
+      None
+    } else {
+      Some(uindex as usize)
+    }
+  }
+
+  #[inline]
+  fn get_uslice(&self, slice: &Slice) -> Option<(Option<usize>, Option<usize>)> {
+    match slice {
+      Slice::Full => Some((None, None)),
+      Slice::From(i) => Some((Some(self.get_ubound(*i)?), None)),
+      Slice::To(i) => Some((None, Some(self.get_ubound(*i)?))),
+      Slice::Between(l, r) => Some((Some(self.get_ubound(*l)?), Some(self.get_ubound(*r)?))),
+    }
+  }
+
+  pub fn slice_get(&self, slice: &Slice) -> ValueSliceResult {
+    let (slice_from, slice_to) = self.get_uslice(slice).ok_or(SliceError::OutOfRange)?;
+
+    match self {
+      RantValue::String(_s) => todo!(),
+      RantValue::Block(_b) => todo!(),
+      RantValue::List(list) => {
+        let list = list.borrow();
+        match (slice_from, slice_to) {
+            (None, None) => Ok(self.shallow_copy()),
+            (None, Some(to)) => Ok(RantValue::List(Rc::new(RefCell::new((&list[..to]).iter().cloned().collect())))),
+            (Some(from), None) => Ok(RantValue::List(Rc::new(RefCell::new((&list[from..]).iter().cloned().collect())))),
+            (Some(from), Some(to)) => {
+              let (from, to) = util::minmax(from, to);
+              Ok(RantValue::List(Rc::new(RefCell::new((&list[from..to]).iter().cloned().collect()))))
+            }
+        }
+      }
+      other => Err(SliceError::CannotSliceType(other.get_type()))
+    }
+  }
+
+  pub fn slice_set(&mut self, slice: &Slice, val: RantValue) -> ValueSliceSetResult {
+    let (slice_from, slice_to) = self.get_uslice(slice).ok_or(SliceError::OutOfRange)?;
+
+    match (self, &val) {
+      (RantValue::List(dst_list), RantValue::List(src_list)) => {
+        let src_list = src_list.borrow();
+        let mut dst_list = dst_list.borrow_mut();
+        let src = src_list.iter().cloned();
+        match (slice_from, slice_to) {
+          (None, None) => {
+            dst_list.splice(.., src);
+          },
+          (None, Some(to)) => {
+            dst_list.splice(..to, src);
+          },
+          (Some(from), None) => {
+            dst_list.splice(from.., src);
+          },
+          (Some(from), Some(to)) => {
+            let (from, to) = util::minmax(from, to);
+            dst_list.splice(from..to, src);
+          }
+        }
+        Ok(())
+      },
+      (RantValue::List(_), other) => Err(SliceError::UnsupportedSpliceSource { src: RantValueType::List, dst: other.get_type() }),
+      (dst, _src) => Err(SliceError::CannotSetSliceOnType(dst.get_type()))
     }
   }
 
   /// Attempts to get a value by index.
   pub fn index_get(&self, index: i64) -> ValueIndexResult {
-    let uindex = self.get_uindex(index);
-
-    if uindex < 0 {
-      return Err(IndexError::OutOfRange)
-    }
-
-    let uindex = uindex as usize;
+    let uindex = self.get_uindex(index).ok_or(IndexError::OutOfRange)?;
 
     match self {
       RantValue::String(s) => {
@@ -239,13 +336,7 @@ impl RantValue {
 
   /// Attempts to set a value by index.
   pub fn index_set(&mut self, index: i64, val: RantValue) -> ValueIndexSetResult {
-    let uindex = self.get_uindex(index);
-
-    if uindex < 0 {
-      return Err(IndexError::OutOfRange)
-    }
-
-    let uindex = uindex as usize;
+    let uindex = self.get_uindex(index).ok_or(IndexError::OutOfRange)?;
 
     match self {
       RantValue::List(list) => {
@@ -410,6 +501,8 @@ pub enum IndexError {
 }
 
 impl_error_default!(IndexError);
+impl_into_runtime_result!(ValueIndexResult, RantValue, IndexError);
+impl_into_runtime_result!(ValueIndexSetResult, (), IndexError);
 
 impl Display for IndexError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -418,28 +511,6 @@ impl Display for IndexError {
       IndexError::CannotIndexType(t) => write!(f, "cannot read index on value of type '{}'", t),
       IndexError::CannotSetIndexOnType(t) => write!(f, "cannot write index on value of type '{}'", t),
     }
-  }
-}
-
-impl IntoRuntimeResult<RantValue> for ValueIndexResult {
-  #[inline]
-  fn into_runtime_result(self) -> RuntimeResult<RantValue> {
-    self.map_err(|err| RuntimeError {
-      description: err.to_string(),
-      error_type: RuntimeErrorType::IndexError(err),
-      stack_trace: None,
-    })
-  }
-}
-
-impl IntoRuntimeResult<()> for ValueIndexSetResult {
-  #[inline]
-  fn into_runtime_result(self) -> RuntimeResult<()> {
-    self.map_err(|err| RuntimeError {
-      description: err.to_string(),
-      error_type: RuntimeErrorType::IndexError(err),
-      stack_trace: None,
-    })
   }
 }
 
@@ -453,6 +524,8 @@ pub enum KeyError {
 }
 
 impl_error_default!(KeyError);
+impl_into_runtime_result!(ValueKeyResult, RantValue, KeyError);
+impl_into_runtime_result!(ValueKeySetResult, (), KeyError);
 
 impl Display for KeyError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -463,25 +536,34 @@ impl Display for KeyError {
   }
 }
 
-impl IntoRuntimeResult<RantValue> for ValueKeyResult {
-  #[inline]
-  fn into_runtime_result(self) -> RuntimeResult<RantValue> {
-    self.map_err(|err| RuntimeError {
-      description: err.to_string(),
-      error_type: RuntimeErrorType::KeyError(err),
-      stack_trace: None,
-    })
-  }
+/// Error produced by slicing a RantValue.
+#[derive(Debug)]
+pub enum SliceError {
+  /// Slice is out of range.
+  OutOfRange,
+  /// Tried to slice with an unsupported bound type.
+  UnsupportedSliceBoundType(RantValueType),
+  /// Type cannot be sliced.
+  CannotSliceType(RantValueType),
+  /// Type cannot be spliced.
+  CannotSetSliceOnType(RantValueType),
+  /// Type cannot be spliced with the specified source type.
+  UnsupportedSpliceSource { src: RantValueType, dst: RantValueType },
 }
 
-impl IntoRuntimeResult<()> for ValueKeySetResult {
-  #[inline]
-  fn into_runtime_result(self) -> RuntimeResult<()> {
-    self.map_err(|err| RuntimeError {
-      description: err.to_string(),
-      error_type: RuntimeErrorType::KeyError(err),
-      stack_trace: None,
-    })
+impl_error_default!(SliceError);
+impl_into_runtime_result!(ValueSliceResult, RantValue, SliceError);
+impl_into_runtime_result!(ValueSliceSetResult, (), SliceError);
+
+impl Display for SliceError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      SliceError::OutOfRange => write!(f, "slice is out of range"),
+      SliceError::UnsupportedSliceBoundType(t) => write!(f, "cannot use '{}' value as slice bound", t),
+      SliceError::CannotSliceType(t) => write!(f, "cannot slice '{}' value", t),
+      SliceError::CannotSetSliceOnType(t) => write!(f, "cannot set slice on '{}' value", t),
+      SliceError::UnsupportedSpliceSource { src, dst } => write!(f, "cannot splice {} into {}", dst, src),
+    }
   }
 }
 
@@ -594,7 +676,7 @@ impl PartialEq for RantValue {
       (RantValue::Float(a), RantValue::Float(b)) => a == b,
       (RantValue::Float(a), RantValue::Int(b)) => *a == *b as f64,
       (RantValue::Boolean(a), RantValue::Boolean(b)) => a == b,
-      (RantValue::List(a), RantValue::List(b)) => Rc::as_ptr(a) == Rc::as_ptr(b),
+      (RantValue::List(a), RantValue::List(b)) => a.borrow().eq(&b.borrow()),
       (RantValue::Map(a), RantValue::Map(b)) => Rc::as_ptr(a) == Rc::as_ptr(b),
       (RantValue::Special(a), RantValue::Special(b)) => a == b,
       _ => false
