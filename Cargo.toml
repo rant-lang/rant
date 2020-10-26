@@ -31,10 +31,10 @@ codegen-units = 1
 [[bin]]
 name = "rant"
 path = "src/tools/cli/main.rs"
-required-features = ["cli-deps"]
+required-features = ["cli"]
 
 [features]
-cli-deps = ["argh", "codemap", "codemap-diagnostic", "colored", "ctrlc", "embedded-triple", "exitcode"]
+cli = ["argh", "codemap", "codemap-diagnostic", "colored", "ctrlc", "embedded-triple", "exitcode"]
 vm-trace = []
 
 

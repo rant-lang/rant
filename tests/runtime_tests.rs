@@ -438,6 +438,16 @@ fn slice_to_dynamic() {
 }
 
 #[test]
+fn splice_static() {
+  test_rant_file!("sources/splice/static.rant");
+}
+
+#[test]
+fn splice_dynamic() {
+  test_rant_file!("sources/splice/dynamic.rant");
+}
+
+#[test]
 fn modules_require() {
   test_rant_file!("sources/modules/require.rant");
 }
