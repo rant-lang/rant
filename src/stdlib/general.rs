@@ -141,3 +141,18 @@ pub(crate) fn require(vm: &mut VM, module_path: String) -> RantStdResult {
     runtime_error!(RuntimeErrorType::ArgumentError, "module name is missing from path");
   }
 }
+
+pub(crate) fn try_(vm: &mut VM, (context, handler): (RantValue, Option<RantFunctionRef>)) -> RantStdResult {
+  vm.push_unwind_state(handler);
+  vm.cur_frame_mut().push_intent_front(Intent::DropStaleUnwinds);
+  match context {
+    RantValue::Function(func) => {
+      vm.call_func(func, vec![], PrintFlag::Sink, false)?;
+    },
+    RantValue::Block(block) => {
+      vm.push_block(&block, PrintFlag::Sink)?;
+    }
+    other => runtime_error!(RuntimeErrorType::ArgumentError, "try: cannot protect '{}' value; only functions and blocks can be protected", other.get_type())
+  }
+  Ok(())
+}

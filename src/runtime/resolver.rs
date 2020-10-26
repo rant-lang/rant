@@ -162,6 +162,12 @@ impl Resolver {
     self.block_stack.push(state);
   }
 
+  /// Gets the current size of the resolver's block stack.
+  #[inline]
+  pub fn block_stack_len(&self) -> usize {
+    self.block_stack.len()
+  }
+
   /// Removes the active block state from the block stack.
   #[inline]
   pub fn pop_block(&mut self) -> Option<BlockState> {

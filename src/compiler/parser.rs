@@ -1357,7 +1357,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
   }
     
-  /// Parses a dynamic expression (a flat block).
+  /// Parses a dynamic expression (a linear block).
   fn parse_dynamic_expr(&mut self, expect_opening_brace: bool) -> ParseResult<Sequence> {
     if expect_opening_brace && !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
       self.syntax_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
