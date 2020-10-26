@@ -378,6 +378,11 @@ fn getter_fallback_from_key() {
 }
 
 #[test]
+fn top_level_return() {
+  test_rant_file!("sources/top_level_return.rant");
+}
+
+#[test]
 fn assert_pass() {
   test_rant_file!("sources/assert/assert_pass.rant");
 }
@@ -430,4 +435,9 @@ fn slice_from_dynamic() {
 #[test]
 fn slice_to_dynamic() {
   test_rant_file!("sources/slice/to_dynamic.rant");
+}
+
+#[test]
+fn modules_require() {
+  test_rant_file!("sources/modules/require.rant");
 }

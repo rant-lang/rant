@@ -35,6 +35,7 @@ required-features = ["cli-deps"]
 
 [features]
 cli-deps = ["argh", "codemap", "codemap-diagnostic", "colored", "ctrlc", "embedded-triple", "exitcode"]
+vm-trace = []
 
 
 [dependencies]

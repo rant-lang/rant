@@ -12,6 +12,8 @@
 
 ### Fixes
   * Fixed some unintended module re-exports
+  * Fixed modules imported with `[require]` not living long enough
+  * Fixed panic when trying to return from main program scope
 
 ## 4.0.0-alpha.13 (latest)
 

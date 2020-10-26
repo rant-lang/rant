@@ -144,18 +144,18 @@ impl CallStack {
     macro_rules! trickle_down_func_lookup {
       ($value_iter:expr) => {
         if let Some(mut vars) = $value_iter {
-          // Store a reference to the topmost value to use as a fallback
-          let mut var = vars.next().unwrap();
-          // If the topmost value isn't callable, check the whole pile and then globals for something that is
-          if !var.value_ref().is_callable() {
-            if let Some(func_var) = vars
-            .find(|v| v.value_ref().is_callable())
-            .or_else(|| context.get_global_var(id).filter(|v| v.value_ref().is_callable())) 
-            {
-              var = func_var;
+          if let Some(mut var) = vars.next() {
+            // If the topmost value isn't callable, check the whole pile and then globals for something that is
+            if !var.value_ref().is_callable() {
+              if let Some(func_var) = vars
+              .find(|v| v.value_ref().is_callable())
+              .or_else(|| context.get_global_var(id).filter(|v| v.value_ref().is_callable())) 
+              {
+                var = func_var;
+              }
             }
+            return Ok(var.value_cloned())
           }
-          return Ok(var.value_cloned())
         }
       }
     }
@@ -326,8 +326,9 @@ impl StackFrame {
     }
   }
 
-  pub(crate) fn new_empty(
-    func: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, 
+  #[inline]
+  pub(crate) fn new_native_call(
+    function: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, 
     has_output: bool, 
     prev_output: Option<&OutputWriter>, 
     origin: Rc<RantProgramInfo>, 
@@ -336,7 +337,10 @@ impl StackFrame {
   ) -> Self 
   {
     let mut intents: VecDeque<Intent> = Default::default();
-    intents.push_front(Intent::RuntimeCall(func));
+    intents.push_front(Intent::RuntimeCall {
+      function,
+      interrupt: true,
+    });
 
     Self {
       origin,

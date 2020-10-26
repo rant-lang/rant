@@ -1,0 +1,7 @@
+<$module = @()>
+
+[$module/test] {
+  42
+}
+
+<module>

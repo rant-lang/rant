@@ -5,7 +5,7 @@ use crate::*;
 use crate::lang::*;
 use crate::runtime::resolver::{SelectorError, Resolver, BlockAction};
 
-use std::{rc::Rc, cell::RefCell, ops::Deref, error::Error, fmt::Display};
+use std::{cell::RefCell, error::Error, fmt::{Debug, Display}, ops::Deref, rc::Rc};
 use smallvec::{SmallVec, smallvec};
 
 pub(crate) mod format;
@@ -46,6 +46,15 @@ impl<'rant> VM<'rant> {
       unwinds: Default::default(),
     }
   }
+}
+
+macro_rules! runtime_trace {
+  ($fmt:literal) => {#[cfg(all(feature = "vm-trace", debug_assertions))]{
+    eprintln!("[vm-trace] {}", $fmt)
+  }};
+  ($fmt:literal, $($args:expr),+) => {#[cfg(all(feature = "vm-trace", debug_assertions))]{
+    eprintln!("[vm-trace] {}", format!($fmt, $($args),+))
+  }};
 }
 
 /// Returns a runtime error from the current execution context with the specified error type and optional description.
@@ -98,10 +107,32 @@ pub enum Intent {
   BuildMap { init: Rc<Vec<(MapKeyExpr, Rc<Sequence>)>>, pair_index: usize, map: RantMap },
   /// Pops a map off the stack and loads it as a module with the specified name.
   LoadModule { module_name: String },
-  /// Calls a function that accepts a mutable reference to the current runtime.
-  RuntimeCall(Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>),
+  /// Calls a function that accepts a mutable reference to the current runtime. Optionally interrupts the intent loop to force another tick.
+  RuntimeCall { function: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, interrupt: bool },
   /// Drops all unwind states that are no longer within the call stack.
   DropStaleUnwinds,
+}
+
+impl Intent {
+  fn name(&self) -> &'static str {
+    match self {
+      Intent::PrintValue => "print",
+      Intent::CheckBlock => "check_block",
+      Intent::SetVar { .. } => "set_var",
+      Intent::DefVar { .. } => "def_var",
+      Intent::BuildDynamicGetter { .. } => "build_dyn_getter",
+      Intent::GetValue { .. } => "get_value",
+      Intent::BuildDynamicSetter { .. } => "build_dyn_setter",
+      Intent::SetValue { .. } => "set_value",
+      Intent::Invoke { .. } => "invoke",
+      Intent::Call { .. } => "call",
+      Intent::BuildList { .. } => "build_list",
+      Intent::BuildMap { .. } => "build_map",
+      Intent::LoadModule { .. } => "load_module",
+      Intent::RuntimeCall { .. } => "runtime_call",
+      Intent::DropStaleUnwinds => "drop_stale_unwinds",
+    }
+  }
 }
 
 #[derive(Debug)]
@@ -169,8 +200,13 @@ impl<'rant> VM<'rant> {
     while !self.is_stack_empty() {
       // Tick VM
       match self.tick() {
-        Ok(true) => continue,
-        Ok(false) => {},
+        Ok(true) => {
+          runtime_trace!("tick interrupted (stack @ {})", self.call_stack.len());
+          continue
+        },
+        Ok(false) => {
+          runtime_trace!("tick done (stack @ {})", self.call_stack.len());
+        },
         Err(err) => {
           // Try to unwind to last safe point
           if let Some(unwind) = self.unwind() {
@@ -195,8 +231,10 @@ impl<'rant> VM<'rant> {
 
   #[inline(always)]
   fn tick(&mut self) -> RuntimeResult<bool> {
+    runtime_trace!("tick start (stack @ {}: {})", self.call_stack.len(), self.call_stack.top().map_or("none".to_owned(), |top| top.to_string()));
     // Read frame's current intents and handle them before running the sequence
     while let Some(intent) = self.cur_frame_mut().take_intent() {
+      runtime_trace!("intent: {}", intent.name());
       match intent {
         Intent::PrintValue => {
           let val = self.pop_val()?;
@@ -387,10 +425,13 @@ impl<'rant> VM<'rant> {
             self.engine.set_global(crate::MODULES_CACHE_KEY, RantValue::Map(Rc::new(RefCell::new(cache))));
           }
 
-          self.def_var_value(&module_name, AccessPathKind::Local, module)?;
+          self.def_var_value(&module_name, AccessPathKind::Descope(1), module)?;
         },
-        Intent::RuntimeCall(func) => {
-          func(self)?;
+        Intent::RuntimeCall { function, interrupt } => {
+          function(self)?;
+          if interrupt {
+            return Ok(true)
+          }
         },
         Intent::DropStaleUnwinds => {
           while let Some(unwind) = self.unwinds.last() {
@@ -402,6 +443,8 @@ impl<'rant> VM<'rant> {
         }
       }
     }
+
+    runtime_trace!("intents finished");
     
     // Run frame's sequence elements in order
     while let Some(rst) = &self.cur_frame_mut().seq_next() {
@@ -615,6 +658,8 @@ impl<'rant> VM<'rant> {
         }
       }
     }
+
+    runtime_trace!("frame done: {}", self.call_stack.len());
     
     // Pop frame once its sequence is finished
     let mut last_frame = self.pop_frame()?;
@@ -663,7 +708,7 @@ impl<'rant> VM<'rant> {
     match &func.body {
       RantFunctionInterface::Foreign(foreign_func) => {
         let foreign_func = Rc::clone(foreign_func);
-        self.push_empty_frame(Box::new(move |vm| foreign_func(vm, args)), is_printing, StackFrameFlavor::NativeCall)?;
+        self.push_native_call_frame(Box::new(move |vm| foreign_func(vm, args)), is_printing, StackFrameFlavor::NativeCall)?;
       },
       RantFunctionInterface::User(user_func) => {
         // Push the function onto the call stack
@@ -1021,6 +1066,7 @@ impl<'rant> VM<'rant> {
   /// Removes the topmost frame from the call stack and returns it.
   #[inline(always)]
   pub fn pop_frame(&mut self) -> RuntimeResult<StackFrame> {
+    runtime_trace!("pop_frame: {} -> {}", self.call_stack.len(), self.call_stack.len() - 1);
     if let Some(frame) = self.call_stack.pop_frame() {
       Ok(frame)
     } else {
@@ -1031,6 +1077,7 @@ impl<'rant> VM<'rant> {
   /// Pushes a frame onto the call stack without overflow checks.
   #[inline(always)]
   fn push_frame_unchecked(&mut self, callee: Rc<Sequence>, use_output: bool, flavor: StackFrameFlavor) {
+    runtime_trace!("push_frame_unchecked");
     let frame = StackFrame::new(
       callee, 
       use_output, 
@@ -1043,6 +1090,7 @@ impl<'rant> VM<'rant> {
   /// Pushes a frame onto the call stack.
   #[inline(always)]
   pub fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool) -> RuntimeResult<()> {
+    runtime_trace!("push_frame");
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
@@ -1059,7 +1107,8 @@ impl<'rant> VM<'rant> {
   }
 
   /// Pushes an empty frame onto the call stack with a single `RuntimeCall` intent.
-  pub fn push_empty_frame(&mut self, callee: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
+  pub fn push_native_call_frame(&mut self, callee: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
+    runtime_trace!("push_native_call_frame");
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
@@ -1067,7 +1116,7 @@ impl<'rant> VM<'rant> {
 
     let last_frame = self.call_stack.top().unwrap();
 
-    let frame = StackFrame::new_empty(
+    let frame = StackFrame::new_native_call(
       callee,
       use_output,
       self.call_stack.top().map(|last| last.output()).flatten(),
@@ -1083,6 +1132,7 @@ impl<'rant> VM<'rant> {
   /// Pushes a flavored frame onto the call stak.
   #[inline(always)]
   pub fn push_frame_flavored(&mut self, callee: Rc<Sequence>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
+    runtime_trace!("push_frame_flavored");
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
@@ -1140,6 +1190,7 @@ impl<'rant> VM<'rant> {
   /// Returns from the currently running function.
   #[inline]
   pub fn func_return(&mut self, ret_val: Option<RantValue>) -> RuntimeResult<()> {
+    runtime_trace!("func_return");
     if let Some(block_depth) = self.call_stack.taste_for_first(StackFrameFlavor::FunctionBody) {
       // Pop down to owning scope of function
       if let Some(break_val) = ret_val {
@@ -1180,6 +1231,12 @@ impl<'rant> VM<'rant> {
   #[inline(always)]
   pub fn cur_frame_mut(&mut self) -> &mut StackFrame {
     self.call_stack.top_mut().unwrap()
+  }
+
+  /// Safely attempts to get a mutable reference to the topmost frame on the call stack.
+  #[inline(always)]
+  pub fn any_cur_frame_mut(&mut self) -> Option<&mut StackFrame> {
+    self.call_stack.top_mut()
   }
 
   /// Gets a reference to the topmost frame on the call stack.
