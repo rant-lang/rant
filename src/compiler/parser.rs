@@ -2,7 +2,7 @@
 #![allow(clippy::ptr_arg)]
 
 use super::{reader::RantTokenReader, lexer::RantToken, message::*, Problem, Reporter};
-use crate::{RantProgramInfo, RantString, lang::*};
+use crate::{RantProgramInfo, InternalString, lang::*};
 use fnv::FnvBuildHasher;
 use line_col::LineColLookup;
 use quickscope::ScopeSet;
@@ -535,7 +535,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         RantToken::Escape(ch) => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
-          let mut frag = RantString::new();
+          let mut frag = InternalString::new();
           frag.push(ch);
           consume_fragments!(frag);
           Rst::Fragment(frag)
@@ -585,7 +585,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         RantToken::Colon => no_flags!({
           match mode {
             SequenceParseMode::AnonFunctionExpr => return Ok((sequence.with_name_str("anonymous function expression"), SequenceEndType::AnonFunctionExprToArgs, true)),
-            _ => seq_add!(Rst::Fragment(RantString::from(":")))
+            _ => seq_add!(Rst::Fragment(InternalString::from(":")))
           }
         }),
         
@@ -601,7 +601,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             // Accessor fallback value
             SequenceParseMode::AccessorFallbackValue => return Ok((sequence.with_name_str("fallback value"), SequenceEndType::AccessorFallbackValueToDelim, true)),
             // If we're anywhere else, just print the semicolon like normal text
-            _ => seq_add!(Rst::Fragment(RantString::from(";")))
+            _ => seq_add!(Rst::Fragment(InternalString::from(";")))
           }
         }),
         

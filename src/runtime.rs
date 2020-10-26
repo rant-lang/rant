@@ -109,7 +109,7 @@ enum SetterKey<'a> {
   Index(i64),
   Slice(Slice),
   KeyRef(&'a str),
-  KeyString(RantString),
+  KeyString(InternalString),
 }
 
 /// Describes where a setter gets its RHS value.
@@ -352,7 +352,7 @@ impl<'rant> VM<'rant> {
             let prev_pair = &init[pair_index - 1];
             // If the key is dynamic, there are two values to pop
             let key = match prev_pair {
-              (MapKeyExpr::Dynamic(_), _) => RantString::from(self.pop_val()?.to_string()),
+              (MapKeyExpr::Dynamic(_), _) => InternalString::from(self.pop_val()?.to_string()),
               (MapKeyExpr::Static(key), _) => key.clone()
             };
             let val = self.pop_val()?;
@@ -719,7 +719,7 @@ impl<'rant> VM<'rant> {
         Some(SetterKey::KeyRef(vname.as_str()))
       },
       Some(AccessPathComponent::DynamicKey(_)) => {
-        let key = RantString::from(dynamic_values.next().unwrap().to_string());
+        let key = InternalString::from(dynamic_values.next().unwrap().to_string());
         Some(SetterKey::KeyString(key))
       },
       Some(AccessPathComponent::AnonymousValue(_)) => {
@@ -763,7 +763,7 @@ impl<'rant> VM<'rant> {
               SetterKey::Index(index)
             },
             key_val => {
-              let key = RantString::from(key_val.to_string());
+              let key = InternalString::from(key_val.to_string());
               SetterKey::KeyString(key)
             }
           }

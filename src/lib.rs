@@ -55,7 +55,7 @@ use rand::Rng;
 
 type IOErrorKind = std::io::ErrorKind;
 
-pub(crate) type RantString = smartstring::alias::CompactString;
+pub(crate) type InternalString = smartstring::alias::CompactString;
 
 /// The build version according to the crate metadata at the time of compiling.
 pub const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -82,7 +82,7 @@ pub(crate) type ModuleLoadResult = Result<RantProgram, ModuleLoadError>;
 pub struct Rant {
   rng: Rc<RantRng>,
   debug_mode: bool,
-  globals: HashMap<RantString, RantVar, FnvBuildHasher>,
+  globals: HashMap<InternalString, RantVar, FnvBuildHasher>,
   options: RantOptions,
 }
 
@@ -206,7 +206,7 @@ impl Rant {
     if let Some(global_var) = self.globals.get_mut(key) {
       global_var.write(value);
     } else {
-      self.globals.insert(RantString::from(key), RantVar::ByVal(value));
+      self.globals.insert(InternalString::from(key), RantVar::ByVal(value));
     }
   }
 
@@ -225,7 +225,7 @@ impl Rant {
   /// Sets a global variable to the provided `RantVar`.
   #[inline]
   pub(crate) fn set_global_var(&mut self, key: &str, var: RantVar) {
-    self.globals.insert(RantString::from(key), var);
+    self.globals.insert(InternalString::from(key), var);
   }
 
   /// Gets a mutable reference to the `RantVar` representation of the specified variable.

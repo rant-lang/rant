@@ -11,7 +11,7 @@ type CallStackVector = SmallVec<[StackFrame; super::CALL_STACK_INLINE_COUNT]>;
 /// Represents a call stack and its associated locals.
 pub struct CallStack {
   frames: CallStackVector,
-  locals: ScopeMap<RantString, RantVar, FnvBuildHasher>,
+  locals: ScopeMap<InternalString, RantVar, FnvBuildHasher>,
 }
 
 impl Default for CallStack {
@@ -227,11 +227,11 @@ impl CallStack {
   pub fn def_var(&mut self, context: &mut Rant, id: &str, access: AccessPathKind, var: RantVar) -> RuntimeResult<()> {
     match access {
       AccessPathKind::Local => {
-        self.locals.define(RantString::from(id), var);
+        self.locals.define(InternalString::from(id), var);
         return Ok(())
       },
       AccessPathKind::Descope(descope_count) => {
-        self.locals.define_parent(RantString::from(id), var, descope_count);
+        self.locals.define_parent(InternalString::from(id), var, descope_count);
         return Ok(())
       },
       AccessPathKind::ExplicitGlobal => {}
@@ -250,11 +250,11 @@ impl CallStack {
   pub fn def_var_value(&mut self, context: &mut Rant, id: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
     match access {
       AccessPathKind::Local => {
-        self.locals.define(RantString::from(id), RantVar::ByVal(val));
+        self.locals.define(InternalString::from(id), RantVar::ByVal(val));
         return Ok(())
       },
       AccessPathKind::Descope(descope_count) => {
-        self.locals.define_parent(RantString::from(id), RantVar::ByVal(val), descope_count);
+        self.locals.define_parent(InternalString::from(id), RantVar::ByVal(val), descope_count);
         return Ok(())
       },
       AccessPathKind::ExplicitGlobal => {}

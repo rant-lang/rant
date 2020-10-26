@@ -1,5 +1,5 @@
 use std::{rc::Rc, ops::{DerefMut, Deref}, iter::FromIterator, cell::RefCell};
-use crate::{RantString, RantValue};
+use crate::{InternalString, RantValue};
 use fnv::FnvHashMap;
 
 const DEFAULT_MAP_CAPACITY: usize = 16;
@@ -76,7 +76,7 @@ impl IntoIterator for RantList {
 #[derive(Debug, Clone)]
 pub struct RantMap {
   /// The physical contents of the map
-  map: FnvHashMap<RantString, RantValue>,
+  map: FnvHashMap<InternalString, RantValue>,
   /// The prototype of the map
   proto: Option<RantMapRef>
 }
@@ -116,7 +116,7 @@ impl RantMap {
 
   #[inline]
   pub fn raw_set(&mut self, key: &str, val: RantValue) {
-    self.map.insert(RantString::from(key), val);
+    self.map.insert(InternalString::from(key), val);
   }
 
   #[inline]

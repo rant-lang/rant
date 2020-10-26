@@ -1,5 +1,5 @@
 use logos::*;
-use crate::RantString;
+use crate::InternalString;
 
 #[derive(Logos, Debug, PartialEq)]
 pub enum RantToken {
@@ -109,16 +109,16 @@ pub enum RantToken {
   Escape(char),
   
   #[regex(r#""(""|[^"])*""#, parse_string_literal)]
-  StringLiteral(RantString),
+  StringLiteral(InternalString),
   
   #[regex(r#""(""|[^"])*"#)]
   UnterminatedStringLiteral,
 }
 
-fn parse_string_literal<'a>(lex: &mut Lexer<'a, RantToken>) -> Option<RantString> {
+fn parse_string_literal<'a>(lex: &mut Lexer<'a, RantToken>) -> Option<InternalString> {
   let literal: String = lex.slice().to_owned();
   let literal_content = &literal[1..literal.len() - 1];
-  let mut string_content = RantString::new();
+  let mut string_content = InternalString::new();
   let mut prev_quote = false;
   for c in literal_content.chars() {
     match c {

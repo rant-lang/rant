@@ -1,7 +1,7 @@
 //! Contains Rant's syntax tree implementation and supporting data structures.
 
 use std::{ops::{DerefMut, Deref}, fmt::Display, rc::Rc};
-use crate::{RantProgramInfo, RantString, RantValue, RantValueType};
+use crate::{RantProgramInfo, InternalString, RantValue, RantValueType};
 
 /// Printflags indicate to the compiler whether a given program element is likely to print something or not.
 #[repr(u8)]
@@ -33,16 +33,16 @@ impl PrintFlag {
 /// Identifiers are special strings used to name variables and static (non-procedural) map keys.
 /// This is just a wrapper around a SmartString that enforces identifier formatting requirements.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Identifier(RantString);
+pub struct Identifier(InternalString);
 
 impl Identifier {
-  pub fn new(idstr: RantString) -> Self {
+  pub fn new(idstr: InternalString) -> Self {
     Self(idstr)
   }
 }
 
 impl Deref for Identifier {
-  type Target = RantString;
+  type Target = InternalString;
   fn deref(&self) -> &Self::Target {
     &self.0
   }
@@ -276,7 +276,7 @@ impl Display for AccessPath {
 #[derive(Debug)]
 pub struct Sequence {
   elements: Vec<Rc<Rst>>,
-  pub name: Option<RantString>,
+  pub name: Option<InternalString>,
   pub origin: Rc<RantProgramInfo>,
 }
 
@@ -302,18 +302,18 @@ impl Sequence {
   }
 
   #[inline(always)]
-  pub fn with_name(mut self, name: RantString) -> Self {
+  pub fn with_name(mut self, name: InternalString) -> Self {
     self.name = Some(name);
     self
   }
 
   #[inline(always)]
   pub fn with_name_str(mut self, name: &str) -> Self {
-    self.name = Some(RantString::from(name));
+    self.name = Some(InternalString::from(name));
     self
   }
 
-  pub fn name(&self) -> Option<&RantString> {
+  pub fn name(&self) -> Option<&InternalString> {
     self.name.as_ref()
   }
 }
@@ -455,7 +455,7 @@ pub enum MapKeyExpr {
   /// Map key is evaluated from an expression at runtime.
   Dynamic(Rc<Sequence>),
   /// Map key is evaluated at compile time from an identifier.
-  Static(RantString),
+  Static(InternalString),
 }
 
 /// Rant Syntax Tree
@@ -488,9 +488,9 @@ pub enum Rst {
   /// Value setter
   VarSet(Rc<AccessPath>, Rc<Sequence>),
   /// Fragment
-  Fragment(RantString),
+  Fragment(InternalString),
   /// Whitespace
-  Whitespace(RantString),
+  Whitespace(InternalString),
   /// Integer value
   Integer(i64),
   /// Floating-point value

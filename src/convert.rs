@@ -6,7 +6,7 @@
 #![allow(unused_variables)]
 
 use crate::value::*;
-use crate::{lang::{Varity, Parameter, Identifier}, RantString, RantMapRef, stdlib::RantStdResult};
+use crate::{lang::{Varity, Parameter, Identifier}, InternalString, RantMapRef, stdlib::RantStdResult};
 use crate::{RantList, runtime::*, RantListRef};
 use cast::*;
 use cast::Error as CastError;
@@ -372,7 +372,7 @@ impl<T: FromRant> FromRantArgs for T {
     };
 
     let param = Parameter {
-      name: Identifier::new(RantString::from("arg0")),
+      name: Identifier::new(InternalString::from("arg0")),
       varity
     };
 
@@ -436,7 +436,7 @@ macro_rules! impl_from_rant_args {
       fn as_rant_params() -> Vec<Parameter> {
         let mut i: usize = 0;
         vec![$(Parameter { 
-          name: Identifier::new(RantString::from(format!("arg{}", inc(&mut i)))),
+          name: Identifier::new(InternalString::from(format!("arg{}", inc(&mut i)))),
           varity: as_varity::<$generic_types>(),
         },)*]
       }
@@ -458,11 +458,11 @@ macro_rules! impl_from_rant_args {
       fn as_rant_params() -> Vec<Parameter> {
         let mut i: usize = 0;
         vec![$(Parameter { 
-          name: Identifier::new(RantString::from(format!("arg{}", inc(&mut i)))),
+          name: Identifier::new(InternalString::from(format!("arg{}", inc(&mut i)))),
           varity: as_varity::<$generic_types>(),
         },)*
         Parameter {
-          name: Identifier::new(RantString::from(format!("arg{}", inc(&mut i)))),
+          name: Identifier::new(InternalString::from(format!("arg{}", inc(&mut i)))),
           varity: Varity::VariadicStar,
         }]
       }
@@ -484,11 +484,11 @@ macro_rules! impl_from_rant_args {
       fn as_rant_params() -> Vec<Parameter> {
         let mut i: usize = 0;
         vec![$(Parameter { 
-          name: Identifier::new(RantString::from(format!("arg{}", inc(&mut i)))),
+          name: Identifier::new(InternalString::from(format!("arg{}", inc(&mut i)))),
           varity: as_varity::<$generic_types>(),
         },)*
         Parameter {
-          name: Identifier::new(RantString::from(format!("arg{}", inc(&mut i)))),
+          name: Identifier::new(InternalString::from(format!("arg{}", inc(&mut i)))),
           varity: Varity::VariadicPlus,
         }]
       }

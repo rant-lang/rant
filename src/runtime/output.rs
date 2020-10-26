@@ -1,4 +1,4 @@
-use crate::{RantValue, RantString};
+use crate::{RantValue, InternalString};
 use super::format::{WhitespaceNormalizationMode, OutputFormat};
 use std::rc::Rc;
 
@@ -7,7 +7,7 @@ const INITIAL_CHAIN_CAPACITY: usize = 64;
 /// Writes a stream of buffers that can be passed to a parent buffer or rendered to a string.
 pub struct OutputWriter {
   buffers: Vec<OutputBuffer>,
-  frag_buffer: Option<RantString>,
+  frag_buffer: Option<InternalString>,
   format: Rc<OutputFormat>,
 }
 
@@ -42,7 +42,7 @@ impl OutputWriter {
     if let Some(frag_buffer) = self.frag_buffer.as_mut() {
       frag_buffer.push_str(value);
     } else {
-      self.frag_buffer = Some(RantString::from(value))
+      self.frag_buffer = Some(InternalString::from(value))
     }
   }
   
@@ -89,7 +89,7 @@ impl OutputWriter {
       // Multiple buffers are concatenated into a single string, unless they are all empty
       _ => {
         let mut has_any_nonempty = false;
-        let mut output = RantString::new();
+        let mut output = InternalString::new();
         for buf in self.buffers {
           if !matches!(buf, OutputBuffer::Value(RantValue::Empty)) {
             has_any_nonempty = true;
@@ -116,17 +116,17 @@ impl Default for OutputWriter {
 /// A unit of output.
 #[derive(Debug)]
 pub enum OutputBuffer {
-  String(RantString),
+  String(InternalString),
   Value(RantValue)
 }
 
 impl<'a> OutputBuffer {
   /// Consumes the buffer and returns its contents rendered as a single `String`.
   #[inline]
-  pub(crate) fn render(self) -> RantString {
+  pub(crate) fn render(self) -> InternalString {
     match self {
       OutputBuffer::String(s) => s,
-      OutputBuffer::Value(v) => RantString::from(v.to_string())
+      OutputBuffer::Value(v) => InternalString::from(v.to_string())
     }
   }
 }
