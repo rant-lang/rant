@@ -134,6 +134,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     load_func!(require);
   }
 
-  // Miscellaneous
+  // Constants
   context.set_global("RANT_VERSION", RantValue::String(RANT_VERSION.to_owned()));
+  context.set_global("BUILD_VERSION", RantValue::String(BUILD_VERSION.to_owned()));
 }

@@ -4,6 +4,7 @@
 
 ### New
   * Add support for slice notation in getters and setters
+  * Added `BUILD_VERSION` constant to stdlib
   * Added new stdlib functions:
     * `[try]`: execute a protected call on a function or block with optional error handling callback
 
