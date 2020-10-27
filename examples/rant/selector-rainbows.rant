@@ -1,0 +1,24 @@
+<$side-len = 16>
+<$color-block = *{⬛|🟫|🟥|🟧|🟨|🟩|🟦|🟪}>
+<$sels = (
+  @(name = Forward; state = [mksel:forward]);
+  @(name = Forward Clamp; state = [mksel:forward-clamp]);
+  @(name = Deck Loop; state = [mksel:deck-loop]);
+  @(name = One; state = [mksel:one]);
+  @(name = Ping; state = [mksel:ping]);
+  @(name = Pong; state = [mksel:pong]);
+  @(name = Random; state = [mksel:random])
+)>
+[len: <sels> & rep]
+[sep: \n\n]
+{
+  <$current-sel = <sels/{[step-index]}>>
+  <current-sel/name>\:\n
+  [rep: <side-len>]
+  [sep: \n]
+  {
+    [rep:<side-len>]
+    [sel:<current-sel/state>]
+    [resolve:<color-block>]
+  }
+}
