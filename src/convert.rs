@@ -232,13 +232,13 @@ impl ToRant for f64 {
 
 impl ToRant for String {
   fn to_rant(self) -> ValueResult<RantValue> {
-    Ok(RantValue::String(self))
+    Ok(RantValue::String(self.into()))
   }
 }
 
 impl ToRant for &'static str {
   fn to_rant(self) -> ValueResult<RantValue> {
-    Ok(RantValue::String(self.to_owned()))
+    Ok(RantValue::String(self.into()))
   }
 }
 

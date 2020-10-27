@@ -56,7 +56,7 @@ pub(crate) fn either(vm: &mut VM, (cond, a, b): (bool, RantValue, RantValue)) ->
 pub(crate) fn fork(vm: &mut VM, seed: Option<RantValue>) -> RantStdResult {
   let rng = match seed {
     Some(RantValue::Int(i)) => vm.rng().fork_i64(i),
-    Some(RantValue::String(s)) => vm.rng().fork_str(&s),
+    Some(RantValue::String(s)) => vm.rng().fork_str(s.as_str()),
     Some(other) => runtime_error!(RuntimeErrorType::ArgumentError, "seeding fork with '{}' value is not supported", other.type_name()),
     None => vm.rng().fork_random(),
   };

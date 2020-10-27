@@ -45,11 +45,13 @@ cervine = "0.0.6"
 fnv = "1.0.7"
 line-col = "0.2.1"
 logos = "0.11.4"
+once_cell = "1.4.1"
 quickscope = "0.1.5"
 rand = "0.7.3"
 rand_xoshiro = "0.4.0"
 smallvec = "1.4.2"
 smartstring = "0.2.5"
+unicode-segmentation = "1.6.0"
 
 # CLI
 argh = { version = "0.1.3", optional = true }

@@ -212,7 +212,7 @@ impl<'rant> VM<'rant> {
           if let Some(unwind) = self.unwind() {
             // Fire off handler if available
             if let Some(handler) = unwind.handler {
-              self.call_func(handler, vec![RantValue::String(err.to_string())], PrintFlag::None, false)?;
+              self.call_func(handler, vec![RantValue::String(err.to_string().into())], PrintFlag::None, false)?;
               continue;
             }
           } else {

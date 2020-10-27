@@ -82,7 +82,7 @@ impl OutputWriter {
       1 => {
         let buffer = self.buffers.pop().unwrap();
         match buffer {
-          OutputBuffer::String(s) => RantValue::String(s.to_string()),
+          OutputBuffer::String(s) => RantValue::String(s.as_str().into()),
           OutputBuffer::Value(v) => v,
         }
       },
@@ -98,7 +98,7 @@ impl OutputWriter {
         }
         // If there is at least one non-empty, return the string; otherwise, return empty value
         if has_any_nonempty {
-          RantValue::String(output.to_string())
+          RantValue::String(output.as_str().into())
         } else {
           RantValue::Empty
         }

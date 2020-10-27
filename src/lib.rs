@@ -33,12 +33,14 @@ mod convert;
 mod lang;
 mod random;
 mod stdlib;
+mod string;
 mod util;
 mod value;
 mod var;
 
 pub use collections::*;
 pub use convert::*;
+pub use string::*;
 pub use value::*;
 pub use var::*;
 

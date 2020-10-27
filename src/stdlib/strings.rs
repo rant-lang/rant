@@ -43,7 +43,7 @@ pub(crate) fn split(vm: &mut VM, (s, at): (String, Option<String>)) -> RantStdRe
 }
 
 pub(crate) fn lines(vm: &mut VM, s: String) -> RantStdResult {
-  let lines = RantList::from_iter(s.lines().map(|line| RantValue::String(line.to_owned())));
+  let lines = RantList::from_iter(s.lines().map(|line| RantValue::String(line.into())));
   vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(lines))));
   Ok(())
 }

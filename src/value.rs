@@ -1,4 +1,4 @@
-use crate::{RantVar, lang::{Block, Parameter, Sequence}, lang::Identifier, lang::Slice, stdlib::RantStdResult, util};
+use crate::{RantString, RantVar, lang::{Block, Parameter, Sequence}, lang::Identifier, lang::Slice, stdlib::RantStdResult, util};
 use crate::collections::*;
 use crate::runtime::resolver::*;
 use crate::runtime::*;
@@ -71,7 +71,7 @@ pub struct RantEmpty;
 #[derive(Clone)]
 pub enum RantValue {
   /// A Rant value of type `string`. Passed by-value.
-  String(String),
+  String(RantString),
   /// A Rant value of type `float`. Passed by-value.
   Float(f64),
   /// A Rant value of type `int`. Passed by-value.
@@ -131,7 +131,7 @@ impl RantValue {
       RantValue::Int(_) => self,
       RantValue::Float(n) => RantValue::Int(n as i64),
       RantValue::String(s) => {
-        match s.parse() {
+        match s.as_str().parse() {
           Ok(n) => RantValue::Int(n),
           Err(_) => RantValue::Empty,
         }
@@ -148,7 +148,7 @@ impl RantValue {
       RantValue::Float(_) => self,
       RantValue::Int(n) => RantValue::Float(n as f64),
       RantValue::String(s) => {
-        match s.parse() {
+        match s.as_str().parse() {
           Ok(n) => RantValue::Float(n),
           Err(_) => RantValue::Empty,
         }
@@ -163,7 +163,7 @@ impl RantValue {
   pub fn into_rant_string(self) -> RantValue {
     match self {
       RantValue::String(_) => self,
-      _ => RantValue::String(self.to_string())
+      _ => RantValue::String(self.to_string().into())
     }
   }
 
@@ -172,7 +172,7 @@ impl RantValue {
   pub fn len(&self) -> usize {
     match self {
       // Length of string is character count
-      RantValue::String(s) => s.chars().count(),
+      RantValue::String(s) => s.len(),
       // Length of block is element count
       RantValue::Block(b) => b.elements.len(),
       // Length of list is element count
@@ -316,8 +316,8 @@ impl RantValue {
 
     match self {
       RantValue::String(s) => {
-        if uindex < s.len() {
-          Ok(RantValue::String(s[uindex..uindex + 1].to_owned()))
+        if let Some(s) = s.grapheme_at(uindex) {
+          Ok(RantValue::String(s))
         } else {
           Err(IndexError::OutOfRange)
         }
@@ -736,13 +736,13 @@ impl Add for RantValue {
       (RantValue::Float(a), RantValue::Float(b)) => RantValue::Float(a + b),
       (RantValue::Float(a), RantValue::Int(b)) => RantValue::Float(a + f64(b)),
       (RantValue::Float(a), RantValue::Boolean(b)) => RantValue::Float(a + bf64(b)),
-      (RantValue::String(a), RantValue::String(b)) => RantValue::String(format!("{}{}", a, b)),
-      (RantValue::String(a), rhs) => RantValue::String(format!("{}{}", a, rhs)),
+      (RantValue::String(a), RantValue::String(b)) => RantValue::String(a + b),
+      (RantValue::String(a), rhs) => RantValue::String(a + rhs.to_string().into()),
       (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Int(bi64(a) + bi64(b)),
       (RantValue::Boolean(a), RantValue::Int(b)) => RantValue::Int(bi64(a).saturating_add(b)),
       (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) + b),
       (RantValue::List(a), RantValue::List(b)) => RantValue::List(Rc::new(RefCell::new(a.borrow().iter().cloned().chain(b.borrow().iter().cloned()).collect()))),
-      (lhs, rhs) => RantValue::String(format!("{}{}", lhs, rhs))
+      (lhs, rhs) => RantValue::String(RantString::from(format!("{}{}", lhs, rhs)))
     }
   }
 }
@@ -782,7 +782,7 @@ impl Mul for RantValue {
       (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Int(bi64(a) * bi64(b)),
       (RantValue::Boolean(a), RantValue::Int(b)) => RantValue::Int(bi64(a) * b),
       (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) * b),
-      (RantValue::String(a), RantValue::Int(b)) => RantValue::String(a.as_str().repeat(clamp(b, 0, i64::MAX) as usize)),
+      (RantValue::String(a), RantValue::Int(b)) => RantValue::String(a.as_str().repeat(clamp(b, 0, i64::MAX) as usize).into()),
       _ => RantValue::nan()
     }
   }
