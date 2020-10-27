@@ -10,6 +10,7 @@
 
 ### Changes
   * Make some unnecessarily public runtime/compiler APIs crate-visible
+  * Strings are now measured by grapheme clusters instead of bytes; this affects indexing + slicing behavior
 
 ### Fixes
   * Fixed some unintended module re-exports

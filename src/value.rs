@@ -262,7 +262,7 @@ impl RantValue {
     let (slice_from, slice_to) = self.get_uslice(slice).ok_or(SliceError::OutOfRange)?;
 
     match self {
-      RantValue::String(_s) => todo!(),
+      RantValue::String(s) => Ok(RantValue::String(s.to_slice(slice_from, slice_to).ok_or(SliceError::OutOfRange)?)),
       RantValue::Block(_b) => todo!(),
       RantValue::List(list) => {
         let list = list.borrow();
