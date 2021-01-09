@@ -1055,7 +1055,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let afcall = AnonFunctionCall {
             expr: Rc::new(func_expr),
             args: Rc::new(func_args),
-            flag
+            flag,
+            spread_last_arg: false, // TODO
           };
           
           Some(Rst::AnonFuncCall(afcall))
@@ -1086,7 +1087,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             let fcall = FunctionCall {
               id: Rc::new(func_name),
               arguments: Rc::new(func_args),
-              flag
+              flag,
+              spread_last_arg: false, // TODO
             };
             
             let func_call = Rst::FuncCall(fcall);

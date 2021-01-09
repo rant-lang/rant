@@ -422,6 +422,7 @@ pub struct FunctionCall {
   pub flag: PrintFlag,
   pub id: Rc<AccessPath>,
   pub arguments: Rc<Vec<Rc<Sequence>>>,
+  pub spread_last_arg: bool,
 }
 
 /// Describes a function definition.
@@ -447,6 +448,7 @@ pub struct AnonFunctionCall {
   pub flag: PrintFlag,
   pub expr: Rc<Sequence>,
   pub args: Rc<Vec<Rc<Sequence>>>,
+  pub spread_last_arg: bool,
 }
 
 /// Key creation methods for map initializer entries.

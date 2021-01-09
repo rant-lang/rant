@@ -1,9 +1,15 @@
-<$side-len = 16>
-<$color-block = *{⬛|🟫|🟥|🟧|🟨|🟩|🟦|🟪}>
+<$side-len = 32>
 <$sels = (
   @(name = Forward; state = [mksel:forward]);
+  @(name = Reverse; state = [mksel:reverse]);
   @(name = Forward Clamp; state = [mksel:forward-clamp]);
+  @(name = Reverse Clamp; state = [mksel:reverse-clamp]);
+  @(name = Forward Mirror; state = [mksel:forward-mirror]);
+  @(name = Reverse Mirror; state = [mksel:reverse-mirror]);
+  @(name = Deck; state = [mksel:deck]);
   @(name = Deck Loop; state = [mksel:deck-loop]);
+  @(name = Deck Clamp; state = [mksel:deck-clamp]);
+  @(name = Deck Mirror; state = [mksel:deck-mirror]);
   @(name = One; state = [mksel:one]);
   @(name = Ping; state = [mksel:ping]);
   @(name = Pong; state = [mksel:pong]);
@@ -19,6 +25,6 @@
   {
     [rep:<side-len>]
     [sel:<current-sel/state>]
-    [resolve:<color-block>]
+    {⬛|🟫|🟥|🟧|🟨|🟩|🟦|🟪}
   }
 }

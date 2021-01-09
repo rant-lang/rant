@@ -304,7 +304,7 @@ impl<'rant> VM<'rant> {
               RantValue::Function(func) => {
                 func
               },
-              other => runtime_error!(RuntimeErrorType::CannotInvokeValue, format!("cannot invoke '{}' value", other.type_name()))
+              other => runtime_error!(RuntimeErrorType::CannotInvokeValue, format!("cannot call '{}' value", other.type_name()))
             };
 
             // Call the function
@@ -324,7 +324,7 @@ impl<'rant> VM<'rant> {
             RantValue::Function(func) => {
               func
             },
-            other => runtime_error!(RuntimeErrorType::CannotInvokeValue, format!("cannot invoke '{}' value", other.type_name()))
+            other => runtime_error!(RuntimeErrorType::CannotInvokeValue, format!("cannot call '{}' value", other.type_name()))
           };
 
           // Call the function
@@ -600,6 +600,7 @@ impl<'rant> VM<'rant> {
             expr,
             args,
             flag,
+            spread_last_arg,
           } = afcall;
 
           // Evaluate arguments after function is evaluated
@@ -619,6 +620,7 @@ impl<'rant> VM<'rant> {
             id,
             arguments,
             flag,
+            spread_last_arg,
           } = fcall;
 
           let dynamic_keys = id.dynamic_exprs();
@@ -654,7 +656,7 @@ impl<'rant> VM<'rant> {
           return Ok(true)
         },
         rst => {
-          panic!(format!("Unsupported RST: {:?}", rst));
+          runtime_error!(RuntimeErrorType::InternalError, format!("unsupported node type: '{}'", rst.display_name()));
         }
       }
     }
@@ -1391,8 +1393,8 @@ pub enum RuntimeErrorType {
   InvalidAccess,
   /// Operation is not valid for the current program state
   InvalidOperation,
-  /// Error in function outside of Rant
-  ExternalError,
+  /// Internal VM error, usually indicating a bug or corrupted data
+  InternalError,
   /// Too few/many arguments were passed to a function
   ArgumentMismatch,
   /// Invalid argument passed to function
@@ -1428,7 +1430,7 @@ impl Display for RuntimeErrorType {
       RuntimeErrorType::StackUnderflow => "stack underflow",
       RuntimeErrorType::InvalidAccess => "invalid access",
       RuntimeErrorType::InvalidOperation => "invalid operation",
-      RuntimeErrorType::ExternalError => "external error",
+      RuntimeErrorType::InternalError => "external error",
       RuntimeErrorType::ArgumentMismatch => "argument mismatch",
       RuntimeErrorType::ArgumentError => "argument error",
       RuntimeErrorType::CannotInvokeValue => "cannot invoke value",

@@ -186,7 +186,7 @@ impl CallStack {
 
     Err(RuntimeError {
       error_type: RuntimeErrorType::InvalidAccess,
-      description: format!("variable '{}' not found", id),
+      description: format!("{} '{}' not found", if prefer_function { "function" } else { "variable" }, id),
       stack_trace: None,
     })
   }

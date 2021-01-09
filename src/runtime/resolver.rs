@@ -331,7 +331,7 @@ pub struct Selector {
   index: usize,
   /// Element count of the selector
   count: usize,
-  /// True if the pass is odd (used by ping/pong)
+  /// True if the pass is odd (used by ping/pong and mirror modes)
   parity: bool,
   /// Jump table used by some selector modes (won't allocate if unused)
   jump_table: Vec<usize>,
@@ -363,23 +363,17 @@ impl Selector {
     self.count = elem_count;
     
     match self.mode {
-      SelectorMode::Random | SelectorMode::One => {
+      SelectorMode::Random | SelectorMode::One | SelectorMode::NoDouble => {
         self.index = rng.next_usize(elem_count);
       },
-      SelectorMode::Forward => {},
-      SelectorMode::ForwardClamp => {},
-      SelectorMode::Reverse | SelectorMode::ReverseClamp => {
+      SelectorMode::Forward | SelectorMode::ForwardClamp | SelectorMode::ForwardMirror | SelectorMode::Ping => {
+        self.index = 0;
+      },
+      SelectorMode::Reverse | SelectorMode::ReverseClamp | SelectorMode::ReverseMirror | SelectorMode::Pong => {
         self.index = elem_count - 1;
       },
-      SelectorMode::Deck | SelectorMode::DeckLoop | SelectorMode::DeckClamp => {
+      SelectorMode::Deck | SelectorMode::DeckLoop | SelectorMode::DeckClamp | SelectorMode::DeckMirror => {
         self.shuffle(rng);
-      },
-      SelectorMode::Ping => {},
-      SelectorMode::Pong => {
-        self.index = elem_count - 1;
-      },
-      SelectorMode::NoDouble => {
-        self.index = rng.next_usize(elem_count);
       },
     }
 
@@ -428,6 +422,18 @@ impl Selector {
       SelectorMode::ForwardClamp => {
         self.index = (cur_index + 1).min(elem_count - 1);
       },
+      SelectorMode::ForwardMirror => {
+        let prev_parity = self.parity;
+        if (prev_parity && cur_index == 0) || (!prev_parity && cur_index == elem_count - 1) {
+          self.parity = !prev_parity;
+        } else {
+          if self.parity {
+            self.index = cur_index.saturating_sub(1);
+          } else {
+            self.index = (cur_index + 1) % elem_count;
+          }
+        }
+      },
       SelectorMode::Reverse => {
         self.index = if cur_index == 0 {
           elem_count
@@ -437,6 +443,18 @@ impl Selector {
       },
       SelectorMode::ReverseClamp => {
         self.index = cur_index.saturating_sub(1);
+      },
+      SelectorMode::ReverseMirror => {
+        let prev_parity = self.parity;
+        if (!prev_parity && cur_index == 0) || (prev_parity && cur_index == elem_count - 1) {
+          self.parity = !prev_parity;
+        } else {
+          if self.parity {
+            self.index = (cur_index + 1) % elem_count;
+          } else {
+            self.index = cur_index.saturating_sub(1);
+          }
+        }
       },
       SelectorMode::Deck => {
         // Store the return value before reshuffling to avoid accidental early duplicates
@@ -451,6 +469,29 @@ impl Selector {
 
         return Ok(jump_index)
       },
+      SelectorMode::DeckMirror => {
+        // Store the return value before reshuffling to avoid accidental early duplicates
+        let jump_index = self.jump_table[cur_index];
+        let cur_parity = self.parity;
+
+        // Flip parity after boundary elements
+        if (cur_parity && cur_index == 0) || (!cur_parity && cur_index >= elem_count - 1) {
+          // If previous parity was odd, reshuffle
+          if cur_parity {
+            self.shuffle(rng);
+          }
+          
+          self.parity = !cur_parity;
+        } else {
+          if self.parity {
+            self.index = cur_index.saturating_sub(1);
+          } else {
+            self.index = (cur_index + 1).min(elem_count - 1);
+          }
+        }
+
+        return Ok(jump_index)
+      },
       SelectorMode::DeckLoop => {
         self.index = (cur_index + 1) % elem_count;
         return Ok(self.jump_table[cur_index])
@@ -461,7 +502,7 @@ impl Selector {
       },
       SelectorMode::Ping => {
         let prev_parity = self.parity;
-        if (prev_parity && cur_index == 0) || (!prev_parity && cur_index == elem_count - 1) {
+        if (prev_parity && cur_index == 0) || (!prev_parity && cur_index >= elem_count - 1) {
           self.parity = !prev_parity;
         }
 
@@ -473,7 +514,7 @@ impl Selector {
       },
       SelectorMode::Pong => {
         let prev_parity = self.parity;
-        if (!prev_parity && cur_index == 0) || (prev_parity && cur_index == elem_count - 1) {
+        if (!prev_parity && cur_index == 0) || (prev_parity && cur_index >= elem_count - 1) {
           self.parity = !prev_parity;
         }
 
@@ -542,19 +583,30 @@ pub enum SelectorMode {
   Forward,
   /// Selects each element from left to right, then repeats the right-most element.
   ForwardClamp,
+  /// Selects each element from left to right, then right to left, and repeats.
+  /// Boundary elements are repeated.
+  ForwardMirror,
   /// Selects each element in a wrapping reverse sequence from right to left.
   Reverse,
   /// Selects each element from right to left, then repeats the left-most element.
   ReverseClamp,
+  /// Selects each element from right to left, then left to right, and repeats.
+  /// Boundary elements are repeated.
+  ReverseMirror,
   /// Selects each element once in a random sequence, then reshuffles.
   Deck,
   /// Selects each element once in a wrapping random sequence, without reshuffling.
   DeckLoop,
   /// Selects each element once in a random sequence, repeating the final element.
   DeckClamp,
-  /// Selects each element from left to right, switching directions each time an edge element is reached.
+  /// Selects each element once in a random sequence, then selects the same sequence backwards, then reshuffles and repeats.
+  /// Mirror boundary elements are repeated.
+  DeckMirror,
+  /// Selects each element from left to right, switching directions each time a boundary element is reached.
+  /// Boundary elements are not repeated.
   Ping,
-  /// Selects each element from right to left, switching directions each time an edge element is reached.
+  /// Selects each element from right to left, switching directions each time a boundary element is reached.
+  /// Boundary elements are not repeated.
   Pong,
   /// Ensures that no one element index is selected twice in a row.
   NoDouble,
@@ -569,11 +621,14 @@ impl FromRant for SelectorMode {
           "one" =>            SelectorMode::One,
           "forward" =>        SelectorMode::Forward,
           "forward-clamp" =>  SelectorMode::ForwardClamp,
+          "forward-mirror" => SelectorMode::ForwardMirror,
           "reverse" =>        SelectorMode::Reverse,
           "reverse-clamp" =>  SelectorMode::ReverseClamp,
+          "reverse-mirror" => SelectorMode::ReverseMirror,
           "deck" =>           SelectorMode::Deck,
           "deck-loop" =>      SelectorMode::DeckLoop,
           "deck-clamp" =>     SelectorMode::DeckClamp,
+          "deck-mirror" =>    SelectorMode::DeckMirror,
           "ping" =>           SelectorMode::Ping,
           "pong" =>           SelectorMode::Pong,
           "no-double" =>      SelectorMode::NoDouble,
