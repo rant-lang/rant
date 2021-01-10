@@ -58,8 +58,7 @@ impl Reporter for Vec<CompilerMessage> {
 }
 
 // TODO: Seriously consider replacing this struct with just a set of functions unless configuration is needed
-pub(crate) struct RantCompiler {
-}
+pub(crate) struct RantCompiler;
 
 impl RantCompiler {
   pub fn compile<R: Reporter>(source: &str, reporter: &mut R, debug_enabled: bool, info: RantProgramInfo) -> CompileResult {

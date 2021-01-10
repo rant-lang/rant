@@ -1,0 +1,7 @@
+<$args = (foo; bar; baz; qux)>
+
+[$abcd: a; b; c; d] {
+  <a> <b> <c> <d>
+}
+
+[abcd: + <args> & assert-eq: "foo bar baz qux"]

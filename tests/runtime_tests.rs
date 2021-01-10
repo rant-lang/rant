@@ -451,3 +451,38 @@ fn splice_dynamic() {
 fn modules_require() {
   test_rant_file!("sources/modules/require.rant");
 }
+
+#[test]
+fn spread_all() {
+  test_rant_file!("sources/spread/spread_all.rant");
+}
+
+#[test]
+fn spread_inner() {
+  test_rant_file!("sources/spread/spread_inner.rant");
+}
+
+#[test]
+fn spread_left() {
+  test_rant_file!("sources/spread/spread_left.rant");
+}
+
+#[test]
+fn spread_right() {
+  test_rant_file!("sources/spread/spread_right.rant");
+}
+
+#[test]
+fn spread_multi() {
+  test_rant_file!("sources/spread/spread_multi.rant");
+}
+
+#[test]
+fn spread_variadic_star() {
+  test_rant_file!("sources/spread/spread_variadic_star.rant");
+}
+
+#[test]
+fn spread_variadic_plus() {
+  test_rant_file!("sources/spread/spread_variadic_plus.rant");
+}

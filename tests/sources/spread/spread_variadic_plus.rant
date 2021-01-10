@@ -1,0 +1,7 @@
+<$args = (foo; bar; baz; qux)>
+
+[$concat: a+] {
+  [join:\s;<a>]
+}
+
+[concat: + <args> & assert-eq: "foo bar baz qux"]

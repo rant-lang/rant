@@ -416,13 +416,28 @@ impl Parameter {
   }
 }
 
+/// Represents an argument to a function call.
+#[derive(Debug)]
+pub struct ArgumentExpr {
+  pub expr: Rc<Sequence>,
+  pub is_spread: bool
+}
+
 /// Describes a function call.
 #[derive(Debug)]
 pub struct FunctionCall {
   pub flag: PrintFlag,
   pub id: Rc<AccessPath>,
-  pub arguments: Rc<Vec<Rc<Sequence>>>,
+  pub arguments: Rc<Vec<ArgumentExpr>>,
   pub spread_last_arg: bool,
+}
+
+/// Describes an anonymous (nameless) function call.
+#[derive(Debug)]
+pub struct AnonFunctionCall {
+  pub flag: PrintFlag,
+  pub expr: Rc<Sequence>,
+  pub args: Rc<Vec<ArgumentExpr>>,
 }
 
 /// Describes a function definition.
@@ -440,15 +455,6 @@ pub struct ClosureExpr {
   pub expr: Rc<Sequence>,
   pub params: Rc<Vec<Parameter>>,
   pub capture_vars: Rc<Vec<Identifier>>,
-}
-
-/// Describes an anonymous (nameless) function call.
-#[derive(Debug)]
-pub struct AnonFunctionCall {
-  pub flag: PrintFlag,
-  pub expr: Rc<Sequence>,
-  pub args: Rc<Vec<Rc<Sequence>>>,
-  pub spread_last_arg: bool,
 }
 
 /// Key creation methods for map initializer entries.

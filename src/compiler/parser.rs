@@ -928,11 +928,23 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           () => {{
             loop {
               self.reader.skip_ws();
+              let mut is_spread = false;
+
+              // Check for spread operator
+              if self.reader.eat_where(|t| matches!(t, Some((RantToken::Plus, ..)))) {
+                is_spread = true;
+                self.reader.skip_ws();
+              }
+
               // Check for compose value
               if self.reader.eat_where(|t| matches!(t, Some((RantToken::ComposeValue, ..)))) {
                 if is_composing  {
                   if let Some(compose) = composed_func.take() {
-                    func_args.push(Rc::new(Sequence::one(compose, &self.info)));
+                    let arg = ArgumentExpr {
+                      expr: Rc::new(Sequence::one(compose, &self.info)),
+                      is_spread
+                    };
+                    func_args.push(arg);
                   } else {
                     // If take() fails, it means the compose value was already used
                     // No need to push an arg since it won't be used anyway
@@ -961,7 +973,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               } else {
                 // Parse normal argument
                 let (arg_seq, arg_end, _) = self.parse_sequence(SequenceParseMode::FunctionArg)?;
-                func_args.push(Rc::new(arg_seq));
+                let arg = ArgumentExpr {
+                  expr: Rc::new(arg_seq),
+                  is_spread
+                };
+                func_args.push(arg);
                 match arg_end {
                   SequenceEndType::FunctionArgEndNext => continue,
                   SequenceEndType::FunctionArgEndBreak => {
@@ -983,11 +999,15 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }}
         }
 
+        /// If the composition value wasn't used, inserts it as the first argument.
         macro_rules! fallback_compose {
           () => {
-            // If the composition value wasn't used, insert it as the first argument
             if let Some(compose) = composed_func.take() {
-              func_args.insert(0, Rc::new(Sequence::one(compose, &self.info)));
+              let arg = ArgumentExpr {
+                expr: Rc::new(Sequence::one(compose, &self.info)),
+                is_spread: false
+              };
+              func_args.insert(0, arg);
             }
           }
         }
@@ -1056,7 +1076,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             expr: Rc::new(func_expr),
             args: Rc::new(func_args),
             flag,
-            spread_last_arg: false, // TODO
           };
           
           Some(Rst::AnonFuncCall(afcall))

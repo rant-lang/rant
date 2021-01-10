@@ -98,7 +98,7 @@ pub enum Intent {
   /// Pop `expr_count` values off the stack and use them for expression fields in a setter.
   SetValue { path: Rc<AccessPath>, auto_def: bool, expr_count: usize },
   /// Evaluate `arg_exprs` in order, then pop the argument values off the stack, pop a function off the stack, and pass the arguments to the function.
-  Invoke { arg_exprs: Rc<Vec<Rc<Sequence>>>, eval_count: usize, flag: PrintFlag },
+  Invoke { arg_exprs: Rc<Vec<ArgumentExpr>>, eval_count: usize, flag: PrintFlag },
   /// Pop `argc` args off the stack, then pop a function off the stack and call it with the args.
   Call { argc: usize, flag: PrintFlag, override_print: bool },
   /// Pop value from stack and add it to a list. If `index` is out of range, print the list.
@@ -288,15 +288,26 @@ impl<'rant> VM<'rant> {
         Intent::Invoke { arg_exprs, eval_count, flag } => {
           // First, evaluate all arguments
           if eval_count < arg_exprs.len() {
-            let arg_expr = Rc::clone(arg_exprs.get(arg_exprs.len() - eval_count - 1).unwrap());
+            let arg_expr = arg_exprs.get(arg_exprs.len() - eval_count - 1).unwrap();
+            let arg_seq = Rc::clone(&arg_expr.expr);
             self.cur_frame_mut().push_intent_front(Intent::Invoke { arg_exprs, eval_count: eval_count + 1, flag });
-            self.push_frame_flavored(arg_expr, true, StackFrameFlavor::ArgumentExpression)?;
+            self.push_frame_flavored(arg_seq, true, StackFrameFlavor::ArgumentExpression)?;
             return Ok(true)
           } else {
             // Pop the evaluated args off the stack
             let mut args = vec![];
-            for _ in 0..arg_exprs.len() {
-              args.push(self.pop_val()?);
+            for arg_expr in arg_exprs.iter() {
+              let arg = self.pop_val()?;
+              // When spread notation is used and the argument is a list, expand its values into individual args
+              if arg_expr.is_spread {
+                if let RantValue::List(list_ref) = &arg {
+                  for spread_arg in list_ref.borrow().iter() {
+                    args.push(spread_arg.clone());
+                  }
+                  continue
+                }
+              }
+              args.push(arg);
             }
 
             // Pop the function and make sure it's callable
@@ -600,7 +611,6 @@ impl<'rant> VM<'rant> {
             expr,
             args,
             flag,
-            spread_last_arg,
           } = afcall;
 
           // Evaluate arguments after function is evaluated
