@@ -1,8 +1,9 @@
 # Changelog
 
-## 4.0.0-alpha.14 (unreleased)
+## 4.0.0-alpha.14 (latest)
 
 ### New
+  * Add support for spread notation in function calls
   * Add support for slice notation in getters and setters
   * Added `BUILD_VERSION` constant to stdlib
   * Added new stdlib functions:
@@ -17,7 +18,7 @@
   * Fixed modules imported with `[require]` not living long enough
   * Fixed panic when trying to return from main program scope
 
-## 4.0.0-alpha.13 (latest)
+## 4.0.0-alpha.13
 
 ### Changes
   * Renamed `ErrorKind` to `CompilerErrorKind` in `rant::compiler`
