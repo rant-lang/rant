@@ -141,7 +141,7 @@ impl RantMap {
 
   #[inline]
   pub fn raw_keys(&self) -> RantList {
-    RantList::from_iter(self.map.keys().map(|k| RantValue::String(k.as_str().into())))
+    self.map.keys().map(|k| RantValue::String(k.as_str().into())).collect()
   }
 }
 

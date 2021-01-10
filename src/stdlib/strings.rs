@@ -1,5 +1,3 @@
-use std::iter::FromIterator;
-
 use super::*;
 
 pub(crate) fn seg(vm: &mut VM, (s, seg_size): (String, usize)) -> RantStdResult {
@@ -43,7 +41,7 @@ pub(crate) fn split(vm: &mut VM, (s, at): (String, Option<String>)) -> RantStdRe
 }
 
 pub(crate) fn lines(vm: &mut VM, s: String) -> RantStdResult {
-  let lines = RantList::from_iter(s.lines().map(|line| RantValue::String(line.into())));
+  let lines = s.lines().map(|line| RantValue::String(line.into())).collect();
   vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(lines))));
   Ok(())
 }

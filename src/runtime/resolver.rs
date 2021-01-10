@@ -426,12 +426,10 @@ impl Selector {
         let prev_parity = self.parity;
         if (prev_parity && cur_index == 0) || (!prev_parity && cur_index == elem_count - 1) {
           self.parity = !prev_parity;
+        } else if self.parity {
+          self.index = cur_index.saturating_sub(1);
         } else {
-          if self.parity {
-            self.index = cur_index.saturating_sub(1);
-          } else {
-            self.index = (cur_index + 1) % elem_count;
-          }
+          self.index = (cur_index + 1) % elem_count;
         }
       },
       SelectorMode::Reverse => {
@@ -448,12 +446,10 @@ impl Selector {
         let prev_parity = self.parity;
         if (!prev_parity && cur_index == 0) || (prev_parity && cur_index == elem_count - 1) {
           self.parity = !prev_parity;
+        } else if self.parity {
+          self.index = (cur_index + 1) % elem_count;
         } else {
-          if self.parity {
-            self.index = (cur_index + 1) % elem_count;
-          } else {
-            self.index = cur_index.saturating_sub(1);
-          }
+          self.index = cur_index.saturating_sub(1);
         }
       },
       SelectorMode::Deck => {
@@ -482,12 +478,10 @@ impl Selector {
           }
           
           self.parity = !cur_parity;
+        } else if self.parity {
+          self.index = cur_index.saturating_sub(1);
         } else {
-          if self.parity {
-            self.index = cur_index.saturating_sub(1);
-          } else {
-            self.index = (cur_index + 1).min(elem_count - 1);
-          }
+          self.index = (cur_index + 1).min(elem_count - 1);
         }
 
         return Ok(jump_index)

@@ -626,7 +626,7 @@ impl Debug for RantFunctionInterface {
     unsafe {
       match self {
         RantFunctionInterface::Foreign(func) => write!(f, "{:#016x}", mem::transmute::<_, u128>(Rc::as_ptr(func))),
-        RantFunctionInterface::User(func) => write!(f, "{:#016x}", mem::transmute::<_, usize>(Rc::as_ptr(func)))
+        RantFunctionInterface::User(func) => write!(f, "{:#016x}", Rc::as_ptr(func) as usize)
       }
     }
   }

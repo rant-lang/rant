@@ -115,7 +115,7 @@ pub enum RantToken {
   UnterminatedStringLiteral,
 }
 
-fn parse_string_literal<'a>(lex: &mut Lexer<'a, RantToken>) -> Option<InternalString> {
+fn parse_string_literal(lex: &mut Lexer<RantToken>) -> Option<InternalString> {
   let literal: String = lex.slice().to_owned();
   let literal_content = &literal[1..literal.len() - 1];
   let mut string_content = InternalString::new();
@@ -139,14 +139,14 @@ fn parse_string_literal<'a>(lex: &mut Lexer<'a, RantToken>) -> Option<InternalSt
 }
 
 /// Filter function for whitespace lexer rule to exclude whitespace at start of source
-fn filter_bs<'a>(lex: &mut Lexer<'a, RantToken>) -> Filter<()> {
+fn filter_bs(lex: &mut Lexer<RantToken>) -> Filter<()> {
   if lex.span().start > 0 {
     return Filter::Emit(())
   }
   Filter::Skip
 }
 
-fn parse_escape<'a>(lex: &mut Lexer<'a, RantToken>) -> Option<char> {
+fn parse_escape(lex: &mut Lexer<RantToken>) -> Option<char> {
   let slice = lex.slice();
   Some(match slice.chars().nth(1)? {
     'r' => '\r',
@@ -158,18 +158,18 @@ fn parse_escape<'a>(lex: &mut Lexer<'a, RantToken>) -> Option<char> {
   })
 }
 
-fn parse_code_point_escape<'a>(lex: &mut Lexer<'a, RantToken>) -> Option<char> {
+fn parse_code_point_escape(lex: &mut Lexer<RantToken>) -> Option<char> {
   let codepoint = u8::from_str_radix(&lex.slice()[2..], 16).ok()?;
   Some(codepoint as char)
 }
 
-fn parse_float<'a>(lex: &mut Lexer<'a, RantToken>) -> Option<f64> {
+fn parse_float(lex: &mut Lexer<RantToken>) -> Option<f64> {
   let slice = lex.slice();
   let n = slice.parse().ok()?;
   Some(n)
 }
 
-fn parse_integer<'a>(lex: &mut Lexer<'a, RantToken>) -> Option<i64> {
+fn parse_integer(lex: &mut Lexer<RantToken>) -> Option<i64> {
   let slice = lex.slice();
   let n = slice.parse().ok()?;
   Some(n)
