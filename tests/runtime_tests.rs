@@ -119,7 +119,7 @@ fn func_with_required_param() {
 #[test]
 fn func_with_variadic_star() {
   test_rant_file!(
-    "sources/func_with_variadic_star.rant",
+    "sources/func/func_with_variadic_star.rant",
     "\na\na b\na b c\na b c d"
   );
 }
@@ -127,7 +127,7 @@ fn func_with_variadic_star() {
 #[test]
 fn func_with_variadic_plus() {
   test_rant_file!(
-    "sources/func_with_variadic_plus.rant",
+    "sources/func/func_with_variadic_plus.rant",
     "a\na b\na b c\na b c d"
   );
 }
@@ -135,7 +135,7 @@ fn func_with_variadic_plus() {
 #[test]
 fn func_with_optional_param() {
   test_rant_file!(
-    "sources/func_with_optional_param.rant", 
+    "sources/func/func_with_optional_param.rant", 
     "foo\nbar"
   );
 }
@@ -168,7 +168,7 @@ fn override_shadowed_local_with_descope() {
 #[test]
 fn override_shadowed_locals_with_multi_descope() {
   test_rant_file!(
-    "sources/override_shadowed_locals_with_multi_descope.rant",
+    "sources/access/override_shadowed_locals_with_multi_descope.rant",
     "foo bar baz"
   );
 }
@@ -196,7 +196,7 @@ fn multi_accessor_delim_term() {
 #[test]
 fn dynamic_index_setter() {
   test_rant_file!(
-    "sources/dynamic_index_setter.rant",
+    "sources/access/dynamic_index_setter.rant",
     "1, 2, 4"
   );
 }
@@ -204,7 +204,7 @@ fn dynamic_index_setter() {
 #[test]
 fn dynamic_multi_index_setter() {
   test_rant_file!(
-    "sources/dynamic_multi_index_setter.rant",
+    "sources/access/dynamic_multi_index_setter.rant",
     "1, 2, 4, 4, 5, 6"
   )
 }
@@ -212,7 +212,7 @@ fn dynamic_multi_index_setter() {
 #[test]
 fn closure_capture_var() {
   test_rant_file!(
-    "sources/closure_capture_var.rant",
+    "sources/closure/closure_capture_var.rant",
     "foo"
   );
 }
@@ -220,7 +220,7 @@ fn closure_capture_var() {
 #[test]
 fn closure_capture_arg() {
   test_rant_file!(
-    "sources/closure_capture_arg.rant",
+    "sources/closure/closure_capture_arg.rant",
     "foo"
   );
 }
@@ -228,7 +228,7 @@ fn closure_capture_arg() {
 #[test]
 fn closure_mutate_captured_value() {
   test_rant_file!(
-    "sources/closure_mutate_captured_value.rant",
+    "sources/closure/closure_mutate_captured_value.rant",
     "0 1 2 3"
   );
 }
@@ -282,9 +282,9 @@ fn zip_with_user_callback() {
 }
 
 #[test]
-fn trickle_down_func_lookup() {
+fn func_percolation() {
   test_rant_file!(
-    "sources/trickle_down_func_lookup.rant",
+    "sources/func/func_percolation.rant",
     "global\nlocal\nvery local"
   );
 }
@@ -292,7 +292,7 @@ fn trickle_down_func_lookup() {
 #[test]
 fn anon_getter() {
   test_rant_file!(
-    "sources/anon_getter.rant",
+    "sources/anonymous/anon_getter.rant",
     "foo bar"
   );
 }
@@ -300,7 +300,7 @@ fn anon_getter() {
 #[test]
 fn dynamic_anon_getter() {
   test_rant_file!(
-    "sources/dynamic_anon_getter.rant",
+    "sources/anonymous/dynamic_anon_getter.rant",
     "6"
   );
 }
@@ -308,7 +308,7 @@ fn dynamic_anon_getter() {
 #[test]
 fn anon_setter() {
   test_rant_file!(
-    "sources/anon_setter.rant",
+    "sources/anonymous/anon_setter.rant",
     "baz qux"
   );
 }
@@ -316,7 +316,7 @@ fn anon_setter() {
 #[test]
 fn dynamic_anon_setter() {
   test_rant_file!(
-    "sources/dynamic_anon_setter.rant",
+    "sources/anonymous/dynamic_anon_setter.rant",
     "7"
   );
 }
@@ -324,7 +324,7 @@ fn dynamic_anon_setter() {
 #[test]
 fn inv_index_get() {
   test_rant_file!(
-    "sources/inv_index_get.rant",
+    "sources/access/inv_index_get.rant",
     "3, 2, 1"
   );
 }
@@ -332,7 +332,7 @@ fn inv_index_get() {
 #[test]
 fn inv_index_set() {
   test_rant_file!(
-    "sources/inv_index_set.rant",
+    "sources/access/inv_index_set.rant",
     "4, 5, 6"
   );
 }
@@ -340,7 +340,7 @@ fn inv_index_set() {
 #[test]
 fn function_composition() {
   test_rant_file!(
-    "sources/function_composition.rant",
+    "sources/func/function_composition.rant",
     "the fox the dog"
   );
 }
@@ -348,7 +348,7 @@ fn function_composition() {
 #[test]
 fn function_composition_callback() {
   test_rant_file!(
-    "sources/function_composition_callback.rant",
+    "sources/func/function_composition_callback.rant",
     "foo bar"
   )
 }
@@ -356,7 +356,7 @@ fn function_composition_callback() {
 #[test]
 fn getter_fallback_from_var() {
   test_rant_file!(
-    "sources/getter_fallback_from_var.rant",
+    "sources/access/getter_fallback_from_var.rant",
     "123, fallback"
   )
 }
@@ -364,7 +364,7 @@ fn getter_fallback_from_var() {
 #[test]
 fn getter_fallback_from_index() {
   test_rant_file!(
-    "sources/getter_fallback_from_index.rant",
+    "sources/access/getter_fallback_from_index.rant",
     "foo, bar, baz, oops"
   )
 }
@@ -372,7 +372,7 @@ fn getter_fallback_from_index() {
 #[test]
 fn getter_fallback_from_key() {
   test_rant_file!(
-    "sources/getter_fallback_from_key.rant",
+    "sources/access/getter_fallback_from_key.rant",
     "foo, bar, baz, oops"
   )
 }
@@ -498,11 +498,26 @@ fn const_function() {
 }
 
 #[test]
-fn const_redef() {
-  test_rant_file!("sources/const/const_redef.rant");
+fn redef_var_with_const() {
+  test_rant_file!("sources/const/redef_var_with_const.rant");
 }
 
 #[test]
 fn const_shadow() {
   test_rant_file!("sources/const/const_shadow.rant");
+}
+
+#[test]
+fn redef_const() {
+  test_rant_file!("sources/const/redef_const.rant" raises InvalidAccess);
+}
+
+#[test]
+fn reassign_const() {
+  test_rant_file!("sources/const/reassign_const.rant" raises InvalidAccess);
+}
+
+#[test]
+fn reassign_const_parent() {
+  test_rant_file!("sources/const/reassign_const_parent.rant" raises InvalidAccess);
 }
