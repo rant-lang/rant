@@ -511,7 +511,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // These symbols are only used in special contexts and can be safely printed
-        RantToken::Bang | RantToken::Question | RantToken::Slash | RantToken::Plus | RantToken::Dollar | RantToken::Equals
+        RantToken::Bang | RantToken::Question | RantToken::Slash | RantToken::Plus | RantToken::Dollar | RantToken::Equals | RantToken::Percent
         => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
