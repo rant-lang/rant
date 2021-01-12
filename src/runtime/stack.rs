@@ -110,13 +110,17 @@ impl CallStack {
     match access {
       AccessPathKind::Local => {
         if let Some(var) = self.locals.get_mut(id) {
-          var.write(val);
+          if !var.write(val) {
+            runtime_error!(RuntimeErrorType::InvalidAccess, "cannot reassign local constant '{}'", id);
+          }
           return Ok(())
         }
       },
       AccessPathKind::Descope(n) => {
         if let Some(var) = self.locals.get_parent_mut(id, n) {
-          var.write(val);
+          if !var.write(val) {
+            runtime_error!(RuntimeErrorType::InvalidAccess, "cannot reassign local constant '{}'", id);
+          }
           return Ok(())
         }
       },
@@ -126,15 +130,13 @@ impl CallStack {
 
     // Check globals
     if context.has_global(id) {
-      context.set_global(id, val);
+      if !context.set_global(id, val) {
+        runtime_error!(RuntimeErrorType::InvalidAccess, "cannot reassign global constant '{}'", id);
+      }
       return Ok(())
     }
 
-    Err(RuntimeError {
-      error_type: RuntimeErrorType::InvalidAccess,
-      description: format!("variable '{}' not found", id),
-      stack_trace: None,
-    })
+    runtime_error!(RuntimeErrorType::InvalidAccess, "variable '{}' not found", id);
   }
 
   /// Gets a variable's value using the specified access type.
@@ -219,25 +221,13 @@ impl CallStack {
     })
   }
 
-  /// Defines a variable of the specified name.
+  /// Defines a local variable of the specified name.
   ///
   /// ## Notes
   ///
   /// This function does not perform any identifier validation.
-  pub fn def_var(&mut self, context: &mut Rant, id: &str, access: AccessPathKind, var: RantVar) -> RuntimeResult<()> {
-    match access {
-      AccessPathKind::Local => {
-        self.locals.define(InternalString::from(id), var);
-        return Ok(())
-      },
-      AccessPathKind::Descope(descope_count) => {
-        self.locals.define_parent(InternalString::from(id), var, descope_count);
-        return Ok(())
-      },
-      AccessPathKind::ExplicitGlobal => {}
-    }
-    
-    context.set_global_var(id, var);
+  pub fn def_local_var(&mut self, id: &str, var: RantVar) -> RuntimeResult<()> {
+    self.locals.define(InternalString::from(id), var);
     Ok(())
   }
 
@@ -247,20 +237,40 @@ impl CallStack {
   ///
   /// This function does not perform any identifier validation.
   #[inline]
-  pub fn def_var_value(&mut self, context: &mut Rant, id: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
+  pub fn def_var_value(&mut self, context: &mut Rant, id: &str, access: AccessPathKind, val: RantValue, is_const: bool) -> RuntimeResult<()> {
     match access {
       AccessPathKind::Local => {
-        self.locals.define(InternalString::from(id), RantVar::ByVal(val));
+        // Don't allow redefs of local constants
+        if let Some(v) = self.locals.get(id) {
+          if v.is_const() && self.locals.depth_of(id) == Some(0) {
+            runtime_error!(RuntimeErrorType::InvalidAccess, "attempted to redefine local constant '{}'", id);
+          }
+        }
+
+        let variable = if is_const { RantVar::ByValConst(val) } else { RantVar::ByVal(val) };
+        self.locals.define(InternalString::from(id), variable);
         return Ok(())
       },
       AccessPathKind::Descope(descope_count) => {
-        self.locals.define_parent(InternalString::from(id), RantVar::ByVal(val), descope_count);
+        // Don't allow redefs of parent constants
+        if let Some((v, vd)) = self.locals.get_parent_depth(id, descope_count) {
+          if v.is_const() && vd == descope_count {
+            runtime_error!(RuntimeErrorType::InvalidAccess, "attempted to redefine parent constant '{}'", id);
+          }
+        }
+
+        let variable = if is_const { RantVar::ByValConst(val) } else { RantVar::ByVal(val) };
+        self.locals.define_parent(InternalString::from(id), variable, descope_count);
         return Ok(())
       },
       AccessPathKind::ExplicitGlobal => {}
     }
     
-    context.set_global(id, val);
+    // Don't allow redefs of global constants
+    if !(if is_const { context.set_global_const(id, val) } else { context.set_global(id, val) }) {
+      runtime_error!(RuntimeErrorType::InvalidAccess, "attempted to redefine global constant '{}'", id);
+    }
+
     Ok(())
   }
 

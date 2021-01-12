@@ -1,0 +1,5 @@
+<%foo = a>
+{
+  <$foo = b; foo = c>
+}
+[assert-eq: <foo>; a]

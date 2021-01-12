@@ -171,10 +171,16 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
   
   /// Reports a syntax error, allowing parsing to continue but causing the final compilation to fail. 
-  fn syntax_error(&mut self, error_type: Problem, span: &Range<usize>) {
+  fn syntax_error(&mut self, problem: Problem, span: &Range<usize>) {
     let (line, col) = self.lookup.get(span.start);
     self.has_errors = true;
-    self.reporter.report(CompilerMessage::new(error_type, Severity::Error, Some(Position::new(line, col, span.clone()))));
+    self.reporter.report(CompilerMessage::new(problem, Severity::Error, Some(Position::new(line, col, span.clone()))));
+  }
+
+  /// Reports a warning, but allows compiling to succeed.
+  fn warn(&mut self, problem: Problem, span: &Range<usize>) {
+    let (line, col) = self.lookup.get(span.start);
+    self.reporter.report(CompilerMessage::new(problem, Severity::Warning, Some(Position::new(line, col, span.clone()))));
   }
   
   /// Emits an "unexpected token" error for the most recently read token.
@@ -486,7 +492,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 is_seq_printing = true;
                 whitespace!(allow);
               },
-              Rst::VarSet(..) | Rst::VarDef(..) => {
+              Rst::VarSet(..) | Rst::VarDef(..) | Rst::ConstDef(..) => {
                 // whitespace!(ignore both);
               },
               _ => unreachable!()
@@ -874,14 +880,21 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   fn parse_func_access(&mut self, flag: PrintFlag) -> ParseResult<Rst> {
     let start_span = self.reader.last_token_span();
     self.reader.skip_ws();
-    // Check if we're defining a function (with [$ ...]) or creating a closure (with [? ...])
-    if let Some((func_access_type_token, _func_access_type_span)) 
-    = self.reader.take_where(|t| matches!(t, Some((RantToken::Dollar, ..)) | Some((RantToken::Question, ..)))) {
+    // Check if we're defining a function (with [$|% ...]) or creating a closure (with [? ...])
+    if let Some((func_access_type_token, func_access_type_span)) 
+    = self.reader.take_where(|t| matches!(t, Some((RantToken::Dollar, ..)) | Some((RantToken::Question, ..)) | Some((RantToken::Percent, ..)))) {
       match func_access_type_token {
         // Function definition
-        RantToken::Dollar => {
+        tt @ RantToken::Dollar | tt @ RantToken::Percent => {
+          let is_const = matches!(tt, RantToken::Percent);
           // Name of variable function will be stored in
           let func_id = self.parse_access_path(false)?;
+
+          // Warn user if non-variable function definition is marked as a constant
+          if is_const && !func_id.is_variable() {
+            self.warn(Problem::NestedFunctionDefMarkedConstant, &func_access_type_span);
+          }
+
           // Function params
           let params = self.parse_func_params(&start_span)?;
           // Read function body
@@ -890,9 +903,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           
           Ok(Rst::FuncDef(FunctionDef {
             body: Rc::new(body.with_name_str(format!("[{}]", func_id).as_str())),
-            id: Rc::new(func_id),
+            path: Rc::new(func_id),
             params: Rc::new(params),
             capture_vars: Rc::new(captures),
+            is_const,
           }))
         },
         // Closure
@@ -1107,7 +1121,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               id: Rc::new(func_name),
               arguments: Rc::new(func_args),
               flag,
-              spread_last_arg: false, // TODO
             };
             
             let func_call = Rst::FuncCall(fcall);
@@ -1577,7 +1590,19 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         break
       }
       
-      let is_def = self.reader.eat_where(|t| matches!(t, Some((RantToken::Dollar, ..))));
+      let (is_def, is_const_def) = if let Some((def_token, ..)) 
+      = self.reader.take_where(|t| matches!(t, Some((RantToken::Dollar, ..)) | Some((RantToken::Percent, ..)))) {
+        match def_token {
+          // Variable declaration
+          RantToken::Dollar => (true, false),
+          // Constant declaration
+          RantToken::Percent => (true, true),
+          _ => unreachable!()
+        }
+      } else {
+        (false, false)
+      };
+
       self.reader.skip_ws();
       
       // Check if it's a definition. If not, it's a getter or setter
@@ -1592,19 +1617,33 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           match token {
             // Empty definition
             RantToken::RightAngle => {
-              add_accessor!(Rst::VarDef(var_name, access_kind, None));
+              if is_const_def {
+                add_accessor!(Rst::ConstDef(var_name, access_kind, None));
+              } else {
+                add_accessor!(Rst::VarDef(var_name, access_kind, None));
+              }
               break 'read
             },
             // Accessor delimiter
             RantToken::Semi => {
-              add_accessor!(Rst::VarDef(var_name, access_kind, None));
+              if is_const_def {
+                add_accessor!(Rst::ConstDef(var_name, access_kind, None));
+              } else {
+                add_accessor!(Rst::VarDef(var_name, access_kind, None));
+              }
               continue 'read;
             },
             // Definition and assignment
             RantToken::Equals => {
               self.reader.skip_ws();
               let (var_assign_expr, end_type, ..) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
-              add_accessor!(Rst::VarDef(var_name, access_kind, Some(Rc::new(var_assign_expr))));
+
+              if is_const_def {
+                add_accessor!(Rst::ConstDef(var_name, access_kind, Some(Rc::new(var_assign_expr))));
+              } else {
+                add_accessor!(Rst::VarDef(var_name, access_kind, Some(Rc::new(var_assign_expr))));
+              }
+              
               match end_type {
                 SequenceEndType::VariableAssignDelim => {
                   continue 'read

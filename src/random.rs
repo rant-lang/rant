@@ -69,7 +69,7 @@ impl RantRng {
   pub fn next_i64(&self, a: i64, b: i64) -> i64 {
     if a == b { return a }
     let (min, max) = minmax(a, b);
-    self.rng.borrow_mut().gen_range(min, max + 1)
+    self.rng.borrow_mut().gen_range(min ..= max)
   }
   
   /// Generates a pseudorandom `f64` between two inclusive values. The range may be specified in either order.
@@ -77,13 +77,13 @@ impl RantRng {
   pub fn next_f64(&self, a: f64, b: f64) -> f64 {
     if a.eq(&b) { return a }
     let (min, max) = minmax(a, b);
-    self.rng.borrow_mut().gen_range(min, max)
+    self.rng.borrow_mut().gen_range(min .. max)
   }
   
   /// Generates a pseudorandom `usize` between 0 and `max` (exclusive).
   #[inline]
   pub fn next_usize(&self, max: usize) -> usize {
-    self.rng.borrow_mut().gen_range(0usize, max)
+    self.rng.borrow_mut().gen_range(0 .. max)
   }
   
   /// Generates a pseudorandom `f64` between 0 and 1.

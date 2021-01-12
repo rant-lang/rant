@@ -216,6 +216,11 @@ impl AccessPath {
   }
 
   #[inline]
+  pub fn is_variable(&self) -> bool {
+    self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::Name(..)) | Some(AccessPathComponent::DynamicKey(..)))
+  }
+
+  #[inline]
   pub fn kind(&self) -> AccessPathKind {
     self.kind
   }
@@ -429,7 +434,6 @@ pub struct FunctionCall {
   pub flag: PrintFlag,
   pub id: Rc<AccessPath>,
   pub arguments: Rc<Vec<ArgumentExpr>>,
-  pub spread_last_arg: bool,
 }
 
 /// Describes an anonymous (nameless) function call.
@@ -443,7 +447,8 @@ pub struct AnonFunctionCall {
 /// Describes a function definition.
 #[derive(Debug)]
 pub struct FunctionDef {
-  pub id: Rc<AccessPath>,
+  pub path: Rc<AccessPath>,
+  pub is_const: bool, // only used on variable definitions
   pub params: Rc<Vec<Parameter>>,
   pub capture_vars: Rc<Vec<Identifier>>,
   pub body: Rc<Sequence>,
@@ -491,6 +496,8 @@ pub enum Rst {
   FuncDef(FunctionDef),
   /// Variable definition
   VarDef(Identifier, AccessPathKind, Option<Rc<Sequence>>),
+  /// Constant definition
+  ConstDef(Identifier, AccessPathKind, Option<Rc<Sequence>>),
   /// Value getter
   VarGet(Rc<AccessPath>, Option<Rc<Sequence>>),
   /// Value setter
@@ -529,7 +536,8 @@ impl Rst {
       Rst::Boolean(_) =>                      "boolean",
       Rst::EmptyVal =>                        "empty",
       Rst::Nop =>                             "nothing",
-      Rst::VarDef(..) =>                      "definition",
+      Rst::VarDef(..) =>                      "variable definition",
+      Rst::ConstDef(..) =>                    "constant definition",
       Rst::VarGet(..) =>                      "getter",
       Rst::VarSet(..) =>                      "setter",
       _ =>                                    "???"

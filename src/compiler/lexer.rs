@@ -75,6 +75,9 @@ pub enum RantToken {
   
   #[token("$")]
   Dollar,
+
+  #[token("%")]
+  Percent,
   
   #[token("'")]
   Hint,

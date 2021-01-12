@@ -486,3 +486,23 @@ fn spread_variadic_star() {
 fn spread_variadic_plus() {
   test_rant_file!("sources/spread/spread_variadic_plus.rant");
 }
+
+#[test]
+fn const_define() {
+  test_rant_file!("sources/const/const_define.rant");
+}
+
+#[test]
+fn const_function() {
+  test_rant_file!("sources/const/const_function.rant");
+}
+
+#[test]
+fn const_redef() {
+  test_rant_file!("sources/const/const_redef.rant");
+}
+
+#[test]
+fn const_shadow() {
+  test_rant_file!("sources/const/const_shadow.rant");
+}

@@ -55,11 +55,11 @@ pub(crate) fn load_stdlib(context: &mut Rant)
   macro_rules! load_func {
     ($fname:ident) => {{
       let func = $fname.as_rant_func();
-      context.set_global(stringify!($fname), RantValue::Function(Rc::new(func)));
+      context.set_global_force(stringify!($fname), RantValue::Function(Rc::new(func)), true);
     }};
     ($fname:ident, $id:literal) => {{
       let func = $fname.as_rant_func();
-      context.set_global($id, RantValue::Function(Rc::new(func)));
+      context.set_global_force($id, RantValue::Function(Rc::new(func)), true);
     }};
   }
 
@@ -135,6 +135,6 @@ pub(crate) fn load_stdlib(context: &mut Rant)
   }
 
   // Constants
-  context.set_global("RANT_VERSION", RantValue::String(RANT_VERSION.into()));
-  context.set_global("BUILD_VERSION", RantValue::String(BUILD_VERSION.into()));
+  context.set_global_force("RANT_VERSION", RantValue::String(RANT_VERSION.into()), true);
+  context.set_global_force("BUILD_VERSION", RantValue::String(BUILD_VERSION.into()), true);
 }

@@ -202,14 +202,42 @@ impl Rant {
     RantCompiler::compile_file(path, &mut (), self.debug_mode)
   }
 
-  /// Sets a global variable.
+  /// Sets a global variable. This will auto-define the global if it doesn't exist. 
+  ///
+  /// If the global already exists and is a constant, the write will not succeed.
+  ///
+  /// Returns `true` if the write succeeded; otherwise, `false`.
   #[inline]
-  pub fn set_global(&mut self, key: &str, value: RantValue) {
+  pub fn set_global(&mut self, key: &str, value: RantValue) -> bool {
     if let Some(global_var) = self.globals.get_mut(key) {
-      global_var.write(value);
+      global_var.write(value)
     } else {
       self.globals.insert(InternalString::from(key), RantVar::ByVal(value));
+      true
     }
+  }
+
+  /// Sets a global constant. This will auto-define the global if it doesn't exist.
+  ///
+  /// If the global already exists and is a constant, the write will not succeed.
+  ///
+  /// Returns `true` if the write succeeded; otherwise, `false`.
+  #[inline]
+  pub fn set_global_const(&mut self, key: &str, value: RantValue) -> bool {
+    if let Some(global_var) = self.globals.get(key) {
+      if global_var.is_const() {
+        return false
+      }
+    }
+    self.globals.insert(InternalString::from(key), RantVar::ByValConst(value));
+    true
+  }
+
+  /// Sets a global's value, forcing the write even if the existing global is a constant.
+  /// This will auto-define the global if it doesn't exist.
+  #[inline]
+  pub fn set_global_force(&mut self, key: &str, value: RantValue, is_const: bool) {
+    self.globals.insert(InternalString::from(key), if is_const { RantVar::ByValConst(value) } else { RantVar::ByVal(value) });
   }
 
   /// Gets the value of a global variable.

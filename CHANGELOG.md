@@ -1,6 +1,33 @@
 # Changelog
 
-## 4.0.0-alpha.14 (latest)
+## 4.0.0-alpha.15 (unreleased)
+
+### New
+  * Added support for constants
+  * API features:
+    * `Rant::set_global_const()`
+    * `Rant::set_global_force()`
+    * `lang::AccessPath::is_variable()`
+    * `lang::Rst::ConstDef`
+  * Compiler messages:
+    * `R-1003` (nested function definition marked as constant)
+
+### Changes
+  * Updated some AST structures to support constants
+  * The following items are now made constant:
+    * Standard library items
+    * Program arguments
+    * Imported modules
+  * Upgraded library dependencies:
+    * `once_cell` &rarr; 0.5.2
+    * `quickscope` &rarr; 0.1.6
+    * `rand` &rarr; 0.8.1
+    * `rand-xoshiro` &rarr; 0.6.0
+    * `smallvec` &rarr; 1.6.1
+    * `smartstring` &rarr; 0.2.6
+    * `unicode-segmentation` &rarr; 1.7.1
+
+## 4.0.0-alpha.14
 
 ### New
   * Add support for spread notation in function calls

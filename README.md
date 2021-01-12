@@ -72,7 +72,7 @@ The Rant equivalent is nearly identical:
 Rant comes with a CLI tool that includes a REPL. You can install and run it with:
 
 ```sh
-$ cargo install rant --version=4.0.0-alpha.14 --features=cli
+$ cargo install rant --version=4.0.0-alpha.15 --features=cli
 $ rant
 ```
 

@@ -85,7 +85,7 @@ pub enum Intent {
   /// Pop a value off the stack and assign it to an existing variable.
   SetVar { vname: Identifier, access_kind: AccessPathKind, },
   /// Pop a value off the stack and assign it to a new variable.
-  DefVar { vname: Identifier, access_kind: AccessPathKind, },
+  DefVar { vname: Identifier, access_kind: AccessPathKind, is_const: bool },
   /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `GetValue`.
   BuildDynamicGetter { 
     path: Rc<AccessPath>, dynamic_key_count: usize, pending_exprs: Vec<Rc<Sequence>>, 
@@ -94,9 +94,9 @@ pub enum Intent {
   /// Pop `dynamic_key_count` values off the stack and use them for expression fields in a getter.
   GetValue { path: Rc<AccessPath>, dynamic_key_count: usize, override_print: bool, prefer_function: bool, fallback: Option<Rc<Sequence>> },
   /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `SetValue`.
-  BuildDynamicSetter { path: Rc<AccessPath>, auto_def: bool, expr_count: usize, pending_exprs: Vec<Rc<Sequence>>, val_source: SetterValueSource },
+  BuildDynamicSetter { path: Rc<AccessPath>, write_mode: VarWriteMode, expr_count: usize, pending_exprs: Vec<Rc<Sequence>>, val_source: SetterValueSource },
   /// Pop `expr_count` values off the stack and use them for expression fields in a setter.
-  SetValue { path: Rc<AccessPath>, auto_def: bool, expr_count: usize },
+  SetValue { path: Rc<AccessPath>, write_mode: VarWriteMode, expr_count: usize },
   /// Evaluate `arg_exprs` in order, then pop the argument values off the stack, pop a function off the stack, and pass the arguments to the function.
   Invoke { arg_exprs: Rc<Vec<ArgumentExpr>>, eval_count: usize, flag: PrintFlag },
   /// Pop `argc` args off the stack, then pop a function off the stack and call it with the args.
@@ -133,6 +133,18 @@ impl Intent {
       Intent::DropStaleUnwinds => "drop_stale_unwinds",
     }
   }
+}
+
+/// Defines variable write modes for setter intents.
+/// Used by function definitions to control conditional definition behavior.
+#[derive(Debug, Copy, Clone)]
+pub enum VarWriteMode {
+  /// Only set existing variables.
+  SetOnly,
+  /// Defines and sets a variable.
+  Define,
+  /// Defines and sets a new constant.
+  DefineConst,
 }
 
 #[derive(Debug)]
@@ -179,7 +191,7 @@ impl<'rant> VM<'rant> {
   {
     if let Some(args) = args.into() {
       for (k, v) in args {
-        self.def_var_value(&k, AccessPathKind::Local, v)?;
+        self.def_var_value(&k, AccessPathKind::Local, v, true)?;
       }
     }
 
@@ -247,9 +259,9 @@ impl<'rant> VM<'rant> {
           let val = self.pop_val()?;
           self.set_var_value(vname.as_str(), access_kind, val)?;
         },
-        Intent::DefVar { vname, access_kind } => {
+        Intent::DefVar { vname, access_kind, is_const } => {
           let val = self.pop_val()?;
-          self.def_var_value(vname.as_str(), access_kind, val)?;
+          self.def_var_value(vname.as_str(), access_kind, val, is_const)?;
         },
         Intent::BuildDynamicGetter { 
           path, dynamic_key_count, mut pending_exprs, 
@@ -342,12 +354,12 @@ impl<'rant> VM<'rant> {
           self.call_func(func, args, flag, override_print)?;
           return Ok(true)
         },
-        Intent::BuildDynamicSetter { path, auto_def, expr_count, mut pending_exprs, val_source } => {
+        Intent::BuildDynamicSetter { path, write_mode, expr_count, mut pending_exprs, val_source } => {
           // Prepare setter value
           match val_source {
             // Value must be evaluated from an expression
             SetterValueSource::FromExpression(expr) => {
-              self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, auto_def, expr_count, pending_exprs, val_source: SetterValueSource::Consumed });
+              self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, write_mode, expr_count, pending_exprs, val_source: SetterValueSource::Consumed });
               self.push_frame(Rc::clone(&expr), true)?;
               return Ok(true)
             },
@@ -363,20 +375,20 @@ impl<'rant> VM<'rant> {
             // Set next intent based on remaining expressions in setter
             if pending_exprs.is_empty() {
               // Set value once this frame is active again
-              self.cur_frame_mut().push_intent_front(Intent::SetValue { path, auto_def, expr_count });
+              self.cur_frame_mut().push_intent_front(Intent::SetValue { path, write_mode, expr_count });
             } else {
               // Continue building setter
-              self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, auto_def, expr_count, pending_exprs, val_source: SetterValueSource::Consumed });                
+              self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, write_mode, expr_count, pending_exprs, val_source: SetterValueSource::Consumed });                
             }
             self.push_frame_flavored(Rc::clone(&key_expr), true, StackFrameFlavor::DynamicKeyExpression)?;
           } else {
-            self.cur_frame_mut().push_intent_front(Intent::SetValue { path, auto_def, expr_count });
+            self.cur_frame_mut().push_intent_front(Intent::SetValue { path, write_mode, expr_count });
           }
           
           return Ok(true)
         },
-        Intent::SetValue { path, auto_def, expr_count } => {
-          self.set_value(path, auto_def, expr_count)?;
+        Intent::SetValue { path, write_mode, expr_count } => {
+          self.set_value(path, write_mode, expr_count)?;
         },
         Intent::BuildList { init, index, mut list } => {
           // Add latest evaluated value to list
@@ -436,7 +448,7 @@ impl<'rant> VM<'rant> {
             self.engine.set_global(crate::MODULES_CACHE_KEY, RantValue::Map(Rc::new(RefCell::new(cache))));
           }
 
-          self.def_var_value(&module_name, AccessPathKind::Descope(1), module)?;
+          self.def_var_value(&module_name, AccessPathKind::Descope(1), module, true)?;
         },
         Intent::RuntimeCall { function, interrupt } => {
           function(self)?;
@@ -485,12 +497,23 @@ impl<'rant> VM<'rant> {
         Rst::VarDef(vname, access_kind, val_expr) => {
           if let Some(val_expr) = val_expr {
             // If a value is present, it needs to be evaluated first
-            self.cur_frame_mut().push_intent_front(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind });
+            self.cur_frame_mut().push_intent_front(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind, is_const: false });
             self.push_frame(Rc::clone(val_expr), true)?;
             return Ok(true)
           } else {
             // If there's no assignment, just set it to empty value
-            self.def_var_value(vname.as_str(), *access_kind, RantValue::Empty)?;
+            self.def_var_value(vname.as_str(), *access_kind, RantValue::Empty, false)?;
+          }
+        },
+        Rst::ConstDef(vname, access_kind, val_expr) => {
+          if let Some(val_expr) = val_expr {
+            // If a value is present, it needs to be evaluated first
+            self.cur_frame_mut().push_intent_front(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind, is_const: true });
+            self.push_frame(Rc::clone(val_expr), true)?;
+            return Ok(true)
+          } else {
+            // If there's no assignment, just set it to empty value
+            self.def_var_value(vname.as_str(), *access_kind, RantValue::Empty, true)?;
           }
         },
         Rst::VarGet(path, fallback) => {
@@ -525,13 +548,13 @@ impl<'rant> VM<'rant> {
 
           if exprs.is_empty() {
             // Setter is static, so run it directly
-            self.cur_frame_mut().push_intent_front(Intent::SetValue { path: Rc::clone(&path), auto_def: false, expr_count: 0 });
+            self.cur_frame_mut().push_intent_front(Intent::SetValue { path: Rc::clone(&path), write_mode: VarWriteMode::SetOnly, expr_count: 0 });
             self.push_frame(Rc::clone(&val_expr), true)?;
           } else {
             // Build dynamic keys before running setter
             self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter {
               expr_count: exprs.len(),
-              auto_def: false,
+              write_mode: VarWriteMode::SetOnly,
               path: Rc::clone(path),
               pending_exprs: exprs,
               val_source: SetterValueSource::FromExpression(Rc::clone(val_expr))
@@ -541,10 +564,11 @@ impl<'rant> VM<'rant> {
         },
         Rst::FuncDef(fdef) => {
           let FunctionDef { 
-            id, 
+            path, 
             body, 
             params, 
-            capture_vars
+            capture_vars,
+            is_const,
           } = fdef;
 
           // Capture variables
@@ -566,13 +590,13 @@ impl<'rant> VM<'rant> {
               .unwrap_or_else(|| params.len()),
           }));
 
-          let dynamic_keys = id.dynamic_exprs();
+          let dynamic_keys = path.dynamic_exprs();
 
           self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter {
             expr_count: dynamic_keys.len(),
-            auto_def: true,
+            write_mode: if *is_const { VarWriteMode::DefineConst } else { VarWriteMode::Define },
             pending_exprs: dynamic_keys,
-            path: Rc::clone(id),
+            path: Rc::clone(path),
             val_source: SetterValueSource::FromValue(func)
           });
 
@@ -630,7 +654,6 @@ impl<'rant> VM<'rant> {
             id,
             arguments,
             flag,
-            spread_last_arg,
           } = fcall;
 
           let dynamic_keys = id.dynamic_exprs();
@@ -733,16 +756,15 @@ impl<'rant> VM<'rant> {
             self.engine, 
             param.name.as_str(), 
             AccessPathKind::Local, 
-            args.next().unwrap_or(RantValue::Empty)
+            args.next().unwrap_or(RantValue::Empty),
+            false,
           )?;
         }
 
         // Pass captured vars to the function scope
         for (capture_name, capture_var) in func.captured_vars.iter() {
-          self.call_stack.def_var(
-            self.engine,
+          self.call_stack.def_local_var(
             capture_name.as_str(),
-            AccessPathKind::Local,
             RantVar::clone(capture_var)
           )?;
         }
@@ -753,7 +775,7 @@ impl<'rant> VM<'rant> {
 
   /// Runs a setter.
   #[inline]
-  fn set_value(&mut self, path: Rc<AccessPath>, auto_def: bool, dynamic_value_count: usize) -> RuntimeResult<()> {
+  fn set_value(&mut self, path: Rc<AccessPath>, write_mode: VarWriteMode, dynamic_value_count: usize) -> RuntimeResult<()> {
     // Gather evaluated dynamic path components from stack
     let mut dynamic_values = vec![];
     for _ in 0..dynamic_value_count {
@@ -834,10 +856,10 @@ impl<'rant> VM<'rant> {
 
     macro_rules! def_or_set {
       ($vname:expr, $access_kind:expr, $value:expr) => {
-        if auto_def {          
-          self.def_var_value($vname, $access_kind, $value)?;          
-        } else {
-          self.set_var_value($vname, $access_kind, $value)?;
+        match write_mode {
+          VarWriteMode::SetOnly => self.set_var_value($vname, $access_kind, $value)?,
+          VarWriteMode::Define => self.def_var_value($vname, $access_kind, $value, false)?,
+          VarWriteMode::DefineConst => self.def_var_value($vname, $access_kind, $value, true)?,
         }
       }
     }
@@ -1044,8 +1066,8 @@ impl<'rant> VM<'rant> {
 
   /// Defines a new variable in the current scope.
   #[inline(always)]
-  pub fn def_var_value(&mut self, varname: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
-    self.call_stack.def_var_value(self.engine, varname, access, val)
+  pub fn def_var_value(&mut self, varname: &str, access: AccessPathKind, val: RantValue, is_const: bool) -> RuntimeResult<()> {
+    self.call_stack.def_var_value(self.engine, varname, access, val, is_const)
   }
   
   /// Returns `true` if the call stack is currently empty.
@@ -1399,7 +1421,7 @@ pub enum RuntimeErrorType {
   StackOverflow,
   /// Stack underflow
   StackUnderflow,
-  /// Variable access error, such as attempting to access a nonexistent variable
+  /// Variable access error, such as attempting to access a nonexistent variable or write to a constant
   InvalidAccess,
   /// Operation is not valid for the current program state
   InvalidOperation,

@@ -131,57 +131,57 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) -> ExitCode {
   };
   
   let parse_time = start_time.elapsed();
+
+  let code = match &source {
+    ProgramSource::Inline(s) => s.to_owned(),
+    ProgramSource::Stdin(s) => s.to_owned(),
+    ProgramSource::FilePath(path) => std::fs::read_to_string(path).expect("can't open file for error reporting")
+  };     
+
+  let mut codemap = CodeMap::new();
+
+  let file_span = codemap.add_file(match &source {
+    ProgramSource::Inline(_) => "(cmdline)",
+    ProgramSource::Stdin(_) => "(stdin)",
+    ProgramSource::FilePath(path) => path
+  }.to_owned(), code).span;
+
+  let mut emitter = Emitter::stderr(ColorConfig::Always, Some(&codemap));
+  
+  // Print errors/warnings
+  for msg in problems.iter() {
+    let d = Diagnostic {
+      level: match msg.severity() {
+        Severity::Warning => Level::Warning,
+        Severity::Error => Level::Error,
+      },
+      message: msg.message(),
+      code: Some(msg.code().to_owned()),
+      spans: if let Some(pos) = &msg.pos() {
+        let span = pos.span();
+        let label = SpanLabel {
+          span: file_span.subspan(span.start as u64, span.end as u64),
+          label: msg.inline_message(),
+          style: SpanStyle::Primary
+        };
+        vec![label]
+      } else {
+        vec![]
+      }
+    };
+    emitter.emit(&[d]);
+  }
+
+  let errc = problems.iter().filter(|msg| msg.is_error()).count();
   
   // Make sure it compiled successfully
   match &compile_result {
     Ok(_) => {
       if show_stats {
-        println!("{} in {:?}", "Compiled".bright_green().bold(), parse_time) 
+        eprintln!("{} in {:?}", "Compiled".bright_green().bold(), parse_time) 
       }
     },
     Err(_) => {
-      let code = match &source {
-        ProgramSource::Inline(s) => s.to_owned(),
-        ProgramSource::Stdin(s) => s.to_owned(),
-        ProgramSource::FilePath(path) => std::fs::read_to_string(path).expect("can't open file for error reporting")
-      };     
-
-      let mut codemap = CodeMap::new();
-
-      let file_span = codemap.add_file(match &source {
-        ProgramSource::Inline(_) => "(cmdline)",
-        ProgramSource::Stdin(_) => "(stdin)",
-        ProgramSource::FilePath(path) => path
-      }.to_owned(), code).span;
-
-      let mut emitter = Emitter::stderr(ColorConfig::Always, Some(&codemap));
-      
-      // Print errors/warnings
-      for msg in problems.iter() {
-        let d = Diagnostic {
-          level: match msg.severity() {
-            Severity::Warning => Level::Warning,
-            Severity::Error => Level::Error,
-          },
-          message: msg.message(),
-          code: Some(msg.code().to_owned()),
-          spans: if let Some(pos) = &msg.pos() {
-            let span = pos.span();
-            let label = SpanLabel {
-              span: file_span.subspan(span.start as u64, span.end as u64),
-              label: msg.inline_message(),
-              style: SpanStyle::Primary
-            };
-            vec![label]
-          } else {
-            vec![]
-          }
-        };
-        emitter.emit(&[d]);
-      }
-
-      let errc = problems.iter().filter(|msg| msg.is_error()).count();
-      
       eprintln!("\n{}\n", format!("{} ({} {} found)", "Compile failed".bright_red(), errc, if errc == 1 { "error" } else { "errors" }).bold());
       return exitcode::DATAERR
     }

@@ -132,6 +132,7 @@ pub enum Problem {
   UnusedVariable(String),
   UnusedParameter(String),
   EmptyFunctionBody(String),
+  NestedFunctionDefMarkedConstant,
   FileNotFound(String),
   FileIOError(String),
 }
@@ -180,6 +181,7 @@ impl Problem {
       Problem::UnusedVariable(_) =>                               "R-1000",
       Problem::UnusedParameter(_) =>                              "R-1001",
       Problem::EmptyFunctionBody(_) =>                            "R-1002",
+      Problem::NestedFunctionDefMarkedConstant =>                 "R-1003",
     }
   }
   
@@ -209,6 +211,7 @@ impl Problem {
       Problem::UnusedVariable(vname) => format!("variable '{}' is not used", vname),
       Problem::UnusedParameter(pname) => format!("parameter '{}' is not used", pname),
       Problem::EmptyFunctionBody(fname) => format!("function '{}' is empty", fname),
+      Problem::NestedFunctionDefMarkedConstant => "nested function definition can't be made constant; function will be mutable".to_owned(),
       Problem::FileNotFound(file) => format!("file not found: '{}'", file),
       Problem::FileIOError(err) => format!("filesystem error: {}", err),
       Problem::UnclosedVariableAccess => "unclosed accessor; expected '>'".to_owned(),
@@ -249,6 +252,7 @@ impl Problem {
       Problem::AnonValueAssignment => "direct assignment impossible".to_owned(),
       Problem::ComposeValueReused => "composition value reused here".to_owned(),
       Problem::NothingToCompose => "no previous output to consume".to_owned(),
+      Problem::NestedFunctionDefMarkedConstant => "use '$' here instead".to_owned(),
       _ => return None
     })
   }
