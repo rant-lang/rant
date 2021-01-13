@@ -79,9 +79,9 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     // Formatting functions
     whitespace_fmt as "whitespace-fmt",
 
-    // Block attribute / control flow functions
+    // Attribute / control flow functions
     break_ as "break", continue_ as "continue", if_ as "if", else_if as "else-if", else_ as "else", 
-    mksel, rep, return_ as "return", sel, sep,
+    mksel, rep, return_ as "return", sel, sep, pipe,
 
     // Attribute frame stack functions
     push_attrs as "push-attrs", pop_attrs as "pop-attrs", count_attrs as "count-attrs", reset_attrs as "reset-attrs",

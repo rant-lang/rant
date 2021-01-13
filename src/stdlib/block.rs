@@ -47,6 +47,11 @@ pub(crate) fn sep(vm: &mut VM, separator: RantValue) -> RantStdResult {
   Ok(())
 }
 
+pub(crate) fn pipe(vm: &mut VM, pipe_func: Option<RantFunctionRef>) -> RantStdResult {
+  vm.resolver_mut().attrs_mut().pipe = pipe_func;
+  Ok(())
+}
+
 pub(crate) fn step_index(vm: &mut VM, _: ()) -> RantStdResult {
   let n = vm.resolver().active_block().map_or(0, |block| block.step_index());
   vm.cur_frame_mut().write_value(RantValue::Int(n as i64));

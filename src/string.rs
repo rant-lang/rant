@@ -137,6 +137,11 @@ impl RantString {
   pub fn len(&self) -> usize {
     self.graphemes().len()
   }
+
+  #[inline]
+  pub fn is_empty(&self) -> bool {
+    self.graphemes().is_empty()
+  }
 }
 
 impl From<InternalString> for RantString {

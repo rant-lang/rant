@@ -588,6 +588,7 @@ impl<'rant> VM<'rant> {
               .enumerate()
               .find_map(|(i, p)| if p.varity.is_variadic() { Some(i) } else { None })
               .unwrap_or_else(|| params.len()),
+            flavor: None,
           }));
 
           let dynamic_keys = path.dynamic_exprs();
@@ -626,6 +627,7 @@ impl<'rant> VM<'rant> {
               .enumerate()
               .find_map(|(i, p)| if p.varity.is_variadic() { Some(i) } else { None })
               .unwrap_or_else(|| params.len()),
+            flavor: None,
           }));
 
           self.cur_frame_mut().write_value(func);
@@ -747,7 +749,7 @@ impl<'rant> VM<'rant> {
       },
       RantFunctionInterface::User(user_func) => {
         // Push the function onto the call stack
-        self.push_frame_flavored(Rc::clone(user_func), is_printing, StackFrameFlavor::FunctionBody)?;
+        self.push_frame_flavored(Rc::clone(user_func), is_printing, func.flavor.unwrap_or(StackFrameFlavor::FunctionBody))?;
 
         // Pass the args to the function scope
         let mut args = args.drain(..);
@@ -1001,7 +1003,7 @@ impl<'rant> VM<'rant> {
 
       match element {
         BlockAction::Element(elem_seq) => {
-          // Combine with no_print to determine if we *should* print anything, or just push the result to the stack
+          // Determine if we should print anything, or just push the result to the stack
           if is_printing {
             self.cur_frame_mut().push_intent_front(Intent::PrintValue);
           }
@@ -1016,12 +1018,31 @@ impl<'rant> VM<'rant> {
             }
           )?;
         },
+        BlockAction::PipedElement { elem_func, pipe_func } => {
+          // Determine if we should print anything, or just push the result to the stack
+          if is_printing {
+            self.cur_frame_mut().push_intent_front(Intent::PrintValue);
+          }
+
+          let flag = if is_printing {
+            PrintFlag::Hint
+          } else {
+            PrintFlag::Sink
+          };
+
+          // Call the pipe function
+          self.call_func(pipe_func, vec![RantValue::Function(elem_func)], flag, true)?;
+        },
         BlockAction::Separator(separator) => {
           match separator {
             // If the separator is a function, call the function
             RantValue::Function(sep_func) => {
               self.push_val(RantValue::Function(sep_func))?;
-              self.cur_frame_mut().push_intent_front(Intent::Call { argc: 0, flag: if is_printing { PrintFlag::Hint } else { PrintFlag::Sink }, override_print: false });
+              self.cur_frame_mut().push_intent_front(Intent::Call { 
+                argc: 0, 
+                flag: if is_printing { PrintFlag::Hint } else { PrintFlag::Sink }, 
+                override_print: false 
+              });
             },
             // If the separator is a block, resolve it
             RantValue::Block(sep_block) => {

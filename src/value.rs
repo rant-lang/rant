@@ -591,11 +591,20 @@ pub(crate) enum RantNumber {
 /// A function callable from Rant.
 #[derive(Debug)]
 pub struct RantFunction {
+  /// Parameter information for the function.
   pub(crate) params: Rc<Vec<Parameter>>,
+  /// The number of required parameters.
   pub(crate) min_arg_count: usize,
+  /// The parameter index at which variadic parameters start.
+  /// If this is greater than or equal to the number of params, there are no variadic parameters.
   pub(crate) vararg_start_index: usize,
+  /// The external variables captured by the function when it was defined.
   pub(crate) captured_vars: Vec<(Identifier, RantVar)>,
+  /// The body of the function.
   pub(crate) body: RantFunctionInterface,
+  /// Assigns a custom flavor to the stack frame created by the function call.
+  /// If not set, the default function call flavor will be used.
+  pub(crate) flavor: Option<StackFrameFlavor>,
 }
 
 impl RantFunction {

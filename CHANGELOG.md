@@ -4,11 +4,14 @@
 
 ### New
   * Added support for constants
+  * Added "pipe" attribute to allow custom block element handling
   * API features:
     * `Rant::set_global_const()`
     * `Rant::set_global_force()`
     * `lang::AccessPath::is_variable()`
     * `lang::Rst::ConstDef`
+  * Standard Library:
+    * `[pipe]`: Sets the pipe attribute.
   * Compiler messages:
     * `R-1003` (nested function definition marked as constant)
 

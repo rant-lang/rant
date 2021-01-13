@@ -533,6 +533,7 @@ impl<Params: FromRantArgs, Function: Fn(&mut VM, Params) -> RantStdResult> AsRan
       .find_map(|(i, p)| if p.varity.is_variadic() { Some(i) } else { None })
       .unwrap_or_else(|| params.len()),
       params,
+      flavor: None,
     }
   }
 }

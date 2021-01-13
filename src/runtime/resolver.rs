@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc, mem, error::Error, fmt::Display};
-use crate::{random::RantRng, RantValue, lang::{Sequence, Block, PrintFlag}, FromRant, ValueError};
+use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionRef, RantValue, ValueError, lang::{Block, Parameter, PrintFlag, Sequence}, random::RantRng};
 use smallvec::SmallVec;
-use super::{IntoRuntimeResult, RuntimeError};
+use super::{IntoRuntimeResult, RuntimeError, StackFrameFlavor};
 
 pub type SelectorRef = Rc<RefCell<Selector>>;
 
@@ -17,38 +17,79 @@ pub struct Resolver {
   block_stack: SmallVec<[BlockState; BLOCK_STACK_INLINE_COUNT]>,
 }
 
+/// Emitted by the resolver to indicate the current action performed by a block.
+pub enum BlockAction {
+  /// Run a sequence from an element.
+  Element(Rc<Sequence>),
+  /// Call the pipe function and pass in the current element as a callback.
+  PipedElement { elem_func: RantFunctionRef, pipe_func: RantFunctionRef },
+  /// Run the separator.
+  Separator(RantValue),
+}
+
 /// Stores state information for a block that is currently being resolved.
 #[derive(Debug)]
 pub struct BlockState {
+  /// The elements of the block.
   elements: Rc<Vec<Rc<Sequence>>>,
+  /// Flag to short-circuit the block.
   force_stop: bool,
+  /// Indicates how block output should be handled.
   flag: PrintFlag,
+  /// The attributes associated with the block.
   attrs: AttributeFrame,
+  /// How many steps have been run.
   cur_steps: usize,
+  /// How many steps in total the block will run.
   total_steps: usize,
+  /// Indicates whether the previous step was eligible to be followed by a separator.
   prev_step_separated: bool,
 }
 
 impl BlockState {
   #[inline]
   pub fn next_element(&mut self, rng: &RantRng) -> Result<Option<BlockAction>, SelectorError> {
-    if !self.is_done() {
-      if self.cur_steps == 0 || self.prev_step_separated {
-        self.prev_step_separated = false;
-        self.cur_steps += 1;
-        let next_index = self.attrs.selector.as_ref().map_or_else(
-          // Default block selection behavior
-          || Ok(rng.next_usize(self.elements.len())), 
-          // Selector behavior
-          |sel| sel.borrow_mut().select(self.elements.len(), rng)
-        )?;
-        Ok(Some(BlockAction::Element(Rc::clone(&self.elements[next_index]))))
-      } else {
-        self.prev_step_separated = true;
-        Ok(Some(BlockAction::Separator(self.attrs.separator.clone())))
+    if self.is_done() { return Ok(None) }
+
+    // Check if element or separator is next
+    if self.is_piped() || self.cur_steps == 0 || self.prev_step_separated {
+      self.prev_step_separated = false;
+      self.cur_steps += 1;
+
+      // TODO: Allow customization of default selector
+      let next_index = self.attrs.selector.as_ref().map_or_else(
+        // Default block selection behavior
+        || Ok(rng.next_usize(self.elements.len())), 
+        // Selector behavior
+        |sel| sel.borrow_mut().select(self.elements.len(), rng)
+      )?;
+
+      let next_elem = Rc::clone(&self.elements[next_index]);
+
+      // If the pipe function is set, generate piped elements
+      if let Some(pipe_func) = self.attrs.pipe.as_ref() {
+        let elem_func = RantFunction {
+          captured_vars: vec![],
+          min_arg_count: 0,
+          vararg_start_index: 0,
+          params: Rc::new(vec![]),
+          body: RantFunctionInterface::User(next_elem),
+          flavor: Some(if self.is_repeater() { 
+            StackFrameFlavor::RepeaterElement 
+          } else { 
+            StackFrameFlavor::BlockElement 
+          })
+        };
+        return Ok(Some(BlockAction::PipedElement {
+          pipe_func: Rc::clone(pipe_func),
+          elem_func: Rc::new(elem_func),
+        }))
       }
+
+      Ok(Some(BlockAction::Element(next_elem)))
     } else {
-      Ok(None)
+      self.prev_step_separated = true;
+      Ok(Some(BlockAction::Separator(self.attrs.separator.clone())))
     }
   }
 
@@ -77,6 +118,11 @@ impl BlockState {
     matches!(self.attrs.reps, Reps::Repeat(_) | Reps::RepeatForever | Reps::All)
   }
 
+  #[inline]
+  pub fn is_piped(&self) -> bool {
+    self.attrs.pipe.is_some()
+  }
+
   /// Indicates whether the block has finished and should return.
   #[inline(always)]
   pub(crate) fn is_done(&self) -> bool {
@@ -92,11 +138,6 @@ impl BlockState {
   pub fn flag(&self) -> PrintFlag {
     self.flag
   }
-}
-
-pub enum BlockAction {
-  Element(Rc<Sequence>),
-  Separator(RantValue),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -273,6 +314,8 @@ pub struct AttributeFrame {
   pub separator: RantValue,
   /// Active selector
   pub selector: Option<SelectorRef>,
+  /// Pipe function
+  pub pipe: Option<RantFunctionRef>,
 }
 
 impl AttributeFrame {
@@ -319,6 +362,7 @@ impl Default for AttributeFrame {
       reps: Reps::Once,
       separator: RantValue::Empty,
       selector: None,
+      pipe: None,
     }
   }
 }

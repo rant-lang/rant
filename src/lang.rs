@@ -41,6 +41,12 @@ impl Identifier {
   }
 }
 
+impl From<&'static str> for Identifier {
+  fn from(s: &'static str) -> Self {
+    Self::new(InternalString::from(s))
+  }
+}
+
 impl Deref for Identifier {
   type Target = InternalString;
   fn deref(&self) -> &Self::Target {
