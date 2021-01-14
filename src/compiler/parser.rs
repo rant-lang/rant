@@ -5,7 +5,7 @@ use super::{reader::RantTokenReader, lexer::RantToken, message::*, Problem, Repo
 use crate::{RantProgramInfo, InternalString, lang::*};
 use fnv::FnvBuildHasher;
 use line_col::LineColLookup;
-use quickscope::ScopeSet;
+use quickscope::ScopeMap;
 use std::{rc::Rc, ops::Range, collections::HashSet};
 
 type ParseResult<T> = Result<T, ()>;
@@ -110,7 +110,23 @@ enum SequenceEndType {
   SingleItemEnd,
 }
 
-/// Makes a range that encompasses both input ranges.
+/// Used to track variable usages during compilation.
+struct VarStats {
+  def_span: Range<usize>,
+  writes: usize,
+  reads: usize,
+  is_const: bool,
+  role: VarRole,
+}
+
+#[derive(Copy, Clone)]
+enum VarRole {
+  Normal,
+  Function,
+  Parameter,
+}
+
+/// Returns a range that encompasses both input ranges.
 #[inline]
 fn super_range(a: &Range<usize>, b: &Range<usize>) -> Range<usize> {
   a.start.min(b.start)..a.end.max(b.end)
@@ -133,20 +149,18 @@ pub struct RantParser<'source, 'report, R: Reporter> {
   /// A string describing the origin (containing program) of a program element.
   info: Rc<RantProgramInfo>,
   /// Keeps track of active variables in each scope while parsing.
-  var_stack: ScopeSet<Identifier>,
+  var_stack: ScopeMap<Identifier, VarStats>,
   /// Keeps track of active variable capture frames.
   capture_stack: Vec<(usize, HashSet<Identifier, FnvBuildHasher>)>,
 }
 
 impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   pub fn new(source: &'source str, reporter: &'report mut R, debug_enabled: bool, info: &Rc<RantProgramInfo>) -> Self {
-    let reader = RantTokenReader::new(source);
-    let lookup = LineColLookup::new(source);
     Self {
       source,
       has_errors: false,
-      reader,
-      lookup,
+      reader: RantTokenReader::new(source),
+      lookup: LineColLookup::new(source),
       reporter,
       debug_enabled,
       info: Rc::clone(info),
@@ -171,14 +185,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
   
   /// Reports a syntax error, allowing parsing to continue but causing the final compilation to fail. 
-  fn syntax_error(&mut self, problem: Problem, span: &Range<usize>) {
+  fn report_error(&mut self, problem: Problem, span: &Range<usize>) {
     let (line, col) = self.lookup.get(span.start);
     self.has_errors = true;
     self.reporter.report(CompilerMessage::new(problem, Severity::Error, Some(Position::new(line, col, span.clone()))));
   }
 
   /// Reports a warning, but allows compiling to succeed.
-  fn warn(&mut self, problem: Problem, span: &Range<usize>) {
+  fn report_warning(&mut self, problem: Problem, span: &Range<usize>) {
     let (line, col) = self.lookup.get(span.start);
     self.reporter.report(CompilerMessage::new(problem, Severity::Warning, Some(Position::new(line, col, span.clone()))));
   }
@@ -186,7 +200,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   /// Emits an "unexpected token" error for the most recently read token.
   #[inline]
   fn unexpected_last_token_error(&mut self) {
-    self.syntax_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &self.reader.last_token_span())
+    self.report_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &self.reader.last_token_span())
   }
 
   /// Parses a sequence of items. Items are individual elements of a Rant program (fragments, blocks, function calls, etc.)
@@ -194,6 +208,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   fn parse_sequence(&mut self, mode: SequenceParseMode) -> ParseResult<(Sequence, SequenceEndType, bool)> {
     self.var_stack.push_layer();
     let parse_result = self.parse_sequence_inner(mode);
+    self.analyze_top_vars();
     self.var_stack.pop_layer();
     parse_result
   }
@@ -224,7 +239,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let elem = $b;
           if !matches!(next_print_flag, PrintFlag::None) {
             if let Some(flag_span) = last_print_flag_span.take() {
-              self.syntax_error(match next_print_flag {
+              self.report_error(match next_print_flag {
                 PrintFlag::Hint => Problem::InvalidHintOn(elem.display_name()),
                 PrintFlag::Sink => Problem::InvalidSinkOn(elem.display_name()),
                 PrintFlag::None => unreachable!()
@@ -238,7 +253,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           if matches!(next_print_flag, PrintFlag::None) {
             $b
           } else if let Some(flag_span) = last_print_flag_span.take() {
-            self.syntax_error(match next_print_flag {
+            self.report_error(match next_print_flag {
               PrintFlag::Hint => Problem::InvalidHint,
               PrintFlag::Sink => Problem::InvalidSink,
               PrintFlag::None => unreachable!()
@@ -257,7 +272,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       // Shortcut macro for "unexpected token" error
       macro_rules! unexpected_token_error {
         () => {
-          self.syntax_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &span)
+          self.report_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &span)
         };
       }
       
@@ -396,10 +411,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok((sequence.with_name_str("block element"), SequenceEndType::BlockDelim, is_seq_printing))
             },
             SequenceParseMode::DynamicKey => {
-              self.syntax_error(Problem::DynamicKeyBlockMultiElement, &span);
+              self.report_error(Problem::DynamicKeyBlockMultiElement, &span);
             },
             SequenceParseMode::FunctionBody => {
-              self.syntax_error(Problem::FunctionBodyBlockMultiElement, &span);
+              self.report_error(Problem::FunctionBodyBlockMultiElement, &span);
             },
             _ => unexpected_token_error!()
           }
@@ -430,7 +445,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               self.parse_collection_initializer(CollectionInitKind::Map, &span)?
             },
             _ => {
-              self.syntax_error(Problem::ExpectedToken("(".to_owned()), &self.reader.last_token_span());
+              self.report_error(Problem::ExpectedToken("(".to_owned()), &self.reader.last_token_span());
               Rst::EmptyVal
             },
           }
@@ -613,7 +628,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         
         // Handle unclosed string literals as hard errors
         RantToken::UnterminatedStringLiteral => {
-          self.syntax_error(Problem::UnclosedStringLiteral, &span); 
+          self.report_error(Problem::UnclosedStringLiteral, &span); 
           return Err(())
         },
         _ => unexpected_token_error!(),
@@ -636,12 +651,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       PrintFlag::None => {},
       PrintFlag::Hint => {
         if let Some(flag_span) = last_print_flag_span.take() {
-          self.syntax_error(Problem::InvalidHint, &flag_span);
+          self.report_error(Problem::InvalidHint, &flag_span);
         }
       },
       PrintFlag::Sink => {
         if let Some(flag_span) = last_print_flag_span.take() {
-          self.syntax_error(Problem::InvalidSink, &flag_span);
+          self.report_error(Problem::InvalidSink, &flag_span);
         }
       }
     }
@@ -677,7 +692,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               break
             },
             SequenceEndType::ProgramEnd => {
-              self.syntax_error(Problem::UnclosedList, &super_range(start_span, &self.reader.last_token_span()));
+              self.report_error(Problem::UnclosedList, &super_range(start_span, &self.reader.last_token_span()));
               return Err(())
             },
             _ => unreachable!()
@@ -698,7 +713,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             Some((RantToken::Fragment, span)) => {
               let key = self.reader.last_token_string();
               if !is_valid_ident(key.as_str()) {
-                self.syntax_error(Problem::InvalidIdentifier(key.to_string()), &span);
+                self.report_error(Problem::InvalidIdentifier(key.to_string()), &span);
               }
               MapKeyExpr::Static(key)
             },
@@ -715,14 +730,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             },
             // Hard error on EOF
             None => {
-              self.syntax_error(Problem::UnclosedMap, &super_range(start_span, &self.reader.last_token_span()));
+              self.report_error(Problem::UnclosedMap, &super_range(start_span, &self.reader.last_token_span()));
               return Err(())
             }
           };
           
           self.reader.skip_ws();
           if !self.reader.eat_where(|tok| matches!(tok, Some((RantToken::Equals, ..)))) {
-            self.syntax_error(Problem::ExpectedToken("=".to_owned()), &self.reader.last_token_span());
+            self.report_error(Problem::ExpectedToken("=".to_owned()), &self.reader.last_token_span());
             return Err(())
           }
           self.reader.skip_ws();
@@ -737,7 +752,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               break
             },
             SequenceEndType::ProgramEnd => {
-              self.syntax_error(Problem::UnclosedMap, &super_range(start_span, &self.reader.last_token_span()));
+              self.report_error(Problem::UnclosedMap, &super_range(start_span, &self.reader.last_token_span()));
               return Err(())
             },
             _ => unreachable!()
@@ -750,7 +765,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     
   }
   
-  fn parse_func_params(&mut self, start_span: &Range<usize>) -> ParseResult<Vec<Parameter>> {
+  fn parse_func_params(&mut self, start_span: &Range<usize>) -> ParseResult<Vec<(Parameter, Range<usize>)>> {
     // List of parameter names for function
     let mut params = vec![];
     // Separate set of all parameter names to check for duplicates
@@ -773,12 +788,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               let param_name = Identifier::new(self.reader.last_token_string());
               // Make sure it's a valid identifier
               if !is_valid_ident(param_name.as_str()) {
-                self.syntax_error(Problem::InvalidIdentifier(param_name.to_string()), &span)
+                self.report_error(Problem::InvalidIdentifier(param_name.to_string()), &span)
               }
               // Check for duplicates
               // I'd much prefer to store references in params_set, but that's way more annoying to deal with
               if !params_set.insert(param_name.clone()) {
-                self.syntax_error(Problem::DuplicateParameter(param_name.to_string()), &span);
+                self.report_error(Problem::DuplicateParameter(param_name.to_string()), &span);
               }                
               
               // Get varity of parameter
@@ -807,17 +822,19 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               // Check for varity issues
               if is_sig_variadic && is_param_variadic {
                 // Soft error on multiple variadics
-                self.syntax_error(Problem::MultipleVariadicParams, &full_param_span);
+                self.report_error(Problem::MultipleVariadicParams, &full_param_span);
               } else if !Varity::is_valid_order(last_varity, varity) {
                 // Soft error on bad varity order
-                self.syntax_error(Problem::InvalidParamOrder(last_varity.to_string(), varity.to_string()), &full_param_span);
+                self.report_error(Problem::InvalidParamOrder(last_varity.to_string(), varity.to_string()), &full_param_span);
               }
-              
-              // Add parameter to list
-              params.push(Parameter {
+
+              let param = Parameter {
                 name: param_name,
                 varity
-              });
+              };
+              
+              // Add parameter to list
+              params.push((param, full_param_span));
               
               last_varity = varity;
               is_sig_variadic |= is_param_variadic;
@@ -834,26 +851,26 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 },
                 // Emit a hard error on anything else
                 Some((_, span)) => {
-                  self.syntax_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &span);
+                  self.report_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &span);
                   return Err(())
                 },
                 None => {
-                  self.syntax_error(Problem::UnclosedFunctionSignature, &start_span);
+                  self.report_error(Problem::UnclosedFunctionSignature, &start_span);
                   return Err(())
                 },
               }
             },
             // Error on early close
             Some((RantToken::RightBracket, span)) => {
-              self.syntax_error(Problem::MissingIdentifier, &span);
+              self.report_error(Problem::MissingIdentifier, &span);
               break 'read_params
             },
             // Error on anything else
             Some((.., span)) => {
-              self.syntax_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span)
+              self.report_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span)
             },
             None => {
-              self.syntax_error(Problem::UnclosedFunctionSignature, &start_span);
+              self.report_error(Problem::UnclosedFunctionSignature, &start_span);
               return Err(())
             }
           }
@@ -863,12 +880,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       Some((RantToken::RightBracket, _)) => {},
       // Something weird is here, emit a hard error
       Some((.., span)) => {
-        self.syntax_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &span);
+        self.report_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &span);
         return Err(())
       },
       // Nothing is here, emit a hard error
       None => {
-        self.syntax_error(Problem::UnclosedFunctionSignature, &start_span);
+        self.report_error(Problem::UnclosedFunctionSignature, &start_span);
         return Err(())
       }
     }
@@ -888,23 +905,30 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         tt @ RantToken::Dollar | tt @ RantToken::Percent => {
           let is_const = matches!(tt, RantToken::Percent);
           // Name of variable function will be stored in
-          let func_id = self.parse_access_path(false)?;
+          let (func_path, _func_path_span) = self.parse_access_path(false)?;
 
           // Warn user if non-variable function definition is marked as a constant
-          if is_const && !func_id.is_variable() {
-            self.warn(Problem::NestedFunctionDefMarkedConstant, &func_access_type_span);
+          if is_const && !func_path.is_variable() {
+            self.report_warning(Problem::NestedFunctionDefMarkedConstant, &func_access_type_span);
           }
 
           // Function params
           let params = self.parse_func_params(&start_span)?;
+          let end_func_sig_span = self.reader.last_token_span();
           // Read function body
           self.reader.skip_ws();          
           let (body, captures) = self.parse_func_body(&params)?;
+
+          // Track variable
+          if let Some(id) = &func_path.var_name() {
+            let func_def_span = super_range(&start_span, &end_func_sig_span);
+            self.track_variable(id, &func_path.kind(), is_const, VarRole::Function, &func_def_span);
+          }
           
           Ok(Rst::FuncDef(FunctionDef {
-            body: Rc::new(body.with_name_str(format!("[{}]", func_id).as_str())),
-            path: Rc::new(func_id),
-            params: Rc::new(params),
+            body: Rc::new(body.with_name_str(format!("[{}]", func_path).as_str())),
+            path: Rc::new(func_path),
+            params: Rc::new(params.into_iter().map(|(p, _)| p).collect()),
             capture_vars: Rc::new(captures),
             is_const,
           }))
@@ -920,7 +944,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           Ok(Rst::Closure(ClosureExpr {
             capture_vars: Rc::new(captures),
             expr: Rc::new(body.with_name_str("closure")),
-            params: Rc::new(params),
+            params: Rc::new(params.into_iter().map(|(p, _)| p).collect()),
           }))
         },
         _ => unreachable!()
@@ -962,7 +986,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   } else {
                     // If take() fails, it means the compose value was already used
                     // No need to push an arg since it won't be used anyway
-                    self.syntax_error(Problem::ComposeValueReused, &self.reader.last_token_span());
+                    self.report_error(Problem::ComposeValueReused, &self.reader.last_token_span());
                   }
                   // Read next delimiter
                   match self.reader.next_solid() {
@@ -973,7 +997,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                       break
                     },
                     None => {
-                      self.syntax_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
+                      self.report_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
                       return Err(())
                     },
                     _ => {
@@ -982,7 +1006,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                     }
                   }
                 } else {
-                  self.syntax_error(Problem::NothingToCompose, &self.reader.last_token_span());
+                  self.report_error(Problem::NothingToCompose, &self.reader.last_token_span());
                 }
               } else {
                 // Parse normal argument
@@ -1003,7 +1027,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                     break
                   },
                   SequenceEndType::ProgramEnd => {
-                    self.syntax_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
+                    self.report_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
                     return Err(())
                   },
                   _ => unreachable!()
@@ -1051,17 +1075,17 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                     }
                   }
                 } else {
-                  self.syntax_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
+                  self.report_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
                   return Err(())
                 }
   
                 Sequence::one(func_expr, &self.info)
               } else {
-                self.syntax_error(Problem::ComposeValueReused, &self.reader.last_token_span());
+                self.report_error(Problem::ComposeValueReused, &self.reader.last_token_span());
                 return Err(())
               }
             } else {
-              self.syntax_error(Problem::NothingToCompose, &self.reader.last_token_span());
+              self.report_error(Problem::NothingToCompose, &self.reader.last_token_span());
               return Err(())
             }
           } else {
@@ -1095,7 +1119,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           Some(Rst::AnonFuncCall(afcall))
         } else {
           // Named function call
-          let func_name = self.parse_access_path(false)?;
+          let (func_path, func_path_span) = self.parse_access_path(false)?;
           if let Some((token, _)) = self.reader.next_solid() {
             match token {
               // No args, fall through
@@ -1116,22 +1140,20 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
             fallback_compose!();
             
+            // Record access to function
+            self.track_variable_access(&func_path, false, &func_path_span);
+            
             // Create final node for function call
             let fcall = FunctionCall {
-              id: Rc::new(func_name),
+              id: Rc::new(func_path),
               arguments: Rc::new(func_args),
               flag,
             };
-            
-            let func_call = Rst::FuncCall(fcall);
 
-            // Do variable capture pass on function call
-            self.do_capture_pass(&func_call);
-
-            Some(func_call)
+            Some(Rst::FuncCall(fcall))
           } else {
             // Found EOF instead of end of function call, emit hard error
-            self.syntax_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
+            self.report_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
             return Err(())
           }
         };
@@ -1170,11 +1192,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   
   /// Parses an access path.
   #[inline]
-  fn parse_access_path(&mut self, allow_anonymous: bool) -> ParseResult<AccessPath> {
+  fn parse_access_path(&mut self, allow_anonymous: bool) -> ParseResult<(AccessPath, Range<usize>)> {
     self.reader.skip_ws();
     let mut idparts = vec![];
-    let preceding_span = self.reader.last_token_span();
-
+    let start_span = self.reader.last_token_span();
     let mut access_kind = AccessPathKind::Local;
 
     if allow_anonymous && self.reader.eat_where(|t| matches!(t, Some((RantToken::Bang, ..)))) {
@@ -1185,7 +1206,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           idparts.push(AccessPathComponent::AnonymousValue(Rc::new(anon_expr)));
         },
         SequenceEndType::ProgramEnd => {
-          self.syntax_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+          self.report_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
           return Err(())
         },
         _ => unreachable!(),
@@ -1204,7 +1225,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           if is_valid_ident(varname.as_str()) {
             idparts.push(AccessPathComponent::Name(varname));
           } else {
-            self.syntax_error(Problem::InvalidIdentifier(varname.to_string()), &span);
+            self.report_error(Problem::InvalidIdentifier(varname.to_string()), &span);
           }
         },
         // An expression can also be used to provide the variable
@@ -1216,22 +1237,22 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // First path part can't be a slice
         Some((RantToken::Colon, span)) => {
           self.reader.take_where(|t| matches!(t, Some((RantToken::Integer(_), ..))));
-          self.syntax_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
+          self.report_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
         }
         // Prevent other slice forms
         Some((RantToken::Integer(_), span)) => {
           self.reader.skip_ws();
           if self.reader.eat_where(|t| matches!(t, Some((RantToken::Colon, ..)))) {
-            self.syntax_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
+            self.report_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
           } else {
-            self.syntax_error(Problem::AccessPathStartsWithIndex, &span);
+            self.report_error(Problem::AccessPathStartsWithIndex, &span);
           }
         },
         Some((.., span)) => {
-          self.syntax_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span);
+          self.report_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span);
         },
         None => {
-          self.syntax_error(Problem::MissingIdentifier, &preceding_span);
+          self.report_error(Problem::MissingIdentifier, &start_span);
           return Err(())
         }
       }
@@ -1253,7 +1274,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             if is_valid_ident(varname.as_str()) {
               idparts.push(AccessPathComponent::Name(varname));
             } else {
-              self.syntax_error(Problem::InvalidIdentifier(varname.to_string()), &span);
+              self.report_error(Problem::InvalidIdentifier(varname.to_string()), &span);
             }
           },
           // Index or slice with static from-bound
@@ -1286,10 +1307,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 Some(_) => {
                   self.reader.next();
                   let token = self.reader.last_token_string().to_string();
-                  self.syntax_error(Problem::InvalidSliceBound(token), &self.reader.last_token_span());
+                  self.report_error(Problem::InvalidSliceBound(token), &self.reader.last_token_span());
                 },
                 None => {
-                  self.syntax_error(Problem::UnclosedVariableAccess, &super_range(&preceding_span, &self.reader.last_token_span()));
+                  self.report_error(Problem::UnclosedVariableAccess, &super_range(&start_span, &self.reader.last_token_span()));
                   return Err(())
                 }
               }
@@ -1325,10 +1346,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               Some(_) => {
                 self.reader.next();
                 let token = self.reader.last_token_string().to_string();
-                self.syntax_error(Problem::InvalidSliceBound(token), &self.reader.last_token_span());
+                self.report_error(Problem::InvalidSliceBound(token), &self.reader.last_token_span());
               },
               None => {
-                self.syntax_error(Problem::UnclosedVariableAccess, &super_range(&preceding_span, &self.reader.last_token_span()));
+                self.report_error(Problem::UnclosedVariableAccess, &super_range(&start_span, &self.reader.last_token_span()));
                 return Err(())
               }
             }
@@ -1364,10 +1385,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 Some(_) => {
                   self.reader.next();
                   let token = self.reader.last_token_string().to_string();
-                  self.syntax_error(Problem::InvalidSliceBound(token), &self.reader.last_token_span());
+                  self.report_error(Problem::InvalidSliceBound(token), &self.reader.last_token_span());
                 },
                 None => {
-                  self.syntax_error(Problem::UnclosedVariableAccess, &super_range(&preceding_span, &self.reader.last_token_span()));
+                  self.report_error(Problem::UnclosedVariableAccess, &super_range(&start_span, &self.reader.last_token_span()));
                   return Err(())
                 }
               }
@@ -1378,15 +1399,15 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           },
           Some((.., span)) => {
             // error
-            self.syntax_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span);
+            self.report_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span);
           },
           None => {
-            self.syntax_error(Problem::MissingIdentifier, &self.reader.last_token_span());
+            self.report_error(Problem::MissingIdentifier, &self.reader.last_token_span());
             return Err(())
           }
         }
       } else {
-        return Ok(AccessPath::new(idparts, access_kind))
+        return Ok((AccessPath::new(idparts, access_kind), start_span.start .. self.reader.last_token_span().start))
       }
     }
   }
@@ -1394,7 +1415,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   /// Parses a dynamic expression (a linear block).
   fn parse_dynamic_expr(&mut self, expect_opening_brace: bool) -> ParseResult<Sequence> {
     if expect_opening_brace && !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
-      self.syntax_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
+      self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
       return Err(())
     }
     
@@ -1406,7 +1427,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       SequenceEndType::ProgramEnd => {
         // Hard error if block isn't closed
         let err_span = start_span.start .. self.source.len();
-        self.syntax_error(Problem::UnclosedBlock, &err_span);
+        self.report_error(Problem::UnclosedBlock, &err_span);
         return Err(())
       },
       _ => unreachable!()
@@ -1416,9 +1437,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
 
   /// Parses a function body and captures variables.
-  fn parse_func_body(&mut self, params: &Vec<Parameter>) -> ParseResult<(Sequence, Vec<Identifier>)> {
+  fn parse_func_body(&mut self, params: &Vec<(Parameter, Range<usize>)>) -> ParseResult<(Sequence, Vec<Identifier>)> {
     if !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
-      self.syntax_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
+      self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
       return Err(())
     }
     
@@ -1434,12 +1455,21 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     self.var_stack.push_layer();
 
     // Define each parameter as a variable in the current var_stack frame so they are not accidentally captured
-    for param in params {
-      self.var_stack.define(param.name.clone());
+    for (param, span) in params {
+      self.var_stack.define(param.name.clone(), VarStats {
+        reads: 0,
+        writes: 1,
+        def_span: span.clone(),
+        is_const: true,
+        role: VarRole::Parameter,
+      });
     }
 
     // parse_sequence_inner() is used here so that the new stack frame can be customized before use
     let parse_result = self.parse_sequence_inner(SequenceParseMode::FunctionBody);
+
+    // Run static analysis on variable/param usage
+    self.analyze_top_vars();
 
     self.var_stack.pop_layer();
 
@@ -1453,7 +1483,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           SequenceEndType::ProgramEnd => {
             // Hard error if block isn't closed
             let err_span = start_span.start .. self.source.len();
-            self.syntax_error(Problem::UnclosedBlock, &err_span);
+            self.report_error(Problem::UnclosedBlock, &err_span);
             return Err(())
           },
           _ => unreachable!()
@@ -1470,7 +1500,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   /// Parses a block.
   fn parse_block(&mut self, expect_opening_brace: bool, flag: PrintFlag) -> ParseResult<Block> {
     if expect_opening_brace && !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
-      self.syntax_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
+      self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
       return Err(())
     }
     
@@ -1496,7 +1526,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         SequenceEndType::ProgramEnd => {
           // Hard error if block isn't closed
           let err_span = start_pos .. self.source.len();
-          self.syntax_error(Problem::UnclosedBlock, &err_span);
+          self.report_error(Problem::UnclosedBlock, &err_span);
           return Err(())
         },
         _ => unreachable!()
@@ -1518,7 +1548,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         RantToken::Fragment => {
           let idstr = self.reader.last_token_string();
           if !is_valid_ident(idstr.as_str()) {
-            self.syntax_error(Problem::InvalidIdentifier(idstr.to_string()), &span);
+            self.report_error(Problem::InvalidIdentifier(idstr.to_string()), &span);
           }
           Ok(Identifier::new(idstr))
         },
@@ -1528,43 +1558,130 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }
       }
     } else {
-      self.syntax_error(Problem::MissingIdentifier, &self.reader.last_token_span());
+      self.report_error(Problem::MissingIdentifier, &self.reader.last_token_span());
       Err(())
     }
   }
 
   #[inline]
-  fn do_capture_pass(&mut self, capturing_rst: &Rst) {
-    match capturing_rst {
-      Rst::VarDef(id, access_kind, ..) => {
-        match access_kind {
-          AccessPathKind::Local => {
-            self.var_stack.define(id.clone());
-          },
-          AccessPathKind::Descope(n) => {
-            self.var_stack.define_parent(id.clone(), *n);
-          },
-          AccessPathKind::ExplicitGlobal => {},
-        }
+  fn track_variable(&mut self, id: &Identifier, access_kind: &AccessPathKind, is_const: bool, role: VarRole, def_span: &Range<usize>) {
+    // Check if there's already a variable with this name
+    let (prev_tracker, requested_depth, found_depth) = match access_kind {        
+      AccessPathKind::Local => {
+        (self.var_stack.get(id), 0, self.var_stack.depth_of(id))
       },
-      Rst::VarGet(path, ..) | 
-      Rst::VarSet(path, ..) | 
-      Rst::FuncCall(FunctionCall { id: path, .. }, ..) => {
-        // Only local getters can capture variables
-        if path.kind().is_local() {
-          // At least one capture frame must exist
-          if let Some((capture_frame_height, captures)) = self.capture_stack.last_mut() {
-            // Must be accessing a variable
-            if let Some(id) = path.capture_var_name() {
-              // Variable must not exist in the current scope of the active function
-              if self.var_stack.height_of(&id).unwrap_or_default() < *capture_frame_height {
-                captures.insert(id);
-              }
-            }
+      AccessPathKind::Descope(n) => {
+        let (v, d) = self.var_stack
+          .get_parent_depth(id, *n)
+          .map(|(v, d)| (Some(v), Some(d)))
+          .unwrap_or_default();
+        (v, *n, d)
+      },
+      AccessPathKind::ExplicitGlobal => {
+        let rd = self.var_stack.depth();
+        let (v, d) = self.var_stack
+          .get_parent_depth(id, rd)
+          .map(|(v, d)| (Some(v), Some(d)))
+          .unwrap_or_default();
+        (v, rd, d)
+      },
+    };
+
+    // Check for constant redef
+    if let Some(prev_tracker) = prev_tracker {
+      if prev_tracker.is_const && found_depth == Some(requested_depth) {
+        self.report_error(Problem::ConstantRedefinition(id.to_string()), def_span);
+      }
+    }
+
+    // Create variable tracking info
+    let v = VarStats {
+      writes: 0,
+      reads: 0,
+      def_span: def_span.clone(),
+      is_const,
+      role,
+    };
+
+    // Add to stack
+    match access_kind {
+      AccessPathKind::Local => {
+        self.var_stack.define(id.clone(), v);
+      },
+      AccessPathKind::Descope(n) => {
+        self.var_stack.define_parent(id.clone(), v, *n);
+      },
+      AccessPathKind::ExplicitGlobal => {
+        self.var_stack.define_parent(id.clone(), v, self.var_stack.depth());
+      },
+    }
+  }
+
+  #[inline]
+  fn track_variable_access(&mut self, path: &AccessPath, is_write: bool, span: &Range<usize>) {
+    // Handle access stats
+    if let Some(id) = &path.var_name() {
+      let tracker = match path.kind() {
+        AccessPathKind::Local => {
+          self.var_stack.get_mut(id)
+        },
+        AccessPathKind::Descope(n) => {
+          self.var_stack.get_parent_mut(id, n)
+        },
+        AccessPathKind::ExplicitGlobal => {
+          self.var_stack.get_parent_mut(id, self.var_stack.depth())
+        }
+      };
+
+      // Update tracker
+      if let Some(tracker) = tracker {
+        if is_write {
+          tracker.writes += 1;
+
+          if tracker.is_const {
+            self.report_error(Problem::ConstantReassignment(id.to_string()), span);
+          }
+        } else {
+          tracker.reads += 1;
+        }
+      }
+    }
+    
+    // Handle captures
+    if path.kind().is_local() {
+      // At least one capture frame must exist
+      if let Some((capture_frame_height, captures)) = self.capture_stack.last_mut() {
+        // Must be accessing a variable
+        if let Some(id) = path.var_name() {
+          // Variable must not exist in the current scope of the active function
+          if self.var_stack.height_of(&id).unwrap_or_default() < *capture_frame_height {
+            captures.insert(id);
           }
         }
-      },
-      _ => {}
+      }
+    }
+  }
+
+  #[inline]
+  fn analyze_top_vars(&mut self) {
+    let mut unused_vars: Vec<(String, VarRole, Range<usize>)> = vec![];
+
+    // Can't warn inside the loop due to bOrRoWiNg RuLeS!
+    // Have to store the warning contents in a vec first...
+    for (id, tracker) in self.var_stack.iter_top() {
+      if tracker.reads == 0 {
+        unused_vars.push((id.to_string(), tracker.role, tracker.def_span.clone()));
+      }
+    }
+
+    // Generate warnings
+    unused_vars.sort_by(|(.., a_span), (.., b_span)| a_span.start.cmp(&b_span.start));
+    for (name, role, span) in unused_vars {
+      match role {
+        VarRole::Normal => self.report_warning(Problem::UnusedVariable(name), &span),
+        VarRole::Parameter => self.report_warning(Problem::UnusedParameter(name), &span),
+        VarRole::Function => self.report_warning(Problem::UnusedFunction(name), &span),
+      }
     }
   }
     
@@ -1576,13 +1693,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     macro_rules! add_accessor {
       ($rst:expr) => {{
         let rst = $rst;
-        self.do_capture_pass(&rst);
         accessors.push(rst);
       }}
     }
     
-    'read: loop {
-      let access_start_span = self.reader.last_token_span();
+    'read: loop {      
       self.reader.skip_ws();
 
       // Check if the accessor ends here as long as there's at least one component
@@ -1603,6 +1718,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         (false, false)
       };
 
+      let access_start_span = self.reader.last_token_span();
+
       self.reader.skip_ws();
       
       // Check if it's a definition. If not, it's a getter or setter
@@ -1612,14 +1729,18 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         self.reader.skip_ws();
         // Read name of variable we're defining
         let var_name = self.parse_ident()?;
+
+        let def_span = access_start_span.start .. self.reader.last_token_span().end;
         
-        if let Some((token, _)) = self.reader.next_solid() {
+        if let Some((token, _token_span)) = self.reader.next_solid() {
           match token {
             // Empty definition
-            RantToken::RightAngle => {
+            RantToken::RightAngle => {              
               if is_const_def {
+                self.track_variable(&var_name, &access_kind, true, VarRole::Normal, &def_span);
                 add_accessor!(Rst::ConstDef(var_name, access_kind, None));
               } else {
+                self.track_variable(&var_name, &access_kind, false, VarRole::Normal, &def_span);
                 add_accessor!(Rst::VarDef(var_name, access_kind, None));
               }
               break 'read
@@ -1627,8 +1748,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             // Accessor delimiter
             RantToken::Semi => {
               if is_const_def {
+                self.track_variable(&var_name, &access_kind, true, VarRole::Normal, &def_span);
                 add_accessor!(Rst::ConstDef(var_name, access_kind, None));
               } else {
+                self.track_variable(&var_name, &access_kind, false, VarRole::Normal, &def_span);
                 add_accessor!(Rst::VarDef(var_name, access_kind, None));
               }
               continue 'read;
@@ -1638,9 +1761,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               self.reader.skip_ws();
               let (var_assign_expr, end_type, ..) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
 
+              let def_span = access_start_span.start .. self.reader.last_token_span().start;
               if is_const_def {
+                self.track_variable(&var_name, &access_kind, true, VarRole::Normal, &def_span);
                 add_accessor!(Rst::ConstDef(var_name, access_kind, Some(Rc::new(var_assign_expr))));
               } else {
+                self.track_variable(&var_name, &access_kind, false, VarRole::Normal, &def_span);
                 add_accessor!(Rst::VarDef(var_name, access_kind, Some(Rc::new(var_assign_expr))));
               }
               
@@ -1652,7 +1778,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   break 'read
                 },
                 SequenceEndType::ProgramEnd => {
-                  self.syntax_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+                  self.report_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
                   return Err(())
                 },
                 _ => unreachable!()
@@ -1665,22 +1791,24 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           }
         } else {
-          self.syntax_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+          self.report_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
           return Err(())
         }
       } else {
         // Read the path to what we're accessing
-        let var_path = self.parse_access_path(true)?;
+        let (var_path, var_path_span) = self.parse_access_path(true)?;
         
         if let Some((token, _)) = self.reader.next_solid() {
           match token {
             // If we hit a '>', it's a getter
             RantToken::RightAngle => {
+              self.track_variable_access(&var_path, false, &var_path_span);
               add_accessor!(Rst::VarGet(Rc::new(var_path), None));
               break 'read;
             },
             // If we hit a ';', it's a getter with another accessor chained after it
             RantToken::Semi => {
+              self.track_variable_access(&var_path, false, &var_path_span);
               add_accessor!(Rst::VarGet(Rc::new(var_path), None));
               continue 'read;
             },
@@ -1688,13 +1816,16 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             RantToken::Question => {
               self.reader.skip_ws();
               let (fallback, end_type, ..) = self.parse_sequence(SequenceParseMode::AccessorFallbackValue)?;
+
+              self.track_variable_access(&var_path, false, &var_path_span);
               add_accessor!(Rst::VarGet(Rc::new(var_path), Some(Rc::new(fallback))));
+
               match end_type {
                 SequenceEndType::AccessorFallbackValueToDelim => continue 'read,
                 SequenceEndType::AccessorFallbackValueToEnd => break 'read,
                 // Error
                 SequenceEndType::ProgramEnd => {
-                  self.syntax_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+                  self.report_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
                   return Err(())
                 },
                 _ => unreachable!()
@@ -1705,13 +1836,15 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               self.reader.skip_ws();
               let (var_assign_rhs, end_type, _) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
               let assign_end_span = self.reader.last_token_span();
-
+              let setter_span = super_range(&access_start_span, &assign_end_span);
               // Don't allow setters directly on anonymous values
               if var_path.is_anonymous() && var_path.len() == 1 {
-                self.syntax_error(Problem::AnonValueAssignment, &super_range(&access_start_span, &assign_end_span));
+                self.report_error(Problem::AnonValueAssignment, &setter_span);
               }
 
+              self.track_variable_access(&var_path, true, &setter_span);
               add_accessor!(Rst::VarSet(Rc::new(var_path), Rc::new(var_assign_rhs)));
+
               match end_type {
                 // Accessor was terminated
                 SequenceEndType::VariableAccessEnd => {                  
@@ -1723,7 +1856,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 },
                 // Error
                 SequenceEndType::ProgramEnd => {
-                  self.syntax_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+                  self.report_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
                   return Err(())
                 },
                 _ => unreachable!()
@@ -1736,7 +1869,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           }
         } else {
-          self.syntax_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+          self.report_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
           return Err(())
         }
       }

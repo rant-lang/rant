@@ -255,7 +255,7 @@ impl AccessPath {
 
   /// If the path statically accesses a variable, returns the name of the variable accessed; otherwise, returns `None`.
   #[inline]
-  pub fn capture_var_name(&self) -> Option<Identifier> {
+  pub fn var_name(&self) -> Option<Identifier> {
     if let Some(AccessPathComponent::Name(id)) = self.first() {
       Some(id.clone())
     } else {

@@ -230,7 +230,7 @@ pub(crate) fn pick(vm: &mut VM, list: RantValue) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn join(vm: &mut VM, (sep, list): (RantValue, Vec<RantValue>)) -> RantStdResult {
+pub(crate) fn join(vm: &mut VM, (list, sep): (Vec<RantValue>, RantValue)) -> RantStdResult {
   let mut is_first = true;
   let frame = vm.cur_frame_mut();
   for val in list {

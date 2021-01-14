@@ -759,7 +759,7 @@ impl<'rant> VM<'rant> {
             param.name.as_str(), 
             AccessPathKind::Local, 
             args.next().unwrap_or(RantValue::Empty),
-            false,
+            true,
           )?;
         }
 
@@ -1292,6 +1292,12 @@ impl<'rant> VM<'rant> {
   #[inline(always)]
   pub fn any_cur_frame_mut(&mut self) -> Option<&mut StackFrame> {
     self.call_stack.top_mut()
+  }
+
+  /// Safely attempts to get a mutable reference to the frame `depth` frames below the top of the call stack.
+  #[inline(always)]
+  pub fn parent_frame_mut(&mut self, depth: usize) -> Option<&mut StackFrame> {
+    self.call_stack.parent_mut(depth)
   }
 
   /// Gets a reference to the topmost frame on the call stack.

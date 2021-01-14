@@ -64,6 +64,13 @@ impl CallStack {
     self.frames.last_mut()
   }
 
+
+  /// Returns a mutable reference to the frame `depth` frames below the top of the stack.
+  #[inline]
+  pub fn parent_mut(&mut self, depth: usize) -> Option<&mut StackFrame> {
+    self.frames.iter_mut().rev().nth(depth)
+  }
+
   /// Returna reference to the topmost frame in the stack.
   #[inline]
   pub fn top(&self) -> Option<&StackFrame> {

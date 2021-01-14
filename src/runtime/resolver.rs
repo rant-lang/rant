@@ -1,12 +1,12 @@
 use std::{cell::RefCell, rc::Rc, mem, error::Error, fmt::Display};
-use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionRef, RantValue, ValueError, lang::{Block, Parameter, PrintFlag, Sequence}, random::RantRng};
+use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionRef, RantValue, ValueError, lang::{Block, PrintFlag, Sequence}, random::RantRng, runtime_error};
 use smallvec::SmallVec;
-use super::{IntoRuntimeResult, RuntimeError, StackFrameFlavor};
+use super::{IntoRuntimeResult, RuntimeError, RuntimeErrorType, RuntimeResult, StackFrameFlavor};
 
 pub type SelectorRef = Rc<RefCell<Selector>>;
 
 /// The number of attribute frames you can put on the stack before the runtime goes up in smoke.
-const DEFAULT_MAX_ATTR_FRAMES: usize = 127;
+const MAX_ATTR_FRAMES: usize = 255;
 const BLOCK_STACK_INLINE_COUNT: usize = 4;
 
 /// Manages block execution behavior ("resolution").
@@ -267,9 +267,13 @@ impl Resolver {
     }
   }
 
-  pub fn push_attrs(&mut self) {
-    // TODO: Limit attr frame stack size
-    self.attr_override_stack.push(Default::default())
+  pub fn push_attrs(&mut self) -> RuntimeResult<()> {
+    if self.attr_override_stack.len() >= MAX_ATTR_FRAMES {
+      runtime_error!(RuntimeErrorType::StackOverflow, "attribute frame stack has overflowed")
+    }
+
+    self.attr_override_stack.push(Default::default());
+    Ok(())
   }
 
   pub fn pop_attrs(&mut self) -> Option<AttributeFrame> {

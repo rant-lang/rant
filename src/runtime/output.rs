@@ -3,6 +3,7 @@ use super::format::{WhitespaceNormalizationMode, OutputFormat};
 use std::rc::Rc;
 
 const INITIAL_CHAIN_CAPACITY: usize = 64;
+const DEFAULT_SPACE: &str = " ";
 
 /// Writes a stream of buffers that can be passed to a parent buffer or rendered to a string.
 pub struct OutputWriter {
@@ -50,14 +51,15 @@ impl OutputWriter {
   pub fn write_ws(&mut self, value: &str) {
     match &self.format.ws_norm_mode {
       WhitespaceNormalizationMode::Default => {
-        self.write_frag(" ");
+        self.write_frag(DEFAULT_SPACE);
       },
       WhitespaceNormalizationMode::IgnoreAll => {},
       WhitespaceNormalizationMode::Verbatim => {
         self.write_frag(value);
       },
       WhitespaceNormalizationMode::Custom(val) => {
-        self.write_frag(val.to_string().as_str())
+        let val = val.to_string();
+        self.write_frag(&val);
       },
     }
   }

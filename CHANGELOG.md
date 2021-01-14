@@ -5,30 +5,43 @@
 ### New
   * Added support for constants
   * Added "pipe" attribute to allow custom block element handling
+  * Compiler now emits warnings for unused variables
+  * Attribute frame stack now has a max size of 255
   * API features:
     * `Rant::set_global_const()`
     * `Rant::set_global_force()`
     * `lang::AccessPath::is_variable()`
     * `lang::Rst::ConstDef`
+    * `compiler::message::CompilerMessage.is_warning()`
+  * CLI: added `-W` switch to disable warnings
   * Standard Library:
     * `[pipe]`: Sets the pipe attribute.
-  * Compiler messages:
-    * `R-1003` (nested function definition marked as constant)
 
 ### Changes
   * Updated some AST structures to support constants
   * The following items are now made constant:
     * Standard library items
     * Program arguments
+    * Function arguments
     * Imported modules
+  * API changes:
+    * Renamed `lang::AccessPath::capture_var_name()` to `var_name()`
   * Upgraded library dependencies:
     * `once_cell` &rarr; 0.5.2
     * `quickscope` &rarr; 0.1.6
-    * `rand` &rarr; 0.8.1
+    * `rand` &rarr; 0.8.2
     * `rand-xoshiro` &rarr; 0.6.0
     * `smallvec` &rarr; 1.6.1
     * `smartstring` &rarr; 0.2.6
     * `unicode-segmentation` &rarr; 1.7.1
+  * Stamdard library:
+    * Swapped the positions of the two parameters in `[join]` so the separator comes last
+  * Upgraded CLI dependencies:
+    * `argh` &rarr; 0.1.4
+
+### Fixes
+  * Fixed globals created within program scope not being tracked by compiler
+  * Fixed `[whitespace-fmt]` modifying the wrong stack frame
 
 ## 4.0.0-alpha.14
 

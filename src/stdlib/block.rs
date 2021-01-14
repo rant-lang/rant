@@ -99,7 +99,7 @@ pub(crate) fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
 }
 
 pub(crate) fn push_attrs(vm: &mut VM, _: ()) -> RantStdResult {
-  vm.resolver_mut().push_attrs();
+  vm.resolver_mut().push_attrs()?;
   Ok(())
 }
 

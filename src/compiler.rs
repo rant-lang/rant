@@ -131,8 +131,11 @@ pub enum Problem {
   NothingToCompose,
   UnusedVariable(String),
   UnusedParameter(String),
+  UnusedFunction(String),
   EmptyFunctionBody(String),
   NestedFunctionDefMarkedConstant,
+  ConstantReassignment(String),
+  ConstantRedefinition(String),
   FileNotFound(String),
   FileIOError(String),
 }
@@ -140,48 +143,58 @@ pub enum Problem {
 impl Problem {
   fn code(&self) -> &'static str {
     match self {
-      // Common errors (0000 - 0019)
+      // Syntax errors (0000 - 0099)
+      // Tokens
       Problem::UnexpectedToken(_) =>                              "R-0000",
       Problem::ExpectedToken(_) =>                                "R-0001",
+      // Unclosed
       Problem::UnclosedBlock =>                                   "R-0002",
       Problem::UnclosedFunctionCall =>                            "R-0003",
       Problem::UnclosedFunctionSignature =>                       "R-0004",
-      Problem::InvalidParamOrder(..) =>                           "R-0005",
-      Problem::MissingFunctionBody =>                             "R-0006",
-      Problem::UnclosedFunctionBody =>                            "R-0007",
-      Problem::InvalidParameter(_) =>                             "R-0008",
-      Problem::DuplicateParameter(_) =>                           "R-0009",
-      Problem::UnclosedStringLiteral =>                           "R-0010",
-      Problem::MultipleVariadicParams =>                          "R-0011",
-      Problem::UnclosedVariableAccess =>                          "R-0012",
-      Problem::UnclosedList =>                                    "R-0013",
-      Problem::UnclosedMap =>                                     "R-0014",
+      Problem::UnclosedVariableAccess =>                          "R-0005",
+      Problem::UnclosedStringLiteral =>                           "R-0006",
+      Problem::UnclosedList =>                                    "R-0007",
+      Problem::UnclosedMap =>                                     "R-0008",
+      // Functions
+      Problem::InvalidParamOrder(..) =>                           "R-0009",
+      Problem::MissingFunctionBody =>                             "R-0010",
+      Problem::UnclosedFunctionBody =>                            "R-0011",
+      Problem::InvalidParameter(_) =>                             "R-0012",
+      Problem::DuplicateParameter(_) =>                           "R-0013",
+      Problem::MultipleVariadicParams =>                          "R-0014",
+      // Blocks
       Problem::DynamicKeyBlockMultiElement =>                     "R-0015",
       Problem::FunctionBodyBlockMultiElement =>                   "R-0016",
+      // Accessors
       Problem::AnonValueAssignment =>                             "R-0017",
-      Problem::ComposeValueReused =>                              "R-0018",
-      Problem::NothingToCompose =>                                "R-0019",
+      Problem::MissingIdentifier =>                               "R-0018",
+      Problem::InvalidIdentifier(_) =>                            "R-0019",
+      Problem::AccessPathStartsWithIndex =>                       "R-0020",
+      Problem::AccessPathStartsWithSlice =>                       "R-0021",
+      Problem::InvalidSliceBound(_) =>                            "R-0022",
       
-      // Access path errors (0020 - 0029)
-      Problem::MissingIdentifier =>                               "R-0020",
-      Problem::InvalidIdentifier(_) =>                            "R-0021",
-      Problem::AccessPathStartsWithIndex =>                       "R-0022",
-      Problem::AccessPathStartsWithSlice =>                       "R-0023",
-      Problem::InvalidSliceBound(_) =>                            "R-0024",
+      // Composition
+      Problem::ComposeValueReused =>                              "R-0023",
+      Problem::NothingToCompose =>                                "R-0024",
       
-      // Hint/sink errors (0030 - 0039)
-      Problem::InvalidSink | Problem::InvalidSinkOn(_) =>         "R-0030",
-      Problem::InvalidHint | Problem::InvalidHintOn(_) =>         "R-0031",
+      // Static analysis errors (0100 - 0199)
+      Problem::ConstantReassignment(_) =>                         "R-0100",
+      Problem::ConstantRedefinition(_) =>                         "R-0101",
 
-      // File access errors (0100 - 0109)
-      Problem::FileNotFound(_) =>                                 "R-0100",
-      Problem::FileIOError(_) =>                                  "R-0101",
+      // Hint/sink errors (0130 - 0139)
+      Problem::InvalidSink | Problem::InvalidSinkOn(_) =>         "R-0130",
+      Problem::InvalidHint | Problem::InvalidHintOn(_) =>         "R-0131",
 
-      // Common warnings (1000 - 1019)
+      // Common warnings (1000 - 1099)
       Problem::UnusedVariable(_) =>                               "R-1000",
       Problem::UnusedParameter(_) =>                              "R-1001",
-      Problem::EmptyFunctionBody(_) =>                            "R-1002",
-      Problem::NestedFunctionDefMarkedConstant =>                 "R-1003",
+      Problem::UnusedFunction(_) =>                               "R-1002",
+      Problem::EmptyFunctionBody(_) =>                            "R-1003",
+      Problem::NestedFunctionDefMarkedConstant =>                 "R-1004",
+
+      // File access errors (0100 - 0109)
+      Problem::FileNotFound(_) =>                                 "R-2100",
+      Problem::FileIOError(_) =>                                  "R-2101",
     }
   }
   
@@ -208,8 +221,9 @@ impl Problem {
       Problem::InvalidParameter(pname) => format!("invalid parameter '{}'; must be a valid identifier or '*'", pname),
       Problem::DuplicateParameter(pname) => format!("duplicate parameter '{}' in function signature", pname),
       Problem::MultipleVariadicParams => "multiple variadic parameters are not allowed".to_owned(),
-      Problem::UnusedVariable(vname) => format!("variable '{}' is not used", vname),
-      Problem::UnusedParameter(pname) => format!("parameter '{}' is not used", pname),
+      Problem::UnusedVariable(vname) => format!("variable '{}' is defined but never used", vname),
+      Problem::UnusedParameter(pname) => format!("parameter '{}' is never used", pname),
+      Problem::UnusedFunction(fname) => format!("function '{}' is defined but never used", fname),
       Problem::EmptyFunctionBody(fname) => format!("function '{}' is empty", fname),
       Problem::NestedFunctionDefMarkedConstant => "nested function definition can't be made constant; function will be mutable".to_owned(),
       Problem::FileNotFound(file) => format!("file not found: '{}'", file),
@@ -222,6 +236,8 @@ impl Problem {
       Problem::AnonValueAssignment => "can't assign directly to anonymous value; try assigning to a key or index instead".to_owned(),
       Problem::ComposeValueReused => "composition output consumed more than once within the same function call".to_owned(),
       Problem::NothingToCompose => "first function in composition cannot consume output".to_owned(),
+      Problem::ConstantReassignment(cname) => format!("reassignment of known constant '{}'", cname),
+      Problem::ConstantRedefinition(cname) => format!("redefinition of known constant '{}'", cname),
     }
   }
   

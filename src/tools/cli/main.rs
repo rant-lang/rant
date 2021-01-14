@@ -41,6 +41,10 @@ struct CliArgs {
   /// don't emit debug symbols
   #[argh(switch, short = 'n')]
   no_debug: bool,
+
+  /// don't emit compiler warnings
+  #[argh(switch, short = 'W')]
+  no_warnings: bool,
 }
 
 enum ProgramSource {
@@ -150,6 +154,10 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) -> ExitCode {
   
   // Print errors/warnings
   for msg in problems.iter() {
+    if args.no_warnings && msg.is_warning() {
+      continue
+    }
+    
     let d = Diagnostic {
       level: match msg.severity() {
         Severity::Warning => Level::Warning,

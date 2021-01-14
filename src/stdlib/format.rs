@@ -13,7 +13,7 @@ pub(crate) fn whitespace_fmt(vm: &mut VM, (mode, custom): (Option<String>, Optio
       "custom" =>     WhitespaceNormalizationMode::Custom(custom.unwrap_or(RantValue::Empty)),
       bad_mode => runtime_error!(RuntimeErrorType::ArgumentError, "invalid whitespace normalization mode: '{}'", bad_mode),
     };
-    vm.cur_frame_mut().use_output_mut(move |output| output.format_mut().ws_norm_mode = mode);
+    vm.parent_frame_mut(1).unwrap().use_output_mut(move |output| output.format_mut().ws_norm_mode = mode);
   } else {
     let mode = vm.cur_frame().use_output(|output| output.format().ws_norm_mode.clone()).unwrap_or_default();
     let frame = vm.cur_frame_mut();

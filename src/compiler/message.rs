@@ -119,4 +119,9 @@ impl CompilerMessage {
   pub fn is_error(&self) -> bool {
     matches!(self.severity, Severity::Error)
   }
+
+  /// Returns true if the message is a warning.
+  pub fn is_warning(&self) -> bool {
+    matches!(self.severity, Severity::Warning)
+  }
 }
