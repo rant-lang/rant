@@ -7,6 +7,7 @@
   * Added "pipe" attribute to allow custom block element handling
   * Compiler now emits warnings for unused variables
   * Attribute frame stack now has a max size of 255
+  * `[sel]` can now additionally accept selector mode strings directly to create + apply a transient selector
   * API features:
     * `Rant::set_global_const()`
     * `Rant::set_global_force()`

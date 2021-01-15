@@ -52,7 +52,7 @@ impl BlockState {
     if self.is_done() { return Ok(None) }
 
     // Check if element or separator is next
-    if self.is_piped() || self.cur_steps == 0 || self.prev_step_separated {
+    if self.cur_steps == 0 || self.prev_step_separated {
       self.prev_step_separated = false;
       self.cur_steps += 1;
 

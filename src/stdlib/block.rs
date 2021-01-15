@@ -82,6 +82,11 @@ pub(crate) fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
     Some(RantValue::Special(RantSpecial::Selector(selector))) => {
       Some(Rc::clone(&selector))
     },
+    Some(val @ RantValue::String(_)) => {
+      let mode = SelectorMode::from_rant(val).into_runtime_result()?;
+      let selector = Rc::new(RefCell::new(Selector::new(mode)));
+      Some(selector)
+    },
     Some(val) => {
       return Err(RuntimeError {
         error_type: RuntimeErrorType::ValueError(ValueError::InvalidConversion {
