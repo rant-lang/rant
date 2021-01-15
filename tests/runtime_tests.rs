@@ -10,6 +10,7 @@ use rant::*;
 
 use assert_matches::*;
 
+#[macro_export]
 macro_rules! test_rant_file {
   ($src_path:literal raises $runtime_err_variant:pat) => {{
     use rant::runtime::{RuntimeError, RuntimeErrorType::*};
@@ -236,7 +237,7 @@ fn closure_mutate_captured_value() {
 #[test]
 fn filter_with_native_predicate() {
   test_rant_file!(
-    "sources/filter_with_native_predicate.rant",
+    "sources/collections/filter_with_native_predicate.rant",
     "1, 3, 5, 7, 9"
   );
 }
@@ -244,7 +245,7 @@ fn filter_with_native_predicate() {
 #[test]
 fn filter_with_user_predicate() {
   test_rant_file!(
-    "sources/filter_with_user_predicate.rant",
+    "sources/collections/filter_with_user_predicate.rant",
     "1, 3, 5, 7, 9"
   );
 }
@@ -252,7 +253,7 @@ fn filter_with_user_predicate() {
 #[test]
 fn map_with_native_callback() {
   test_rant_file!(
-    "sources/map_with_native_callback.rant",
+    "sources/collections/map_with_native_callback.rant",
     "-1, -2, -3, -4, -5, -6, -7, -8, -9, -10"
   )
 }
@@ -260,7 +261,7 @@ fn map_with_native_callback() {
 #[test]
 fn map_with_user_callback() {
   test_rant_file!(
-    "sources/map_with_user_callback.rant",
+    "sources/collections/map_with_user_callback.rant",
     "-1, -2, -3, -4, -5, -6, -7, -8, -9, -10"
   )
 }
@@ -268,7 +269,7 @@ fn map_with_user_callback() {
 #[test]
 fn zip_with_native_callback() {
   test_rant_file!(
-    "sources/zip_with_native_callback.rant",
+    "sources/collections/zip_with_native_callback.rant",
     "5, 7, 9"
   );
 }
@@ -276,7 +277,7 @@ fn zip_with_native_callback() {
 #[test]
 fn zip_with_user_callback() {
   test_rant_file!(
-    "sources/zip_with_user_callback.rant",
+    "sources/collections/zip_with_user_callback.rant",
     "5, 7, 9"
   );
 }
@@ -505,11 +506,6 @@ fn redef_var_with_const() {
 #[test]
 fn const_shadow() {
   test_rant_file!("sources/const/const_shadow.rant");
-}
-
-#[test]
-fn redef_const() {
-  test_rant_file!("sources/const/redef_const.rant" raises InvalidAccess);
 }
 
 #[test]
