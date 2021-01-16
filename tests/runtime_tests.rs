@@ -517,3 +517,18 @@ fn reassign_const() {
 fn reassign_const_parent() {
   test_rant_file!("sources/const/reassign_const_parent.rant" raises InvalidAccess);
 }
+
+#[test]
+fn list_autoconcat() {
+  test_rant_file!("sources/collections/list_autoconcat.rant");
+}
+
+#[test]
+fn list_autoconcat_repeater() {
+  test_rant_file!("sources/collections/list_autoconcat_repeater.rant");
+}
+
+#[test]
+fn map_autoconcat() {
+  test_rant_file!("sources/collections/map_autoconcat.rant");
+}
