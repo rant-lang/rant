@@ -4,7 +4,7 @@ use fnv::{FnvBuildHasher};
 use quickscope::ScopeMap;
 use crate::{lang::{Sequence, Rst}, RantValue, Rant};
 use crate::runtime::*;
-use super::{OutputBuffer, output::OutputWriter, Intent};
+use super::{output::OutputWriter, Intent};
 
 type CallStackVector = SmallVec<[StackFrame; super::CALL_STACK_INLINE_COUNT]>;
 
@@ -500,11 +500,8 @@ impl StackFrame {
   /// Writes a value to the frame's output.
   #[inline]
   pub fn write_value(&mut self, val: RantValue) {
-    if val.is_empty() {
-      return
-    }
     if let Some(output) = self.output.as_mut() {
-      output.write_buffer(OutputBuffer::Value(val));
+      output.write_value(val);
     }
   }
 

@@ -9,7 +9,7 @@ const LIST_INLINE_SIZE: usize = 2;
 /// Type alias for `Rc<RefCell<RantMap>>`
 pub type RantMapRef = Rc<RefCell<RantMap>>;
 
-/// Type alias for `Rc<RefCell<RantMap>>`
+/// Type alias for `Rc<RefCell<RantList>>`
 pub type RantListRef = Rc<RefCell<RantList>>;
 
 /// Represents Rant's `list` type, which stores an ordered collection of values.

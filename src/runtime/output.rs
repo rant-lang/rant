@@ -30,9 +30,16 @@ impl OutputWriter {
   pub fn format_mut(&mut self) -> &mut OutputFormat {
     Rc::make_mut(&mut self.format)
   }
+
+  #[inline]
+  pub fn write_value(&mut self, value: RantValue) {
+    if !matches!(value, RantValue::Empty) {
+      self.write_buffer(OutputBuffer::Value(value));
+    }
+  }
   
   #[inline]
-  pub fn write_buffer(&mut self, value: OutputBuffer) {
+  fn write_buffer(&mut self, value: OutputBuffer) {
     // Set the correct mode for the output content
     match (self.buffers.len() + 1, self.mode) {
       (1, _) => {
@@ -163,7 +170,7 @@ enum OutputPrintMode {
 
 /// A unit of output.
 #[derive(Debug)]
-pub enum OutputBuffer {
+enum OutputBuffer {
   Fragment(InternalString),
   Whitespace(InternalString),
   Value(RantValue)
