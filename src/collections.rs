@@ -1,9 +1,10 @@
-use std::{rc::Rc, ops::{DerefMut, Deref}, iter::FromIterator, cell::RefCell};
+use std::{cell::RefCell, iter::FromIterator, ops::{DerefMut, Deref}, rc::Rc};
 use crate::{InternalString, RantValue};
 use fnv::FnvHashMap;
 
 const DEFAULT_MAP_CAPACITY: usize = 16;
 const DEFAULT_LIST_CAPACITY: usize = 16;
+const LIST_INLINE_SIZE: usize = 2;
 
 /// Type alias for `Rc<RefCell<RantMap>>`
 pub type RantMapRef = Rc<RefCell<RantMap>>;
@@ -24,6 +25,16 @@ impl RantList {
   /// Creates an empty RantList with the specified initial capacity.
   pub fn with_capacity(capacity: usize) -> Self {
     Self(Vec::with_capacity(capacity))
+  }
+
+  #[inline(always)]
+  pub fn len(&self) -> usize {
+    self.0.len()
+  }
+
+  #[inline(always)]
+  pub fn is_empty(&self) -> bool {
+    self.0.is_empty()
   }
 }
 
@@ -107,6 +118,14 @@ impl RantMap {
   #[inline]
   pub fn proto(&self) -> Option<RantMapRef> {
     self.proto.clone()
+  }
+
+  #[inline]
+  pub fn extend<M: Deref<Target = RantMap>>(&mut self, other: M)
+  {
+    for (k, v) in other.map.iter(){
+      self.map.insert(k.clone(), v.clone());
+    }
   }
 
   #[inline]

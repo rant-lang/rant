@@ -5,6 +5,7 @@
 ### New
   * Added support for constants
   * Added "pipe" attribute to allow custom block element handling
+  * Print semantics for collection auto-concatenation
   * Compiler now emits warnings for unused variables
   * Attribute frame stack now has a max size of 255
   * `[sel]` can now additionally accept selector mode strings directly to create + apply a transient selector
