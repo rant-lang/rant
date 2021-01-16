@@ -1,6 +1,6 @@
 [package]
 name = "rant"
-version = "4.0.0-alpha.15"
+version = "4.0.0-alpha.16"
 authors = ["Berkin <TheBerkin@users.noreply.github.com>"]
 edition = "2018"
 description = "The Rant procedural templating language"
