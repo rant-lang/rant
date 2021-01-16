@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.0.0-alpha.15 (unreleased)
+## 4.0.0-alpha.15
 
 ### New
   * Added support for constants
