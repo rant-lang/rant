@@ -21,16 +21,19 @@ impl OutputWriter {
     }
   }
 
+  /// Gets a reference to the current output format.
   #[inline]
   pub fn format(&self) -> &OutputFormat {
     &self.format
   }
 
+  /// Gets a mutable reference to the current output format.
   #[inline]
   pub fn format_mut(&mut self) -> &mut OutputFormat {
     Rc::make_mut(&mut self.format)
   }
 
+  /// Writes a value to the output.
   #[inline]
   pub fn write_value(&mut self, value: RantValue) {
     if !matches!(value, RantValue::Empty) {
@@ -75,11 +78,13 @@ impl OutputWriter {
     self.buffers.push(value);
   }
   
+  /// Writes a text fragment to the output.
   #[inline]
   pub fn write_frag(&mut self, value: &str) {
     self.write_buffer(OutputBuffer::Fragment(InternalString::from(value)));
   }
   
+  /// Writes a whitespace string to the output.
   #[inline]
   pub fn write_ws(&mut self, value: &str) {
     let ws_str = match &self.format.ws_norm_mode {
@@ -97,6 +102,7 @@ impl OutputWriter {
 }
 
 impl OutputWriter {
+  /// Consumes the output and returns the final value.
   #[inline]
   pub fn render_value(mut self) -> RantValue {    
     match self.buffers.len() {

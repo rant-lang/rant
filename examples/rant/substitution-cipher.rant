@@ -1,5 +1,5 @@
 # Constructs a substitution cipher function
-[$make-cipher: alphabet] {
+[%make-cipher: alphabet] {
   <
     $letters = [split: <alphabet>];
     $sub-letters = [shuffled: <letters>];

@@ -8,9 +8,13 @@ use crate::RantValue;
 /// The `Clone` implementation for this type does not copy any data in `ByRef*` variants; it only copies the reference.
 #[derive(Debug)]
 pub enum RantVar {
+  /// By-value variable
   ByVal(RantValue),
+  /// By-value constant
   ByValConst(RantValue),
+  /// By-ref variable
   ByRef(Rc<RefCell<RantValue>>),
+  /// By-ref constant
   ByRefConst(Rc<RantValue>)
 }
 

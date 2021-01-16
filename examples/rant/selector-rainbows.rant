@@ -18,7 +18,7 @@
 [len: <sels> & rep]
 [sep: \n\n]
 {
-  <$current-sel = <sels/{[step-index]}>>
+  <%current-sel = <sels/{[step-index]}>>
   <current-sel/name>\:\n
   [rep: <side-len>]
   [sep: \n]

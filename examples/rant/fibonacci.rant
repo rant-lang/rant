@@ -1,11 +1,10 @@
-[$fib:n] {
-  <$a = 0; $b = 1; $fib = ()>
-  [rep:<n>]
+[$fib: n] {
+  <$a = 0; $b = 1>
+  [rep: <n>]
   {
-    [push:<fib>;<a>]
+    (<a>)
     <$c = [add: <a>; <b>]; a = <b>; b = <c>>
   }
-  <fib>
 }
 
-[join:,\s;[fib:20]]
+[fib: 20 & join: ,\s]
