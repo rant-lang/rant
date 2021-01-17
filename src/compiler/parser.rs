@@ -286,6 +286,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             pending_whitespace = None;
           }
         };
+        (queue next) => {{
+          if let Some((RantToken::Whitespace, ..)) = self.reader.take_where(|tt| matches!(tt, Some((RantToken::Whitespace, ..)))) {
+            pending_whitespace = Some(self.reader.last_token_string());
+          }
+        }};
         (queue $ws:expr) => {
           pending_whitespace = Some($ws);
         };
@@ -347,7 +352,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               is_seq_printing = true;
             },
             
-            // If sinked, hold pending whitespace and do nothing
+            // If sinked, remove surrounding whitespace
             PrintFlag::Sink => {},
             
             // If no flag, take a hint
@@ -367,8 +372,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         RantToken::LeftBrace => {
           // Read in the entire block
           let block = self.parse_block(false, next_print_flag)?;
-          
-          // Decide what to do with surrounding whitespace
+
+          // Decide what to do with previous whitespace
           match next_print_flag {                        
             // If hinted, allow pending whitespace
             PrintFlag::Hint => {
@@ -376,10 +381,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               is_seq_printing = true;
             },
             
-            // If sinked, hold pending whitespace and do nothing
-            PrintFlag::Sink => {},
+            // If sinked, delete pending whitespace
+            PrintFlag::Sink => whitespace!(ignore prev),
             
-            // If no flag, take a hint
+            // If no flag, infer from block contents
             PrintFlag::None => {
               // Inherit hints from inner blocks
               if let Block { flag: PrintFlag::Hint, ..} = block {
@@ -389,7 +394,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           }
           
-          seq_add!(Rst::Block(block));               
+          seq_add!(Rst::Block(block));
         },
 
         RantToken::Compose => no_flags!({
