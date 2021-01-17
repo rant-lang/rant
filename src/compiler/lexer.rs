@@ -21,6 +21,9 @@ pub enum RantToken {
 
   #[token("[]")]
   ComposeValue,
+
+  #[token("<>")]
+  Defer,
   
   #[token("[")]
   LeftBracket,

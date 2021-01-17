@@ -5,6 +5,7 @@
 ### New
 
 ### Changes
+  * Changed defer operator from `*` to `<>`
   * Adjusted whitespace behavior around blocks to avoid ambiguities
 
 ### Fixes

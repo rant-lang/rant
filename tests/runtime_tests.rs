@@ -78,6 +78,11 @@ fn repeater() {
 }
 
 #[test]
+fn defer_block() {
+  test_rant_file!("sources/block/defer_block.rant");
+}
+
+#[test]
 fn repeater_with_value_sep() {
   test_rant!(r#"[rep:10][sep:\s]{a}"#, "a a a a a a a a a a");
 }

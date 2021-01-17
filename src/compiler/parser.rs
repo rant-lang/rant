@@ -340,7 +340,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Defer operator
-        RantToken::Star => {
+        RantToken::Defer => {
           self.reader.skip_ws();
           let block = self.parse_block(true, next_print_flag)?;
           
