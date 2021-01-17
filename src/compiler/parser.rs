@@ -278,8 +278,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       
       macro_rules! whitespace {
         (allow) => {
-          if let Some(ws) = pending_whitespace.take() {
-            seq_add!(Rst::Whitespace(ws));
+          if is_seq_printing {
+            if let Some(ws) = pending_whitespace.take() {
+              seq_add!(Rst::Whitespace(ws));
+            }
+          } else {
+            pending_whitespace = None;
           }
         };
         (queue $ws:expr) => {
@@ -291,10 +295,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         (ignore next) => {
           self.reader.skip_ws();
         };
-        (ignore both) => {
+        (ignore both) => {{
           whitespace!(ignore prev);
           whitespace!(ignore next);
-        };
+        }};
       }
 
       macro_rules! consume_fragments {
@@ -473,9 +477,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Handle hint/sink behavior
           match func_access {
             Rst::FuncCall(FunctionCall { flag, ..}) => {
-              // If the call is hinted, allow whitespace around it
-              if matches!(flag, PrintFlag::Hint) {
-                whitespace!(allow);
+              // If the call is not sinked, allow whitespace around it
+              match flag {
+                PrintFlag::Hint => {
+                  is_seq_printing = true;
+                  whitespace!(allow);
+                },
+                _ => whitespace!(ignore both)
               }
             },
             // Definitions are implicitly sinked and ignore surrounding whitespace

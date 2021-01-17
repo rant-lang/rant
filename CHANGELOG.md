@@ -2,6 +2,13 @@
 
 ## 4.0.0-alpha.16 (unreleased)
 
+### New
+
+### Changes
+
+### Fixes
+  * Fixed incorrect whitespace print behavior around unflagged function calls
+
 ## 4.0.0-alpha.15
 
 ### New
