@@ -6,7 +6,7 @@ use crate::{RantProgramInfo, InternalString, lang::*};
 use fnv::FnvBuildHasher;
 use line_col::LineColLookup;
 use quickscope::ScopeMap;
-use std::{rc::Rc, ops::Range, collections::HashSet};
+use std::{collections::{HashMap, HashSet}, ops::Range, rc::Rc};
 
 type ParseResult<T> = Result<T, ()>;
 
@@ -353,7 +353,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             },
             
             // If sinked, remove surrounding whitespace
-            PrintFlag::Sink => {},
+            PrintFlag::Sink => whitespace!(ignore both),
             
             // If no flag, take a hint
             PrintFlag::None => {
@@ -382,7 +382,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             },
             
             // If sinked, delete pending whitespace
-            PrintFlag::Sink => whitespace!(ignore prev),
+            PrintFlag::Sink => whitespace!(ignore both),
             
             // If no flag, infer from block contents
             PrintFlag::None => {
@@ -964,6 +964,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       }
     } else {
       // Function calls, both composed and otherwise
+      
       let mut is_composing = false;
       let mut is_finished = false;
       let mut composed_func: Option<Rst> = None;
@@ -972,19 +973,49 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       while !is_finished {
         self.reader.skip_ws();
         let mut func_args = vec![];
+        let mut temporal_index_labels: HashMap<InternalString, usize> = Default::default();
+        let mut cur_temporal_index: usize = 0;
         let is_anonymous = self.reader.eat_where(|t| matches!(t, Some((RantToken::Bang, ..))));
+        let mut is_temporal = false;
         self.reader.skip_ws();
-
+        
         macro_rules! parse_args {
           () => {{
+            #[allow(unused_assignments)] // added because rustc whines about `spread_mode` being unused; that is a LIE
             loop {
               self.reader.skip_ws();
-              let mut is_spread = false;
+              let mut spread_mode = ArgumentSpreadMode::NoSpread;
 
-              // Check for spread operator
-              if self.reader.eat_where(|t| matches!(t, Some((RantToken::Plus, ..)))) {
-                is_spread = true;
-                self.reader.skip_ws();
+              // Check for spread operators
+              match self.reader.take_where(|t| matches!(t, Some((RantToken::Star, ..)) | Some((RantToken::Temporal, ..)) | Some((RantToken::TemporalLabeled(_), ..)))) {
+                // Parametric spread
+                Some((RantToken::Star, ..)) => {
+                  self.reader.skip_ws();
+                  spread_mode = ArgumentSpreadMode::Parametric;
+                },
+                // Unlabeled temporal spread
+                Some((RantToken::Temporal, ..)) => {
+                  is_temporal = true;
+                  self.reader.skip_ws();
+                  spread_mode = ArgumentSpreadMode::Temporal { label: cur_temporal_index };
+                  cur_temporal_index += 1;
+                },
+                // Labeled temporal spread
+                Some((RantToken::TemporalLabeled(label_str), ..)) => {
+                  is_temporal = true;
+                  self.reader.skip_ws();
+                  let label_index = if let Some(label_index) = temporal_index_labels.get(&label_str) {
+                    *label_index
+                  } else {
+                    let label_index = cur_temporal_index;
+                    temporal_index_labels.insert(label_str.clone(), label_index);
+                    cur_temporal_index += 1;
+                    label_index
+                  };
+                  spread_mode = ArgumentSpreadMode::Temporal { label: label_index };
+                },
+                Some(_) => unreachable!(),
+                None => {},
               }
 
               // Check for compose value
@@ -993,7 +1024,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   if let Some(compose) = composed_func.take() {
                     let arg = ArgumentExpr {
                       expr: Rc::new(Sequence::one(compose, &self.info)),
-                      is_spread
+                      spread_mode
                     };
                     func_args.push(arg);
                   } else {
@@ -1026,7 +1057,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 let (arg_seq, arg_end, _) = self.parse_sequence(SequenceParseMode::FunctionArg)?;
                 let arg = ArgumentExpr {
                   expr: Rc::new(arg_seq),
-                  is_spread
+                  spread_mode,
                 };
                 func_args.push(arg);
                 match arg_end {
@@ -1056,7 +1087,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             if let Some(compose) = composed_func.take() {
               let arg = ArgumentExpr {
                 expr: Rc::new(Sequence::one(compose, &self.info)),
-                is_spread: false
+                // TODO: Provide a way perform spreading on implicit compose values
+                spread_mode: ArgumentSpreadMode::NoSpread,
               };
               func_args.insert(0, arg);
             }
@@ -1127,6 +1159,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             expr: Rc::new(func_expr),
             args: Rc::new(func_args),
             flag,
+            is_temporal,
           };
           
           Some(Rst::AnonFuncCall(afcall))
@@ -1161,6 +1194,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               id: Rc::new(func_path),
               arguments: Rc::new(func_args),
               flag,
+              is_temporal,
             };
 
             Some(Rst::FuncCall(fcall))

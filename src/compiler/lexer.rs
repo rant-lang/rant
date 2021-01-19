@@ -48,7 +48,13 @@ pub enum RantToken {
   
   #[token(":")]
   Colon,
+
+  #[token("**")]
+  Temporal,
   
+  #[regex(r"\*[\w\d\-_]+\*", parse_temporal_spread_label)]
+  TemporalLabeled(InternalString),
+
   #[token("*")]
   Star,
   
@@ -121,8 +127,13 @@ pub enum RantToken {
   UnterminatedStringLiteral,
 }
 
+fn parse_temporal_spread_label(lex: &mut Lexer<RantToken>) -> InternalString {
+  let slice = lex.slice();
+  InternalString::from(&slice[1 .. slice.len() - 1])
+}
+
 fn parse_string_literal(lex: &mut Lexer<RantToken>) -> Option<InternalString> {
-  let literal: String = lex.slice().to_owned();
+  let literal = lex.slice();
   let literal_content = &literal[1..literal.len() - 1];
   let mut string_content = InternalString::new();
   let mut prev_quote = false;

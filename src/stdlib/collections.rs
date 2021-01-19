@@ -3,6 +3,17 @@ use std::cmp::Ordering;
 use super::*;
 use crate::{lang::PrintFlag};
 
+pub(crate) fn list(vm: &mut VM, items: VarArgs<RantValue>) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(items.iter().cloned().collect()))));
+  Ok(())
+}
+
+pub(crate) fn nlist(vm: &mut VM, items: VarArgs<RantValue>) -> RantStdResult {
+  let list = RantValue::List(Rc::new(RefCell::new(items.iter().cloned().collect())));
+  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(RantList::from(vec![list])))));
+  Ok(())
+}
+
 pub(crate) fn squish(vm: &mut VM, (list, target_size): (RantListRef, usize)) -> RantStdResult {
   let mut list = list.borrow_mut();
 

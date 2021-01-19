@@ -1,6 +1,6 @@
 //! Contains Rant's syntax tree implementation and supporting data structures.
 
-use std::{ops::{DerefMut, Deref}, fmt::Display, rc::Rc};
+use std::{collections::HashMap, fmt::Display, ops::{DerefMut, Deref}, rc::Rc};
 use crate::{RantProgramInfo, InternalString, RantValue, RantValueType};
 
 /// Printflags indicate to the compiler whether a given program element is likely to print something or not.
@@ -24,6 +24,7 @@ impl PrintFlag {
     }
   }
 
+  /// Returns `true` if the flag is a sink.
   #[inline]
   pub fn is_sink(&self) -> bool {
     matches!(self, PrintFlag::Sink)
@@ -71,9 +72,12 @@ pub(crate) fn is_valid_ident(name: &str) -> bool {
   has_non_digit && is_valid_chars
 }
 
+/// A single bound index for a slice expression.
 #[derive(Debug)]
 pub enum SliceIndex {
+  /// Static index.
   Static(i64),
+  /// Dynamic index.
   Dynamic(Rc<Sequence>)
 }
 
@@ -86,11 +90,16 @@ impl Display for SliceIndex {
   }
 }
 
+/// An unevaluated list slice.
 #[derive(Debug)]
 pub enum SliceExpr {
+  /// Unbounded slice.
   Full,
+  /// Start-bounded slice.
   From(SliceIndex),
+  /// End-bounded slice.
   To(SliceIndex),
+  /// Fully-bounded slice.
   Between(SliceIndex, SliceIndex),
 }
 
@@ -133,11 +142,16 @@ impl Display for SliceExpr {
   }
 }
 
+/// An evaluated list slice.
 #[derive(Debug)]
 pub enum Slice {
+  /// Unbounded slice.
   Full,
+  /// Start-bounded slice.
   From(i64),
+  /// End-bounded slice.
   To(i64),
+  /// Fully-bounded slice.
   Between(i64, i64),
 }
 
@@ -427,11 +441,26 @@ impl Parameter {
   }
 }
 
+/// Defines spread modes for function arguments.
+#[derive(Debug)]
+pub enum ArgumentSpreadMode {
+  /// Pass as one argument.
+  NoSpread,
+  /// Iterate over the value and pass each element as a separate argument.
+  Parametric,
+  /// Iterate over the value and pass in each item as the argument in separate function calls.
+  ///
+  /// If multiple arguments are temporal, the receiving function is called for each valid combination between them.
+  ///
+  /// Temporal arguments with matching labels will be iterated simultaneously.
+  Temporal { label: usize },
+}
+
 /// Represents an argument to a function call.
 #[derive(Debug)]
 pub struct ArgumentExpr {
   pub expr: Rc<Sequence>,
-  pub is_spread: bool
+  pub spread_mode: ArgumentSpreadMode,
 }
 
 /// Describes a function call.
@@ -440,6 +469,7 @@ pub struct FunctionCall {
   pub flag: PrintFlag,
   pub id: Rc<AccessPath>,
   pub arguments: Rc<Vec<ArgumentExpr>>,
+  pub is_temporal: bool,
 }
 
 /// Describes an anonymous (nameless) function call.
@@ -448,6 +478,81 @@ pub struct AnonFunctionCall {
   pub flag: PrintFlag,
   pub expr: Rc<Sequence>,
   pub args: Rc<Vec<ArgumentExpr>>,
+  pub is_temporal: bool,
+}
+
+/// Keeps track of combination indices in a temporally-spread function call.
+#[derive(Debug)]
+pub struct TemporalSpreadState {
+  counters: Vec<(usize, usize)>,
+  arg_labels: HashMap<usize, usize>,
+}
+
+impl TemporalSpreadState {
+  #[inline]
+  pub fn new(arg_exprs: &[ArgumentExpr], args: &[RantValue]) -> Self {
+    let mut counters = Vec::with_capacity(args.len());
+    let mut arg_labels: HashMap<usize, usize> = Default::default();
+    for (i, expr) in arg_exprs.iter().enumerate() {
+      if let ArgumentSpreadMode::Temporal { label } = expr.spread_mode {
+        arg_labels.insert(i, label);
+        // Since temporal indices are always incremental, we can assume the next label index will only be 1 ahead at most.
+        // This way, duplicate labels share the same counter.
+        if label >= counters.len() {
+          let counter_size = if let RantValue::List(list_ref) = &args[i] {
+            list_ref.borrow().len()
+          } else {
+            0
+          };
+          counters.push((0, counter_size));
+        } else {
+          // If it's an existing index, update the counter size to the minimum list length.
+          // This way, we guarantee that list arguments with a shared temporal label *always* provide the same number of values.
+          if let RantValue::List(list_ref) = &args[i] {
+            let (_, n) = &mut counters[label];
+            *n = list_ref.borrow().len().min(*n);
+          }
+        }
+      }
+    }
+    Self {
+      counters,
+      arg_labels,
+    }
+  }
+
+  #[inline]
+  pub fn len(&self) -> usize {
+    self.counters.len()
+  }
+
+  #[inline]
+  pub fn is_empty(&self) -> bool {
+    self.counters.is_empty() || self.counters.iter().all(|(.., n)| *n == 0)
+  }
+
+  #[inline]
+  pub fn get(&self, arg_index: usize) -> Option<usize> {
+    self.arg_labels.get(&arg_index).map(|i| self.counters[*i].0)
+  }
+
+  /// Increments the temporal counters.
+  /// Returns `true` if another function call should be queued.
+  #[inline]
+  pub fn increment(&mut self) -> bool {
+    let mut success = false;
+    for (c, n) in self.counters.iter_mut() {
+      *c += 1;
+      // Check if counter has reached the end
+      if c >= n {
+        *c = 0;
+      } else {
+        success = true;
+        break
+      }
+    }
+    success
+  }
 }
 
 /// Describes a function definition.
@@ -548,20 +653,6 @@ impl Rst {
       Rst::VarSet(..) =>                      "setter",
       _ =>                                    "???"
     }
-  }
-  
-  pub fn is_printing(&self) -> bool {
-    matches!(self, 
-      Rst::Block(Block { flag: PrintFlag::Hint, .. }) |
-      Rst::AnonFuncCall(AnonFunctionCall { flag: PrintFlag::Hint, .. }) |
-      Rst::FuncCall(FunctionCall { flag: PrintFlag::Hint, .. }) |
-      Rst::Integer(_) |
-      Rst::Float(_) |
-      Rst::Boolean(_) |
-      Rst::Fragment(_) |
-      Rst::Whitespace(_) |
-      Rst::VarGet(..)
-    )
   }
 }
 

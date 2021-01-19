@@ -98,7 +98,9 @@ pub enum Intent {
   /// Pop `expr_count` values off the stack and use them for expression fields in a setter.
   SetValue { path: Rc<AccessPath>, write_mode: VarWriteMode, expr_count: usize },
   /// Evaluate `arg_exprs` in order, then pop the argument values off the stack, pop a function off the stack, and pass the arguments to the function.
-  Invoke { arg_exprs: Rc<Vec<ArgumentExpr>>, eval_count: usize, flag: PrintFlag },
+  Invoke { arg_exprs: Rc<Vec<ArgumentExpr>>, eval_count: usize, flag: PrintFlag, is_temporal: bool },
+  /// Call a function for every variant of a temporally spread argument set.
+  TemporalInvoke { func: RantFunctionRef, args: Rc<Vec<RantValue>>, temporal_state: TemporalSpreadState, flag: PrintFlag, },
   /// Pop `argc` args off the stack, then pop a function off the stack and call it with the args.
   Call { argc: usize, flag: PrintFlag, override_print: bool },
   /// Pop value from stack and add it to a list. If `index` is out of range, print the list.
@@ -131,6 +133,7 @@ impl Intent {
       Intent::LoadModule { .. } => "load_module",
       Intent::RuntimeCall { .. } => "runtime_call",
       Intent::DropStaleUnwinds => "drop_stale_unwinds",
+      Intent::TemporalInvoke { .. } => "temporal invoke",
     }
   }
 }
@@ -297,12 +300,12 @@ impl<'rant> VM<'rant> {
             }
           }
         },
-        Intent::Invoke { arg_exprs, eval_count, flag } => {
+        Intent::Invoke { arg_exprs, eval_count, flag, is_temporal } => {
           // First, evaluate all arguments
           if eval_count < arg_exprs.len() {
             let arg_expr = arg_exprs.get(arg_exprs.len() - eval_count - 1).unwrap();
             let arg_seq = Rc::clone(&arg_expr.expr);
-            self.cur_frame_mut().push_intent_front(Intent::Invoke { arg_exprs, eval_count: eval_count + 1, flag });
+            self.cur_frame_mut().push_intent_front(Intent::Invoke { arg_exprs, eval_count: eval_count + 1, flag, is_temporal });
             self.push_frame_flavored(arg_seq, true, StackFrameFlavor::ArgumentExpression)?;
             return Ok(true)
           } else {
@@ -310,8 +313,8 @@ impl<'rant> VM<'rant> {
             let mut args = vec![];
             for arg_expr in arg_exprs.iter() {
               let arg = self.pop_val()?;
-              // When spread notation is used and the argument is a list, expand its values into individual args
-              if arg_expr.is_spread {
+              // When parametric spread is used and the argument is a list, expand its values into individual args
+              if matches!(arg_expr.spread_mode, ArgumentSpreadMode::Parametric) {
                 if let RantValue::List(list_ref) = &arg {
                   for spread_arg in list_ref.borrow().iter() {
                     args.push(spread_arg.clone());
@@ -329,11 +332,40 @@ impl<'rant> VM<'rant> {
               },
               other => runtime_error!(RuntimeErrorType::CannotInvokeValue, format!("cannot call '{}' value", other.type_name()))
             };
+            
 
             // Call the function
-            self.call_func(func, args, flag, false)?;
+            if is_temporal {
+              self.cur_frame_mut().push_intent_front(Intent::TemporalInvoke { 
+                func,
+                temporal_state: TemporalSpreadState::new(arg_exprs.as_slice(), args.as_slice()), 
+                args: Rc::new(args), 
+                flag  
+              });
+            } else {
+              self.call_func(func, args, flag, false)?;
+            }
+            
             return Ok(true)
           }
+        },
+        Intent::TemporalInvoke { func, args, mut temporal_state, flag } => {
+          let targs = args.iter().enumerate().map(|(arg_index, arg)| {
+            // Check if this is a temporally spread argument
+            if let Some(tindex) = temporal_state.get(arg_index) {
+              if let RantValue::List(list_ref) = arg {
+                return list_ref.borrow().get(tindex).cloned().unwrap_or_default();
+              }
+            }
+            arg.clone()
+          }).collect::<Vec<RantValue>>();
+
+          if temporal_state.increment() {
+            self.cur_frame_mut().push_intent_front(Intent::TemporalInvoke { func: Rc::clone(&func), args, temporal_state, flag });
+          }
+
+          self.call_func(func, targs, flag, false)?;
+          return Ok(true)
         },
         Intent::Call { argc, flag, override_print } => {
           // Pop the evaluated args off the stack
@@ -637,13 +669,15 @@ impl<'rant> VM<'rant> {
             expr,
             args,
             flag,
+            is_temporal,
           } = afcall;
 
           // Evaluate arguments after function is evaluated
           self.cur_frame_mut().push_intent_front(Intent::Invoke {
             arg_exprs: Rc::clone(args),
             eval_count: 0,
-            flag: *flag
+            flag: *flag,
+            is_temporal: *is_temporal,
           });
 
           // Push function expression onto stack
@@ -656,6 +690,7 @@ impl<'rant> VM<'rant> {
             id,
             arguments,
             flag,
+            is_temporal,
           } = fcall;
 
           let dynamic_keys = id.dynamic_exprs();
@@ -687,6 +722,7 @@ impl<'rant> VM<'rant> {
             eval_count: 0,
             arg_exprs: Rc::clone(arguments),
             flag: *flag,
+            is_temporal: *is_temporal,
           });
           return Ok(true)
         },
@@ -707,7 +743,7 @@ impl<'rant> VM<'rant> {
     Ok(false)
   }
 
-  /// Calls a function with the specified arguments.
+  /// Prepares a call to a function with the specified arguments.
   #[inline]
   pub fn call_func(&mut self, func: RantFunctionRef, mut args: Vec<RantValue>, flag: PrintFlag, override_print: bool) -> RuntimeResult<()> {
     let argc = args.len();

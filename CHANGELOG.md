@@ -3,6 +3,7 @@
 ## 4.0.0-alpha.16 (unreleased)
 
 ### New
+  * Added temporal argument spreading
 
 ### Changes
   * Changed defer operator from `*` to `<>`

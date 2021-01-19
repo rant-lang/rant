@@ -116,7 +116,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     proto, set_proto as "set-proto",
 
     // Collection functions
-    assoc, clear, has, keys, index_of as "index-of", insert, last_index_of as "last-index-of", remove, sift, sifted, squish, squished, take, translate,
+    assoc, clear, has, keys, index_of as "index-of", insert, last_index_of as "last-index-of", list, nlist, remove, sift, sifted, squish, squished, take, translate,
 
     // List functions
     pick, filter, join, map, sort, sorted, shuffle, shuffled, sum,
