@@ -1,1 +1,1 @@
-[add: 2; 2 & eq: 5 & assert]
+[add: 2; 2 |> eq: 5 |> assert]

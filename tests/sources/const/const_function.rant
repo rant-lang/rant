@@ -2,4 +2,4 @@
   bar
 }
 
-[foo & assert-eq: bar]
+[assert-eq: [foo]; bar]

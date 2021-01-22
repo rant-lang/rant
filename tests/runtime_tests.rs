@@ -537,3 +537,38 @@ fn list_autoconcat_repeater() {
 fn map_autoconcat() {
   test_rant_file!("sources/collections/map_autoconcat.rant");
 }
+
+#[test]
+fn temporal_one() {
+  test_rant_file!("sources/temporal/temporal_one.rant");
+}
+
+#[test]
+fn temporal_one_mixed() {
+  test_rant_file!("sources/temporal/temporal_one_mixed.rant");
+}
+
+#[test]
+fn temporal_two_samesize() {
+  test_rant_file!("sources/temporal/temporal_two_samesize.rant");
+}
+
+#[test]
+fn temporal_two_samesize_mixed() {
+  test_rant_file!("sources/temporal/temporal_two_samesize_mixed.rant");
+}
+
+#[test]
+fn temporal_two_samesize_sync() {
+  test_rant_file!("sources/temporal/temporal_two_samesize_sync.rant");
+}
+
+#[test]
+fn temporal_two_diffsize() {
+  test_rant_file!("sources/temporal/temporal_two_diffsize.rant");
+}
+
+#[test]
+fn temporal_two_diffsize_mixed() {
+  test_rant_file!("sources/temporal/temporal_two_diffsize_mixed.rant");
+}

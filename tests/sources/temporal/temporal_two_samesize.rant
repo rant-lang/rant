@@ -1,0 +1,1 @@
+[assert-eq: "foobazbarbazfooquxbarqux"; [concat: **(foo; bar); **(baz; qux)]]

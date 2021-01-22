@@ -33,6 +33,13 @@ pub(crate) fn call(vm: &mut VM, (func, args): (RantFunctionRef, Option<Vec<RantV
   Ok(())
 }
 
+pub(crate) fn concat(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult {
+  for val in args.drain(..) {
+    vm.cur_frame_mut().write_value(val);
+  }
+  Ok(())
+}
+
 /// `[$copy: val (any)]`
 ///
 /// Returns a copy of a value.

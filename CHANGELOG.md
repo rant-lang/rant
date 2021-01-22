@@ -4,10 +4,17 @@
 
 ### New
   * Added temporal argument spreading
+  * Standard Library items:
+    * `[concat]`: Print a series of arguments
+    * `[list]`: Create a list from a set of arguments
+    * `[nlist]`: Create a list from a set of arguments and nest it inside another list
 
 ### Changes
+  * Changed compose operator from `&` to `|>`
+  * Changed spread operator from `+` to `*`
   * Changed defer operator from `*` to `<>`
   * Adjusted whitespace behavior around blocks to avoid ambiguities
+  * Made separator parameter on `[join]` optional
 
 ### Fixes
   * Fixed incorrect whitespace print behavior around unflagged function calls

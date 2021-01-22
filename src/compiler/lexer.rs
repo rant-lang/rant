@@ -16,7 +16,7 @@ pub enum RantToken {
   #[token("}")]
   RightBrace,
 
-  #[token("&")]
+  #[token("|>")]
   Compose,
 
   #[token("[]")]
@@ -60,6 +60,9 @@ pub enum RantToken {
   
   #[token("+")]
   Plus,
+
+  #[token("&")]
+  And,
 
   #[token("=")]
   Equals,

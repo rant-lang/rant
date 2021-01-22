@@ -9,10 +9,10 @@
   # Return cipher functions
   @(
     encode = [?: message] {
-      [sum: [translate: [split: <message>]; <cipher>]]
+      [split: <message> |> translate: <cipher> |> sum]
     };
     decode = [?: message] {
-      [sum: [translate: [split: <message>]; <cipher-rev>]]
+      [split: <message> |> translate: <cipher-rev> |> sum]
     };
   )
 }

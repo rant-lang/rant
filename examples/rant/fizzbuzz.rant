@@ -1,8 +1,8 @@
 [rep: 100][sep: \n]
 {
   [alt:
-    [if: [step & is-factor: 3]] { fizz }
-    [if: [step & is-factor: 5]] { buzz };
+    [if: [step |> is-factor: 3]] { fizz }
+    [if: [step |> is-factor: 5]] { buzz };
     [step]
   ]
 }

@@ -1,5 +1,4 @@
 pub use stack::*;
-pub(crate) use output::*;
 
 use crate::*;
 use crate::lang::*;

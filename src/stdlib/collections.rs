@@ -241,13 +241,13 @@ pub(crate) fn pick(vm: &mut VM, list: RantValue) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn join(vm: &mut VM, (list, sep): (Vec<RantValue>, RantValue)) -> RantStdResult {
+pub(crate) fn join(vm: &mut VM, (list, sep): (Vec<RantValue>, Option<RantValue>)) -> RantStdResult {
   let mut is_first = true;
   let frame = vm.cur_frame_mut();
   for val in list {
     if is_first {
       is_first = false;
-    } else {
+    } else if let Some(sep) = &sep {
       frame.write_value(sep.clone());
     }
     frame.write_value(val);

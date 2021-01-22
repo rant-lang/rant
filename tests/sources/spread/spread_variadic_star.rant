@@ -4,4 +4,4 @@
   [join:<a>;\s]
 }
 
-[concat: * <args> & assert-eq: "foo bar baz qux"]
+[concat: * <args> |> assert-eq: "foo bar baz qux"]

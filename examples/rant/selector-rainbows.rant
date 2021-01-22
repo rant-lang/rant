@@ -15,7 +15,7 @@
   @(name = Pong; state = [mksel:pong]);
   @(name = Random; state = [mksel:random])
 )>
-[len: <sels> & rep]
+[len: <sels> |> rep]
 [sep: \n\n]
 {
   <%current-sel = <sels/{[step-index]}>>

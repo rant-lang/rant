@@ -912,7 +912,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     self.reader.skip_ws();
     // Check if we're defining a function (with [$|% ...]) or creating a closure (with [? ...])
     if let Some((func_access_type_token, func_access_type_span)) 
-    = self.reader.take_where(|t| matches!(t, Some((RantToken::Dollar, ..)) | Some((RantToken::Question, ..)) | Some((RantToken::Percent, ..)))) {
+    = self.reader.take_where(|t| matches!(t, Some((RantToken::Dollar, ..)) | Some((RantToken::Percent, ..)) | Some((RantToken::Question, ..)))) {
       match func_access_type_token {
         // Function definition
         tt @ RantToken::Dollar | tt @ RantToken::Percent => {

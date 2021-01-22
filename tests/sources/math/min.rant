@@ -1,4 +1,4 @@
-[min: 1 & assert-eq: 1]
-[min: 3; 2 & assert-eq: 2]
-[min: (3; 2) & assert-eq: 2]
-[min: 3; (4; -2; 0; 10); 6 & assert-eq: -2]
+[min: 1 |> assert-eq: 1]
+[min: 3; 2 |> assert-eq: 2]
+[min: (3; 2) |> assert-eq: 2]
+[min: 3; (4; -2; 0; 10); 6 |> assert-eq: -2]

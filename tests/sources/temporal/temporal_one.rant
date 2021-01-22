@@ -1,0 +1,5 @@
+[%println: cols*] {
+  [join: <cols>; \t]\n
+}
+
+[assert-eq: foo\nbar\n; [println: **(foo; bar)]]

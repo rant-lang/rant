@@ -4,4 +4,4 @@
   <a> <b> <c> <d>
 }
 
-[abcd: *<args> & assert-eq: "foo bar baz qux"]
+[abcd: *<args> |> assert-eq: "foo bar baz qux"]
