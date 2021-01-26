@@ -103,18 +103,10 @@ pub enum Intent {
   SetValue { path: Rc<AccessPath>, write_mode: VarWriteMode, expr_count: usize },
   /// Evaluate `arg_exprs` in order, then pop the argument values off the stack, pop a function off the stack, and pass the arguments to the function.
   Invoke { arg_exprs: Rc<Vec<ArgumentExpr>>, eval_count: usize, flag: PrintFlag, is_temporal: bool, },
-  /// Evaluate functions for a composed function call.
-  InvokeComposed {
-    steps: Rc<Vec<FunctionCall>>,
-    num_evaluated: usize,
-    flag: PrintFlag,
-  },
   /// Invoke a single function in a composed function call chain.
   InvokeComposedStep { 
     /// All steps in the entire composed function call
-    steps: Rc<Vec<FunctionCall>>, 
-    /// Function associated with each step
-    step_functions: Rc<Vec<RantFunctionRef>>,
+    steps: Rc<Vec<FunctionCall>>,
     /// The current step being executed
     step_index: usize, 
     /// Current state of the intent.
@@ -152,7 +144,6 @@ impl Intent {
       Intent::BuildDynamicSetter { .. } => "build_dyn_setter",
       Intent::SetValue { .. } => "set_value",
       Intent::Invoke { .. } => "invoke",
-      Intent::InvokeComposed { .. } => "invoke_composed",
       Intent::InvokeComposedStep { .. } => "invoke_composed_step",
       Intent::Call { .. } => "call",
       Intent::CallTemporal { .. } => "call_temporal",
@@ -168,7 +159,12 @@ impl Intent {
 /// States for the `InvokeComposedStep` intent.
 #[derive(Debug)]
 pub enum InvokeComposedStepState {
-  /// Evaluate argument expressions, then pops them off the stack.
+  /// Evaluate step function and leave it on the value stack.
+  ///
+  /// Transitions to `EvaluatingArgs`.
+  EvaluatingFunc,
+  /// Evaluate argument expressions, then pop them off the value stack.
+  /// Then, before transitioning, pop the function off the value stack and store it.
   ///
   /// Transitions to `PreCall` or `PreTemporalCall`.
   EvaluatingArgs { 
@@ -179,6 +175,7 @@ pub enum InvokeComposedStepState {
   ///
   /// Transitions to `PostTemporalCall`.
   PreTemporalCall {
+    step_function: RantFunctionRef,
     temporal_state: TemporalSpreadState,
     args: Vec<RantValue>,
   },
@@ -186,6 +183,7 @@ pub enum InvokeComposedStepState {
   ///
   /// Transitions to `PostCall`.
   PreCall { 
+    step_function: RantFunctionRef,
     args: Vec<RantValue>,
   },
   /// Step function has returned and output can be used.
@@ -194,6 +192,7 @@ pub enum InvokeComposedStepState {
   ///
   /// Might transition to `PreTemporalCall`.
   PostTemporalCall {
+    step_function: RantFunctionRef,
     temporal_state: TemporalSpreadState,
     args: Vec<RantValue>,
   }
@@ -413,66 +412,40 @@ impl<'rant> VM<'rant> {
             return Ok(true)
           }
         },
-        Intent::InvokeComposed {
-          steps,
-          num_evaluated,
-          flag,
-        } => {
-          let num_steps = steps.len();
-
-          // Evaluate next function
-          if num_evaluated < num_steps {
-            // Evaluate them in reverse order so the pop order is the call order
-            let step = &steps[num_steps - num_evaluated - 1];
-
-            // Push continuation intent for next function eval
-            self.cur_frame_mut().push_intent_front(Intent::InvokeComposed {
-              steps: Rc::clone(&steps),
-              num_evaluated: num_evaluated + 1,
-              flag,
-            });
-
-            match &step.target {
-              FunctionCallTarget::Path(path) => {
-                self.push_getter_intents(path, true, true, None);
-              },
-              FunctionCallTarget::Expression(expr) => {
-                self.push_frame(Rc::clone(expr), true)?;
-              },
-            }
-          } else {
-            // Once all functions are evaluated, pop them all off the value stack
-            let mut step_functions = vec![];
-            for _ in 0..num_steps {
-              let func = match self.pop_val()? {
-                RantValue::Function(func) => {
-                  func
-                },
-                other => runtime_error!(RuntimeErrorType::CannotInvokeValue, format!("cannot call '{}' value", other.type_name()))
-              };
-              step_functions.push(func);
-            }
-
-            self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
-              steps,
-              step_index: 0,
-              step_functions: Rc::new(step_functions),
-              state: InvokeComposedStepState::EvaluatingArgs { num_evaluated: 0 },
-              flag,
-              compval: None,
-            });
-          }
-          return Ok(true)
-        },
         Intent::InvokeComposedStep { 
           steps, 
-          step_functions,
           step_index, 
           state,
           compval, 
           flag 
         } => {          
           match state {
+            InvokeComposedStepState::EvaluatingFunc => {
+              let step = &steps[step_index];
+              let compval_copy = compval.clone();
+
+              self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+                steps: Rc::clone(&steps),
+                step_index,
+                state: InvokeComposedStepState::EvaluatingArgs { num_evaluated: 0 },
+                compval,
+                flag,
+              });
+
+              match &step.target {
+                FunctionCallTarget::Path(path) => {
+                  // TODO: expose compval to path-based function access in compositions
+                  self.push_getter_intents(path, true, true, None);
+                },
+                FunctionCallTarget::Expression(expr) => {
+                  self.push_frame(Rc::clone(expr), true)?;
+                  if let Some(compval) = compval_copy {
+                    self.def_compval(compval)?;
+                  }
+                },
+              }
+              return Ok(true)
+            },
             InvokeComposedStepState::EvaluatingArgs { num_evaluated } => {
               let step = &steps[step_index];
               let arg_exprs = &step.arguments;
@@ -487,7 +460,6 @@ impl<'rant> VM<'rant> {
                 self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep { 
                   steps: Rc::clone(&steps),
                   step_index,
-                  step_functions,
                   state: InvokeComposedStepState::EvaluatingArgs {
                     num_evaluated: num_evaluated + 1,
                   },
@@ -516,41 +488,47 @@ impl<'rant> VM<'rant> {
                   }
                   args.push(arg);
                 }
+
+                // Pop the function and make sure it's callable
+                let step_function = match self.pop_val()? {
+                  RantValue::Function(func) => {
+                    func
+                  },
+                  // What are you doing, step function?
+                  other => runtime_error!(RuntimeErrorType::CannotInvokeValue, format!("cannot call '{}' value", other.type_name()))
+                };
                 
                 // Transition to pre-call for next step
                 self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
                   state: if step.is_temporal {  
                     InvokeComposedStepState::PreTemporalCall {
+                      step_function,
                       temporal_state: TemporalSpreadState::new(arg_exprs.as_slice(), args.as_slice()),
                       args,
                     }
                   } else {
-                    InvokeComposedStepState::PreCall { args }
+                    InvokeComposedStepState::PreCall { step_function, args }
                   },
                   steps,
                   step_index,
-                  step_functions,
                   compval,
                   flag,
                 });
               }
               return Ok(true)
             },
-            InvokeComposedStepState::PreCall { args } => {
-              let func = Rc::clone(&step_functions[step_index]);
-
+            InvokeComposedStepState::PreCall { step_function, args } => {
               // Transition intent to PostCall after function returns
               self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
                 steps,
                 step_index,
-                step_functions,
                 state: InvokeComposedStepState::PostCall,
                 compval,
                 flag,
               });
 
               // Call it and interrupt
-              self.call_func(func, args, PrintFlag::None, true)?;
+              self.call_func(step_function, args, PrintFlag::None, true)?;
               return Ok(true)
             },
             InvokeComposedStepState::PostCall => {
@@ -562,8 +540,7 @@ impl<'rant> VM<'rant> {
                 self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
                   steps,
                   step_index: next_step_index,
-                  step_functions,
-                  state: InvokeComposedStepState::EvaluatingArgs { num_evaluated: 0 },
+                  state: InvokeComposedStepState::EvaluatingFunc,
                   compval: Some(next_compval),
                   flag,
                 });
@@ -573,7 +550,7 @@ impl<'rant> VM<'rant> {
                 self.cur_frame_mut().write_value(next_compval);
               }
             },
-            InvokeComposedStepState::PreTemporalCall { args, temporal_state } => {
+            InvokeComposedStepState::PreTemporalCall { step_function, args, temporal_state } => {
               let targs = args.iter().enumerate().map(|(arg_index, arg)| {
                 // Check if this is a temporally spread argument
                 if let Some(tindex) = temporal_state.get(arg_index) {
@@ -584,14 +561,12 @@ impl<'rant> VM<'rant> {
                 arg.clone()
               }).collect::<Vec<RantValue>>();
 
-              let func = Rc::clone(&step_functions[step_index]);
-
               // Push continuation intent for temporal call
               self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
                 steps,
                 step_index,
-                step_functions,
                 state: InvokeComposedStepState::PostTemporalCall {
+                  step_function: Rc::clone(&step_function),
                   temporal_state,
                   args,
                 },
@@ -599,10 +574,10 @@ impl<'rant> VM<'rant> {
                 flag,
               });
 
-              self.call_func(func, targs, PrintFlag::None, true)?;
+              self.call_func(step_function, targs, PrintFlag::None, true)?;
               return Ok(true)
             },
-            InvokeComposedStepState::PostTemporalCall { args, mut temporal_state } => {
+            InvokeComposedStepState::PostTemporalCall { step_function, args, mut temporal_state } => {
               let next_compval = self.pop_val()?;
               let next_step_index = step_index + 1;
               let step_count = steps.len();
@@ -612,8 +587,8 @@ impl<'rant> VM<'rant> {
                 self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
                   steps: Rc::clone(&steps),
                   step_index,
-                  step_functions: Rc::clone(&step_functions),
                   state: InvokeComposedStepState::PreTemporalCall {
+                    step_function,
                     temporal_state,
                     args,
                   },
@@ -628,8 +603,7 @@ impl<'rant> VM<'rant> {
                 self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
                   steps,
                   step_index: next_step_index,
-                  step_functions,
-                  state: InvokeComposedStepState::EvaluatingArgs { num_evaluated: 0 },
+                  state: InvokeComposedStepState::EvaluatingFunc,
                   compval: Some(next_compval),
                   flag,
                 });
@@ -962,9 +936,11 @@ impl<'rant> VM<'rant> {
           return Ok(true)
         },
         Rst::ComposedCall(compcall) => {     
-          self.cur_frame_mut().push_intent_front(Intent::InvokeComposed {
+          self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
             steps: Rc::clone(&compcall.steps),
-            num_evaluated: 0,
+            step_index: 0,
+            state: InvokeComposedStepState::EvaluatingFunc,
+            compval: None,
             flag: compcall.flag,
           });
           return Ok(true)
