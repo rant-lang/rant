@@ -56,16 +56,25 @@ The Rant equivalent is nearly identical:
 
 ## Features
 
-* 🧰 **Painless API:** Rant's API is designed to be as straightforward as possible. Integrating Rant into your project only takes a few lines of code!
-* 💻 **Cross-Platform:** Write once, run anywhere-- Rant code is fully portable across all supported platforms.
-* 📚 **Rant Standard Library:** Rant's comprehensive standard library lets you get more done and iterate rapidly with far less boilerplate than other languages.
-* 🔱 **Advanced Branching:** Fine-tune branching behavior with a multitude of configuration options and branch selection modes, including several iterative and randomized selection modes.
-* 🎨 **Dynamic Variable System:** Inspired by other popular languages, Rant's built-in primitive and collection types let you represent whatever data you need.
-* 🖨 **Print Semantics:** Every scope has an "output" you can "print" to. Easily build strings and collections without the need for temporary variables.
-* 🧬 **Delightful Combinatorics:** Easily perform nested mappings, filters, zips, combinations, and more with Rant's powerful function composition and iteration engine. 
-* 🎛 **Automatic Formatting:** Passively format text output with automatic capitalization, whitespace normalization, and number formatting.
-* 🧩 **Modules:** Create libraries of Rant functions to easily share between your programs.
-* 🧶 **Entanglement:** Synchronize RNG behavior in different parts of your program with a single function call.
+🧰 **Painless API** <br/> Rant's API is designed to be as straightforward as possible. Integrating Rant into your project only takes a few lines of code!
+
+💻 **Cross-Platform** <br/> Write once, run anywhere-- Rant code is fully portable across all supported platforms.
+
+📚 **Rant Standard Library** <br/> Rant's comprehensive standard library lets you get more done and iterate rapidly with far less boilerplate than other languages.
+
+🔱 **Advanced Branching** <br/> Fine-tune branching behavior with a multitude of configuration options and branch selection modes, including several iterative and randomized selection modes.
+
+🎨 **Dynamic Variable System:** Inspired by other popular languages, Rant's built-in primitive and collection types let you represent whatever data you need.
+
+🖨 **Print Semantics:** Every scope has an "output" you can "print" to. Easily build strings and collections without the need for temporary variables.
+
+🧬 **Delightful Combinatorics:** Easily perform nested mappings, filters, zips, combinations, and more with Rant's powerful function composition and iteration engine. 
+
+🎛 **Automatic Formatting:** Passively format text output with automatic capitalization, whitespace normalization, and number formatting.
+
+🧩 **Modules:** Create libraries of Rant functions to easily share between your programs.
+
+🧶 **Entanglement:** Synchronize RNG behavior in different parts of your program with a single function call.
 
 ## Getting started
 
