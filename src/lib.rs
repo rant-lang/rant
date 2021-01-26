@@ -45,7 +45,6 @@ pub use value::*;
 pub use var::*;
 
 use crate::compiler::*;
-use crate::compiler::{RantCompiler, Reporter};
 use crate::lang::Sequence;
 use crate::random::RantRng;
 use crate::runtime::{RuntimeResult, IntoRuntimeResult, RuntimeError, RuntimeErrorType, VM};
@@ -139,7 +138,7 @@ impl Rant {
   /// Compiles a source string using the specified reporter.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile<R: Reporter>(&self, source: &str, reporter: &mut R) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile(source, reporter, self.debug_mode, RantProgramInfo {
+    compiler::compile_string(source, reporter, self.debug_mode, RantProgramInfo {
       name: None,
       path: None,
     })
@@ -148,7 +147,7 @@ impl Rant {
   /// Compiles a source string using the specified reporter and source name.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_named<R: Reporter>(&self, source: &str, reporter: &mut R, name: &str) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile(source, reporter, self.debug_mode, RantProgramInfo {
+    compiler::compile_string(source, reporter, self.debug_mode, RantProgramInfo {
       name: Some(name.to_owned()),
       path: None,
     })
@@ -163,7 +162,7 @@ impl Rant {
   /// If you require this information, use the `compile()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_quiet(&self, source: &str) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile(source, &mut (), self.debug_mode, RantProgramInfo {
+    compiler::compile_string(source, &mut (), self.debug_mode, RantProgramInfo {
       name: None,
       path: None,
     })
@@ -178,7 +177,7 @@ impl Rant {
   /// If you require this information, use the `compile()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_quiet_named(&self, source: &str, name: &str) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile(source, &mut (), self.debug_mode, RantProgramInfo {
+    compiler::compile_string(source, &mut (), self.debug_mode, RantProgramInfo {
       name: Some(name.to_owned()),
       path: None,
     })
@@ -187,7 +186,7 @@ impl Rant {
   /// Compiles a source file using the specified reporter.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_file<P: AsRef<Path>, R: Reporter>(&self, path: P, reporter: &mut R) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile_file(path, reporter, self.debug_mode)
+    compiler::compile_file(path, reporter, self.debug_mode)
   }
 
   /// Compiles a source file without reporting problems.
@@ -199,7 +198,7 @@ impl Rant {
   /// If you require this information, use the `compile_file()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_file_quiet<P: AsRef<Path>>(&self, path: P) -> Result<RantProgram, CompilerErrorKind> {
-    RantCompiler::compile_file(path, &mut (), self.debug_mode)
+    compiler::compile_file(path, &mut (), self.debug_mode)
   }
 
   /// Sets a global variable. This will auto-define the global if it doesn't exist. 

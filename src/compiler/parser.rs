@@ -119,11 +119,12 @@ struct VarStats {
   role: VarRole,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 enum VarRole {
   Normal,
   Function,
   Parameter,
+  ComposeValue,
 }
 
 /// Returns a range that encompasses both input ranges.
@@ -397,6 +398,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           seq_add!(Rst::Block(block));
         },
 
+        // Compose operator
         RantToken::Compose => no_flags!({
           // Ignore pending whitespace
           whitespace!(ignore prev);
@@ -408,6 +410,16 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok((sequence.with_name_str("anonymous function expression"), SequenceEndType::AnonFunctionExprToCompose, is_seq_printing))
             },
             _ => unexpected_token_error!()
+          }
+        }),
+
+        // Compose value
+        RantToken::ComposeValue => no_flags!({
+          if let Some(compval) = self.var_stack.get_mut(COMPOSE_VALUE_NAME) {
+            seq_add!(Rst::ComposeValue);
+            compval.reads += 1;
+          } else {
+            self.report_error(Problem::NothingToCompose, &span);
           }
         }),
         
@@ -965,20 +977,32 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     } else {
       // Function calls, both composed and otherwise
       
-      let mut is_composing = false;
+      // List of calls in chain. This will only contain one call if it's non-composed (chain of one).
+      let mut calls: Vec<FunctionCall> = vec![];
+      // Flag indicating whether call is composed (has multiple chained function calls)
+      let mut is_composed = false;
+      // Indicates whether the last call in the chain has been parsed
       let mut is_finished = false;
-      let mut composed_func: Option<Rst> = None;
+      // Indicates whether the chain has any temporal calls
+      let mut is_chain_temporal = false;
 
-      // Read functions in composition
+      // Read all calls in chain
       while !is_finished {
         self.reader.skip_ws();
+        // Argument list for current call
         let mut func_args = vec![];
+        // Currently tracked temporal labels
         let mut temporal_index_labels: HashMap<InternalString, usize> = Default::default();
+        // Next temporal index to be consumed
         let mut cur_temporal_index: usize = 0;
+        // Anonymous call flag
         let is_anonymous = self.reader.eat_where(|t| matches!(t, Some((RantToken::Bang, ..))));
+        // Temporal call flag
         let mut is_temporal = false;
-        self.reader.skip_ws();
+        // Do the user-supplied args use the compose value?
+        let mut is_compval_used = false;
         
+        /// Reads arguments until a terminating / delimiting token is reached.
         macro_rules! parse_args {
           () => {{
             #[allow(unused_assignments)] // added because rustc whines about `spread_mode` being unused; that is a LIE
@@ -1018,64 +1042,47 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 None => {},
               }
 
-              // Check for compose value
-              if self.reader.eat_where(|t| matches!(t, Some((RantToken::ComposeValue, ..)))) {
-                if is_composing  {
-                  if let Some(compose) = composed_func.take() {
-                    let arg = ArgumentExpr {
-                      expr: Rc::new(Sequence::one(compose, &self.info)),
-                      spread_mode
-                    };
-                    func_args.push(arg);
-                  } else {
-                    // If take() fails, it means the compose value was already used
-                    // No need to push an arg since it won't be used anyway
-                    self.report_error(Problem::ComposeValueReused, &self.reader.last_token_span());
-                  }
-                  // Read next delimiter
-                  match self.reader.next_solid() {
-                    Some((RantToken::Compose, _)) => break,
-                    Some((RantToken::Semi, _)) => continue,
-                    Some((RantToken::RightBracket, _)) => {
-                      is_finished = true;
-                      break
-                    },
-                    None => {
-                      self.report_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
-                      return Err(())
-                    },
-                    _ => {
-                      self.unexpected_last_token_error();
-                      return Err(())
-                    }
-                  }
-                } else {
-                  self.report_error(Problem::NothingToCompose, &self.reader.last_token_span());
-                }
-              } else {
-                // Parse normal argument
-                let (arg_seq, arg_end, _) = self.parse_sequence(SequenceParseMode::FunctionArg)?;
-                let arg = ArgumentExpr {
-                  expr: Rc::new(arg_seq),
-                  spread_mode,
+              // Parse argument
+              let (arg_seq, arg_end, _) = if is_composed {
+                self.var_stack.push_layer();
+                // Track compose value inside arguement scope
+                let compval_stats = VarStats {
+                  writes: 1,
+                  reads: 0,
+                  def_span: Default::default(), // we'll never need this anyway
+                  is_const: true,
+                  role: VarRole::ComposeValue,
                 };
-                func_args.push(arg);
-                match arg_end {
-                  SequenceEndType::FunctionArgEndNext => continue,
-                  SequenceEndType::FunctionArgEndBreak => {
-                    is_finished = true;
-                    break
-                  },
-                  SequenceEndType::FunctionArgEndToCompose => {
-                    is_composing = true;
-                    break
-                  },
-                  SequenceEndType::ProgramEnd => {
-                    self.report_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
-                    return Err(())
-                  },
-                  _ => unreachable!()
-                }
+                self.var_stack.define(Identifier::from(COMPOSE_VALUE_NAME), compval_stats);
+                let (arg_seq, arg_end, _hint) = self.parse_sequence_inner(SequenceParseMode::FunctionArg)?;
+                is_compval_used |= self.var_stack.get(COMPOSE_VALUE_NAME).unwrap().reads > 0;
+                self.analyze_top_vars();
+                self.var_stack.pop_layer();
+                (arg_seq, arg_end, _hint)
+              } else {
+                self.parse_sequence(SequenceParseMode::FunctionArg)?
+              };
+
+              let arg = ArgumentExpr {
+                expr: Rc::new(arg_seq),
+                spread_mode,
+              };
+              func_args.push(arg);
+              match arg_end {
+                SequenceEndType::FunctionArgEndNext => continue,
+                SequenceEndType::FunctionArgEndBreak => {
+                  is_finished = true;
+                  break
+                },
+                SequenceEndType::FunctionArgEndToCompose => {
+                  is_composed = true;
+                  break
+                },
+                SequenceEndType::ProgramEnd => {
+                  self.report_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
+                  return Err(())
+                },
+                _ => unreachable!()
               }
             }
           }}
@@ -1084,10 +1091,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         /// If the composition value wasn't used, inserts it as the first argument.
         macro_rules! fallback_compose {
           () => {
-            if let Some(compose) = composed_func.take() {
+            if calls.len() > 0 && !is_compval_used {
               let arg = ArgumentExpr {
-                expr: Rc::new(Sequence::one(compose, &self.info)),
-                // TODO: Provide a way perform spreading on implicit compose values
+                expr: Rc::new(Sequence::one(Rst::ComposeValue, &self.info)),
                 spread_mode: ArgumentSpreadMode::NoSpread,
               };
               func_args.insert(0, arg);
@@ -1095,74 +1101,39 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }
         }
         
+        self.reader.skip_ws();
+
         // What kind of function call is this?
-        composed_func = if is_anonymous {
+        if is_anonymous {
           // Anonymous function call
-          // See if comp value is explicitly piped into anon call          
-          let func_expr = if self.reader.eat_where(|t| matches!(t, Some((RantToken::ComposeValue, ..)))) {
-            if is_composing {
-              if let Some(func_expr) = composed_func.take() {
-                if let Some((token, _)) = self.reader.next_solid() {
-                  match token {
-                    // No args, fall through
-                    RantToken::RightBracket => {
-                      is_finished = true;
-                    },
-                    // Parse arguments
-                    RantToken::Colon => parse_args!(),
-                    // Compose without args
-                    RantToken::Compose => {
-                      is_composing = true;
-                    }
-                    _ => {
-                      self.unexpected_last_token_error();
-                      return Err(())
-                    }
-                  }
-                } else {
-                  self.report_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
-                  return Err(())
-                }
-  
-                Sequence::one(func_expr, &self.info)
-              } else {
-                self.report_error(Problem::ComposeValueReused, &self.reader.last_token_span());
-                return Err(())
-              }
-            } else {
-              self.report_error(Problem::NothingToCompose, &self.reader.last_token_span());
-              return Err(())
+          // See if comp value is explicitly piped into anon call
+          let (func_expr, func_expr_end, _) = self.parse_sequence(SequenceParseMode::AnonFunctionExpr)?;
+          // Parse arguments if available
+          match func_expr_end {
+            // No args, fall through
+            SequenceEndType::AnonFunctionExprNoArgs => {
+              is_finished = true;
+            },
+            // Parse arguments
+            SequenceEndType::AnonFunctionExprToArgs => parse_args!(),
+            // Compose without args
+            SequenceEndType::AnonFunctionExprToCompose => {
+              is_composed = true;
             }
-          } else {
-            let (func_expr, func_expr_end, _) = self.parse_sequence(SequenceParseMode::AnonFunctionExpr)?;
-            // Parse arguments if available
-            match func_expr_end {
-              // No args, fall through
-              SequenceEndType::AnonFunctionExprNoArgs => {
-                is_finished = true;
-              },
-              // Parse arguments
-              SequenceEndType::AnonFunctionExprToArgs => parse_args!(),
-              // Compose without args
-              SequenceEndType::AnonFunctionExprToCompose => {
-                is_composing = true;
-              }
-              _ => unreachable!()
-            }
-            func_expr
-          };
+            _ => unreachable!()
+          }
 
           fallback_compose!();
           
           // Create final node for anon function call
-          let afcall = AnonFunctionCall {
-            expr: Rc::new(func_expr),
-            args: Rc::new(func_args),
+          let fcall = FunctionCall {
+            target: FunctionCallTarget::Expression(Rc::new(func_expr)),
+            arguments: Rc::new(func_args),
             flag,
             is_temporal,
           };
-          
-          Some(Rst::AnonFuncCall(afcall))
+
+          calls.push(fcall);
         } else {
           // Named function call
           let (func_path, func_path_span) = self.parse_access_path(false)?;
@@ -1176,7 +1147,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               RantToken::Colon => parse_args!(),
               // Compose without args
               RantToken::Compose => {
-                is_composing = true;
+                is_composed = true;
               }
               _ => {
                 self.unexpected_last_token_error();
@@ -1191,22 +1162,33 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             
             // Create final node for function call
             let fcall = FunctionCall {
-              id: Rc::new(func_path),
+              target: FunctionCallTarget::Path(Rc::new(func_path)),
               arguments: Rc::new(func_args),
               flag,
               is_temporal,
             };
 
-            Some(Rst::FuncCall(fcall))
+            calls.push(fcall);
           } else {
             // Found EOF instead of end of function call, emit hard error
             self.report_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
             return Err(())
           }
-        };
+        }
+
+        is_chain_temporal |= is_temporal;
       }
 
-      Ok(composed_func.unwrap())
+      // Return the finished node
+      Ok(if is_composed {
+        Rst::ComposedCall(ComposedFunctionCall {
+          flag,
+          is_temporal: is_chain_temporal,
+          steps: Rc::new(calls),
+        })
+      } else {
+        Rst::FuncCall(calls.drain(..).next().unwrap())
+      })
     }
   }
     
@@ -1728,6 +1710,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         VarRole::Normal => self.report_warning(Problem::UnusedVariable(name), &span),
         VarRole::Parameter => self.report_warning(Problem::UnusedParameter(name), &span),
         VarRole::Function => self.report_warning(Problem::UnusedFunction(name), &span),
+        // Ignore any other roles
+        _ => {},
       }
     }
   }

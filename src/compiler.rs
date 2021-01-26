@@ -57,42 +57,37 @@ impl Reporter for Vec<CompilerMessage> {
   }
 }
 
-// TODO: Seriously consider replacing this struct with just a set of functions unless configuration is needed
-pub(crate) struct RantCompiler;
+pub(crate) fn compile_string<R: Reporter>(source: &str, reporter: &mut R, debug_enabled: bool, info: RantProgramInfo) -> CompileResult {
+  let info = Rc::new(info);
 
-impl RantCompiler {
-  pub fn compile<R: Reporter>(source: &str, reporter: &mut R, debug_enabled: bool, info: RantProgramInfo) -> CompileResult {
-    let info = Rc::new(info);
+  let mut parser = RantParser::new(source, reporter, debug_enabled, &info);
 
-    let mut parser = RantParser::new(source, reporter, debug_enabled, &info);
-
-    // Return compilation result
-    match parser.parse() {
-      Ok(seq) => Ok(RantProgram::new(seq, info)),
-      Err(()) => Err(CompilerErrorKind::SyntaxError),
-    }
+  // Return compilation result
+  match parser.parse() {
+    Ok(seq) => Ok(RantProgram::new(seq, info)),
+    Err(()) => Err(CompilerErrorKind::SyntaxError),
   }
-  
-  pub fn compile_file<P: AsRef<Path>, R: Reporter>(path: P, reporter: &mut R, debug_enabled: bool) -> CompileResult {
-    let source_name = path.as_ref().canonicalize().unwrap_or_else(|_| path.as_ref().to_path_buf()).to_string_lossy().to_string();
-    let file_read_result = fs::read_to_string(path);
-    match file_read_result {
-      Ok(source) => {
-        Self::compile(&source, reporter, debug_enabled, RantProgramInfo {
-          name: None,
-          path: Some(source_name)
-        })
-      },
-      // Something went wrong with reading the file
-      Err(err) => {
-        // Report file IO issue
-        let problem = match err.kind() {
-            IOErrorKind::NotFound => Problem::FileNotFound(source_name),
-            _ => Problem::FileIOError(err.to_string())
-        };
-        reporter.report(CompilerMessage::new(problem, Severity::Error, None));
-        Err(CompilerErrorKind::IOError(err.kind()))
-      }
+}
+
+pub(crate) fn compile_file<P: AsRef<Path>, R: Reporter>(path: P, reporter: &mut R, debug_enabled: bool) -> CompileResult {
+  let source_name = path.as_ref().canonicalize().unwrap_or_else(|_| path.as_ref().to_path_buf()).to_string_lossy().to_string();
+  let file_read_result = fs::read_to_string(path);
+  match file_read_result {
+    Ok(source) => {
+      compile_string(&source, reporter, debug_enabled, RantProgramInfo {
+        name: None,
+        path: Some(source_name)
+      })
+    },
+    // Something went wrong with reading the file
+    Err(err) => {
+      // Report file IO issue
+      let problem = match err.kind() {
+          IOErrorKind::NotFound => Problem::FileNotFound(source_name),
+          _ => Problem::FileIOError(err.to_string())
+      };
+      reporter.report(CompilerMessage::new(problem, Severity::Error, None));
+      Err(CompilerErrorKind::IOError(err.kind()))
     }
   }
 }
@@ -127,7 +122,6 @@ pub enum Problem {
   InvalidHintOn(&'static str),
   InvalidSink,
   InvalidHint,
-  ComposeValueReused,
   NothingToCompose,
   UnusedVariable(String),
   UnusedParameter(String),
@@ -174,8 +168,7 @@ impl Problem {
       Problem::InvalidSliceBound(_) =>                            "R-0022",
       
       // Composition
-      Problem::ComposeValueReused =>                              "R-0023",
-      Problem::NothingToCompose =>                                "R-0024",
+      Problem::NothingToCompose =>                                "R-0023",
       
       // Static analysis errors (0100 - 0199)
       Problem::ConstantReassignment(_) =>                         "R-0100",
@@ -234,8 +227,7 @@ impl Problem {
       Problem::DynamicKeyBlockMultiElement => "dynamic key blocks can't have more than one element; if branching is desired, create an inner block".to_owned(),
       Problem::FunctionBodyBlockMultiElement => "function body blocks can't have more than one element; if branching is desired, create an inner block".to_owned(),
       Problem::AnonValueAssignment => "can't assign directly to anonymous value; try assigning to a key or index instead".to_owned(),
-      Problem::ComposeValueReused => "composition output consumed more than once within the same function call".to_owned(),
-      Problem::NothingToCompose => "first function in composition cannot consume output".to_owned(),
+      Problem::NothingToCompose => "no compose value is available in this scope".to_owned(),
       Problem::ConstantReassignment(cname) => format!("reassignment of known constant '{}'", cname),
       Problem::ConstantRedefinition(cname) => format!("redefinition of known constant '{}'", cname),
     }
@@ -266,7 +258,6 @@ impl Problem {
       Problem::FunctionBodyBlockMultiElement => "multiple elements not allowed here".to_owned(),
       Problem::DynamicKeyBlockMultiElement => "multiple elements not allowed here".to_owned(),
       Problem::AnonValueAssignment => "direct assignment impossible".to_owned(),
-      Problem::ComposeValueReused => "composition value reused here".to_owned(),
       Problem::NothingToCompose => "no previous output to consume".to_owned(),
       Problem::NestedFunctionDefMarkedConstant => "use '$' here instead".to_owned(),
       _ => return None

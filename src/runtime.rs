@@ -76,9 +76,14 @@ macro_rules! runtime_error {
 }
 
 /// Intents are actions queued on a stack frame that are performed before the frame runs.
+///
+/// ## "Call" or "Invoke"?
+/// In the context of Rant runtime intents, "calling" and "invoking" have specific meanings:
+/// * "Invoke" means that argument expressions potentially need to be evaluated before the call can proceed;
+/// * "Call" means that all argument values are already known (either in the intent or on the value stack).
 pub enum Intent {
-  /// Take the pending output from last frame and print it.
-  PrintValue,
+  /// Pop a value off the value stack and print it to the current frame's output.
+  PrintLastValue,
   /// Check if the active block is finished and either continue the block or pop the state from the stack
   CheckBlock,
   /// Pop a value off the stack and assign it to an existing variable.
@@ -97,11 +102,32 @@ pub enum Intent {
   /// Pop `expr_count` values off the stack and use them for expression fields in a setter.
   SetValue { path: Rc<AccessPath>, write_mode: VarWriteMode, expr_count: usize },
   /// Evaluate `arg_exprs` in order, then pop the argument values off the stack, pop a function off the stack, and pass the arguments to the function.
-  Invoke { arg_exprs: Rc<Vec<ArgumentExpr>>, eval_count: usize, flag: PrintFlag, is_temporal: bool },
-  /// Call a function for every variant of a temporally spread argument set.
-  TemporalInvoke { func: RantFunctionRef, args: Rc<Vec<RantValue>>, temporal_state: TemporalSpreadState, flag: PrintFlag, },
+  Invoke { arg_exprs: Rc<Vec<ArgumentExpr>>, eval_count: usize, flag: PrintFlag, is_temporal: bool, },
+  /// Evaluate functions for a composed function call.
+  InvokeComposed {
+    steps: Rc<Vec<FunctionCall>>,
+    num_evaluated: usize,
+    flag: PrintFlag,
+  },
+  /// Invoke a single function in a composed function call chain.
+  InvokeComposedStep { 
+    /// All steps in the entire composed function call
+    steps: Rc<Vec<FunctionCall>>, 
+    /// Function associated with each step
+    step_functions: Rc<Vec<RantFunctionRef>>,
+    /// The current step being executed
+    step_index: usize, 
+    /// Current state of the intent.
+    state: InvokeComposedStepState,
+    /// The composition value from the last step
+    compval: Option<RantValue>,
+    /// The print flag to use.
+    flag: PrintFlag,
+  },
   /// Pop `argc` args off the stack, then pop a function off the stack and call it with the args.
   Call { argc: usize, flag: PrintFlag, override_print: bool },
+  /// Call a function for every variant of a temporal argument set and increment the provided temporal state.
+  CallTemporal { func: RantFunctionRef, args: Rc<Vec<RantValue>>, temporal_state: TemporalSpreadState, flag: PrintFlag, },
   /// Pop value from stack and add it to a list. If `index` is out of range, print the list.
   BuildList { init: Rc<Vec<Rc<Sequence>>>, index: usize, list: RantList },
   /// Pop value and optional key from stack and add them to a map. If `pair_index` is out of range, print the map.
@@ -117,7 +143,7 @@ pub enum Intent {
 impl Intent {
   fn name(&self) -> &'static str {
     match self {
-      Intent::PrintValue => "print",
+      Intent::PrintLastValue => "print",
       Intent::CheckBlock => "check_block",
       Intent::SetVar { .. } => "set_var",
       Intent::DefVar { .. } => "def_var",
@@ -126,14 +152,50 @@ impl Intent {
       Intent::BuildDynamicSetter { .. } => "build_dyn_setter",
       Intent::SetValue { .. } => "set_value",
       Intent::Invoke { .. } => "invoke",
+      Intent::InvokeComposed { .. } => "invoke_composed",
+      Intent::InvokeComposedStep { .. } => "invoke_composed_step",
       Intent::Call { .. } => "call",
+      Intent::CallTemporal { .. } => "call_temporal",
       Intent::BuildList { .. } => "build_list",
       Intent::BuildMap { .. } => "build_map",
       Intent::LoadModule { .. } => "load_module",
       Intent::RuntimeCall { .. } => "runtime_call",
       Intent::DropStaleUnwinds => "drop_stale_unwinds",
-      Intent::TemporalInvoke { .. } => "temporal invoke",
     }
+  }
+}
+
+/// States for the `InvokeComposedStep` intent.
+#[derive(Debug)]
+pub enum InvokeComposedStepState {
+  /// Evaluate argument expressions, then pops them off the stack.
+  ///
+  /// Transitions to `PreCall` or `PreTemporalCall`.
+  EvaluatingArgs { 
+    /// Number of arguments that have already been evaluated.
+    num_evaluated: usize 
+  },
+  /// Temporal step function is ready to iterate.
+  ///
+  /// Transitions to `PostTemporalCall`.
+  PreTemporalCall {
+    temporal_state: TemporalSpreadState,
+    args: Vec<RantValue>,
+  },
+  /// Step function is ready to call.
+  ///
+  /// Transitions to `PostCall`.
+  PreCall { 
+    args: Vec<RantValue>,
+  },
+  /// Step function has returned and output can be used.
+  PostCall,
+  /// Temporal step function has iterated and output can be used.
+  ///
+  /// Might transition to `PreTemporalCall`.
+  PostTemporalCall {
+    temporal_state: TemporalSpreadState,
+    args: Vec<RantValue>,
   }
 }
 
@@ -250,7 +312,7 @@ impl<'rant> VM<'rant> {
     while let Some(intent) = self.cur_frame_mut().take_intent() {
       runtime_trace!("intent: {}", intent.name());
       match intent {
-        Intent::PrintValue => {
+        Intent::PrintLastValue => {
           let val = self.pop_val()?;
           self.cur_frame_mut().write_value(val);
         },
@@ -267,8 +329,7 @@ impl<'rant> VM<'rant> {
         },
         Intent::BuildDynamicGetter { 
           path, dynamic_key_count, mut pending_exprs, 
-          override_print, prefer_function, fallback 
-        } => {
+          override_print, prefer_function, fallback } => {
           if let Some(key_expr) = pending_exprs.pop() {
             // Set next intent based on remaining expressions in getter
             if pending_exprs.is_empty() {
@@ -292,7 +353,7 @@ impl<'rant> VM<'rant> {
             // Run fallback if available
             (Err(_), Some(fallback)) => {
               if !override_print {
-                self.cur_frame_mut().push_intent_front(Intent::PrintValue);
+                self.cur_frame_mut().push_intent_front(Intent::PrintLastValue);
               }
               self.push_frame(fallback, true)?;
               return Ok(true)
@@ -304,7 +365,7 @@ impl<'rant> VM<'rant> {
           if eval_count < arg_exprs.len() {
             let arg_expr = arg_exprs.get(arg_exprs.len() - eval_count - 1).unwrap();
             let arg_seq = Rc::clone(&arg_expr.expr);
-            self.cur_frame_mut().push_intent_front(Intent::Invoke { arg_exprs, eval_count: eval_count + 1, flag, is_temporal });
+            self.cur_frame_mut().push_intent_front(Intent::Invoke { arg_exprs, eval_count: eval_count + 1, flag, is_temporal, });
             self.push_frame_flavored(arg_seq, true, StackFrameFlavor::ArgumentExpression)?;
             return Ok(true)
           } else {
@@ -331,16 +392,20 @@ impl<'rant> VM<'rant> {
               },
               other => runtime_error!(RuntimeErrorType::CannotInvokeValue, format!("cannot call '{}' value", other.type_name()))
             };
-            
 
             // Call the function
             if is_temporal {
-              self.cur_frame_mut().push_intent_front(Intent::TemporalInvoke { 
-                func,
-                temporal_state: TemporalSpreadState::new(arg_exprs.as_slice(), args.as_slice()), 
-                args: Rc::new(args), 
-                flag  
-              });
+              let temporal_state = TemporalSpreadState::new(arg_exprs.as_slice(), args.as_slice());
+              
+              // If the temporal state has zero iterations, don't call the function at all
+              if !temporal_state.is_empty() {
+                self.cur_frame_mut().push_intent_front(Intent::CallTemporal { 
+                  func,
+                  temporal_state, 
+                  args: Rc::new(args), 
+                  flag
+                });
+              }
             } else {
               self.call_func(func, args, flag, false)?;
             }
@@ -348,7 +413,235 @@ impl<'rant> VM<'rant> {
             return Ok(true)
           }
         },
-        Intent::TemporalInvoke { func, args, mut temporal_state, flag } => {
+        Intent::InvokeComposed {
+          steps,
+          num_evaluated,
+          flag,
+        } => {
+          let num_steps = steps.len();
+
+          // Evaluate next function
+          if num_evaluated < num_steps {
+            // Evaluate them in reverse order so the pop order is the call order
+            let step = &steps[num_steps - num_evaluated - 1];
+
+            // Push continuation intent for next function eval
+            self.cur_frame_mut().push_intent_front(Intent::InvokeComposed {
+              steps: Rc::clone(&steps),
+              num_evaluated: num_evaluated + 1,
+              flag,
+            });
+
+            match &step.target {
+              FunctionCallTarget::Path(path) => {
+                self.push_getter_intents(path, true, true, None);
+              },
+              FunctionCallTarget::Expression(expr) => {
+                self.push_frame(Rc::clone(expr), true)?;
+              },
+            }
+          } else {
+            // Once all functions are evaluated, pop them all off the value stack
+            let mut step_functions = vec![];
+            for _ in 0..num_steps {
+              let func = match self.pop_val()? {
+                RantValue::Function(func) => {
+                  func
+                },
+                other => runtime_error!(RuntimeErrorType::CannotInvokeValue, format!("cannot call '{}' value", other.type_name()))
+              };
+              step_functions.push(func);
+            }
+
+            self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+              steps,
+              step_index: 0,
+              step_functions: Rc::new(step_functions),
+              state: InvokeComposedStepState::EvaluatingArgs { num_evaluated: 0 },
+              flag,
+              compval: None,
+            });
+          }
+          return Ok(true)
+        },
+        Intent::InvokeComposedStep { 
+          steps, 
+          step_functions,
+          step_index, 
+          state,
+          compval, 
+          flag 
+        } => {          
+          match state {
+            InvokeComposedStepState::EvaluatingArgs { num_evaluated } => {
+              let step = &steps[step_index];
+              let arg_exprs = &step.arguments;
+              let argc = arg_exprs.len();
+              if num_evaluated < argc {                
+                // Evaluate next argument
+                let arg_expr = arg_exprs.get(argc - num_evaluated - 1).unwrap();
+                let arg_seq = Rc::clone(&arg_expr.expr);
+                let compval_copy = compval.clone();
+
+                // Prepare next arg eval intent
+                self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep { 
+                  steps: Rc::clone(&steps),
+                  step_index,
+                  step_functions,
+                  state: InvokeComposedStepState::EvaluatingArgs {
+                    num_evaluated: num_evaluated + 1,
+                  },
+                  compval,
+                  flag,
+                });
+
+                // Push current argument expression to call stack
+                self.push_frame_flavored(arg_seq, true, StackFrameFlavor::ArgumentExpression)?;
+                if let Some(compval) = compval_copy {
+                  self.def_compval(compval)?;
+                }
+              } else {
+                // If all args are evaluated, pop them off the stack
+                let mut args = vec![];
+                for arg_expr in arg_exprs.iter() {
+                  let arg = self.pop_val()?;
+                  // When parametric spread is used and the argument is a list, expand its values into individual args
+                  if matches!(arg_expr.spread_mode, ArgumentSpreadMode::Parametric) {
+                    if let RantValue::List(list_ref) = &arg {
+                      for spread_arg in list_ref.borrow().iter() {
+                        args.push(spread_arg.clone());
+                      }
+                      continue
+                    }
+                  }
+                  args.push(arg);
+                }
+                
+                // Transition to pre-call for next step
+                self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+                  state: if step.is_temporal {  
+                    InvokeComposedStepState::PreTemporalCall {
+                      temporal_state: TemporalSpreadState::new(arg_exprs.as_slice(), args.as_slice()),
+                      args,
+                    }
+                  } else {
+                    InvokeComposedStepState::PreCall { args }
+                  },
+                  steps,
+                  step_index,
+                  step_functions,
+                  compval,
+                  flag,
+                });
+              }
+              return Ok(true)
+            },
+            InvokeComposedStepState::PreCall { args } => {
+              let func = Rc::clone(&step_functions[step_index]);
+
+              // Transition intent to PostCall after function returns
+              self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+                steps,
+                step_index,
+                step_functions,
+                state: InvokeComposedStepState::PostCall,
+                compval,
+                flag,
+              });
+
+              // Call it and interrupt
+              self.call_func(func, args, PrintFlag::None, true)?;
+              return Ok(true)
+            },
+            InvokeComposedStepState::PostCall => {
+              let next_compval = self.pop_val()?;
+              let next_step_index = step_index + 1;
+              // Check if there is a next step
+              if next_step_index < steps.len() {
+                // Create intent for next step
+                self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+                  steps,
+                  step_index: next_step_index,
+                  step_functions,
+                  state: InvokeComposedStepState::EvaluatingArgs { num_evaluated: 0 },
+                  compval: Some(next_compval),
+                  flag,
+                });
+                return Ok(true)
+              } else {
+                // If there are no more steps in the chain, just print the compval and let this intent die
+                self.cur_frame_mut().write_value(next_compval);
+              }
+            },
+            InvokeComposedStepState::PreTemporalCall { args, temporal_state } => {
+              let targs = args.iter().enumerate().map(|(arg_index, arg)| {
+                // Check if this is a temporally spread argument
+                if let Some(tindex) = temporal_state.get(arg_index) {
+                  if let RantValue::List(list_ref) = arg {
+                    return list_ref.borrow().get(tindex).cloned().unwrap_or_default();
+                  }
+                }
+                arg.clone()
+              }).collect::<Vec<RantValue>>();
+
+              let func = Rc::clone(&step_functions[step_index]);
+
+              // Push continuation intent for temporal call
+              self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+                steps,
+                step_index,
+                step_functions,
+                state: InvokeComposedStepState::PostTemporalCall {
+                  temporal_state,
+                  args,
+                },
+                compval,
+                flag,
+              });
+
+              self.call_func(func, targs, PrintFlag::None, true)?;
+              return Ok(true)
+            },
+            InvokeComposedStepState::PostTemporalCall { args, mut temporal_state } => {
+              let next_compval = self.pop_val()?;
+              let next_step_index = step_index + 1;
+              let step_count = steps.len();
+
+              // Queue next iteration if available
+              if temporal_state.increment() {
+                self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+                  steps: Rc::clone(&steps),
+                  step_index,
+                  step_functions: Rc::clone(&step_functions),
+                  state: InvokeComposedStepState::PreTemporalCall {
+                    temporal_state,
+                    args,
+                  },
+                  compval,
+                  flag,
+                })
+              }
+
+              // Call next function in chain
+              if next_step_index < step_count {
+                // Create intent for next step
+                self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+                  steps,
+                  step_index: next_step_index,
+                  step_functions,
+                  state: InvokeComposedStepState::EvaluatingArgs { num_evaluated: 0 },
+                  compval: Some(next_compval),
+                  flag,
+                });
+                return Ok(true)
+              } else {
+                // If there are no more steps in the chain, just print the compval and let this intent die
+                self.cur_frame_mut().write_value(next_compval);
+              }
+            },
+          }
+        },
+        Intent::CallTemporal { func, args, mut temporal_state, flag } => {
           let targs = args.iter().enumerate().map(|(arg_index, arg)| {
             // Check if this is a temporally spread argument
             if let Some(tindex) = temporal_state.get(arg_index) {
@@ -360,7 +653,7 @@ impl<'rant> VM<'rant> {
           }).collect::<Vec<RantValue>>();
 
           if temporal_state.increment() {
-            self.cur_frame_mut().push_intent_front(Intent::TemporalInvoke { func: Rc::clone(&func), args, temporal_state, flag });
+            self.cur_frame_mut().push_intent_front(Intent::CallTemporal { func: Rc::clone(&func), args, temporal_state, flag });
           }
 
           self.call_func(func, targs, flag, false)?;
@@ -502,17 +795,7 @@ impl<'rant> VM<'rant> {
     
     // Run frame's sequence elements in order
     while let Some(rst) = &self.cur_frame_mut().seq_next() {
-      match Rc::deref(rst) {
-        Rst::DebugCursor(info) => {
-          self.cur_frame_mut().set_debug_info(info);
-        },
-        Rst::Fragment(frag) => self.cur_frame_mut().write_frag(frag),
-        Rst::Whitespace(ws) => self.cur_frame_mut().write_ws(ws),
-        Rst::Integer(n) => self.cur_frame_mut().write_value(RantValue::Int(*n)),
-        Rst::Float(n) => self.cur_frame_mut().write_value(RantValue::Float(*n)),
-        Rst::EmptyVal => self.cur_frame_mut().write_value(RantValue::Empty),
-        Rst::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
-        Rst::BlockValue(block) => self.cur_frame_mut().write_value(RantValue::Block(Rc::clone(block))),
+      match Rc::deref(rst) {        
         Rst::ListInit(elements) => {
           self.cur_frame_mut().push_intent_front(Intent::BuildList { init: Rc::clone(elements), index: 0, list: RantList::new() });
           return Ok(true)
@@ -548,29 +831,7 @@ impl<'rant> VM<'rant> {
           }
         },
         Rst::VarGet(path, fallback) => {
-          // Get list of dynamic keys in path
-          let dynamic_keys = path.dynamic_exprs();
-
-          if dynamic_keys.is_empty() {
-            // Getter is static, so run it directly
-            self.cur_frame_mut().push_intent_front(Intent::GetValue { 
-              path: Rc::clone(path), 
-              dynamic_key_count: 0, 
-              override_print: false,
-              prefer_function: false,
-              fallback: fallback.as_ref().map(Rc::clone)
-            });
-          } else {
-            // Build dynamic keys before running getter
-            self.cur_frame_mut().push_intent_front(Intent::BuildDynamicGetter {
-              dynamic_key_count: dynamic_keys.len(),
-              path: Rc::clone(path),
-              pending_exprs: dynamic_keys,
-              override_print: false,
-              prefer_function: false,
-              fallback: fallback.as_ref().map(Rc::clone)
-            });
-          }
+          self.push_getter_intents(path, false, false, fallback.as_ref().map(Rc::clone));
           return Ok(true)
         },
         Rst::VarSet(path, val_expr) => {
@@ -663,71 +924,69 @@ impl<'rant> VM<'rant> {
 
           self.cur_frame_mut().write_value(func);
         },
-        Rst::AnonFuncCall(afcall) => {
-          let AnonFunctionCall {
-            expr,
-            args,
-            flag,
-            is_temporal,
-          } = afcall;
-
-          // Evaluate arguments after function is evaluated
-          self.cur_frame_mut().push_intent_front(Intent::Invoke {
-            arg_exprs: Rc::clone(args),
-            eval_count: 0,
-            flag: *flag,
-            is_temporal: *is_temporal,
-          });
-
-          // Push function expression onto stack
-          self.push_frame(Rc::clone(expr), true)?;
-
-          return Ok(true)
-        },
         Rst::FuncCall(fcall) => {
           let FunctionCall {
-            id,
+            target,
             arguments,
             flag,
             is_temporal,
           } = fcall;
 
-          let dynamic_keys = id.dynamic_exprs();
+          match target {
+            // Named function call
+            FunctionCallTarget::Path(path) => {
+              // Queue up the function call behind the dynamic keys
+              self.cur_frame_mut().push_intent_front(Intent::Invoke {
+                eval_count: 0,
+                arg_exprs: Rc::clone(arguments),
+                flag: *flag,
+                is_temporal: *is_temporal,
+              });
 
-          // Run the getter to retrieve the function we're calling first...
-          self.cur_frame_mut().push_intent_front(if dynamic_keys.is_empty() {
-            // Getter is static, so run it directly
-            Intent::GetValue { 
-              path: Rc::clone(id), 
-              dynamic_key_count: 0, 
-              override_print: true,
-              prefer_function: true,
-              fallback: None
-            }
-          } else {
-            // Build dynamic keys before running getter
-            Intent::BuildDynamicGetter {
-              dynamic_key_count: dynamic_keys.len(),
-              path: Rc::clone(id),
-              pending_exprs: dynamic_keys,
-              override_print: true,
-              prefer_function: true,
-              fallback: None
-            }
-          });
+              self.push_getter_intents(path, true, true, None);
+            },
+            // Anonymous function call
+            FunctionCallTarget::Expression(expr) => {
+              // Evaluate arguments after function is evaluated
+              self.cur_frame_mut().push_intent_front(Intent::Invoke {
+                arg_exprs: Rc::clone(arguments),
+                eval_count: 0,
+                flag: *flag,
+                is_temporal: *is_temporal,
+              });
 
-          // Queue up the function call next
-          self.cur_frame_mut().push_intent_back(Intent::Invoke {
-            eval_count: 0,
-            arg_exprs: Rc::clone(arguments),
-            flag: *flag,
-            is_temporal: *is_temporal,
+              // Push function expression onto stack
+              self.push_frame(Rc::clone(expr), true)?;
+            },
+          }
+          return Ok(true)
+        },
+        Rst::ComposedCall(compcall) => {     
+          self.cur_frame_mut().push_intent_front(Intent::InvokeComposed {
+            steps: Rc::clone(&compcall.steps),
+            num_evaluated: 0,
+            flag: compcall.flag,
           });
           return Ok(true)
         },
+        Rst::ComposeValue => {
+          let compval = self.get_var_value(COMPOSE_VALUE_NAME, AccessPathKind::Local, false)?;
+          self.cur_frame_mut().write_value(compval);
+        },
+        Rst::DebugCursor(info) => {
+          self.cur_frame_mut().set_debug_info(info);
+        },
+        Rst::Fragment(frag) => self.cur_frame_mut().write_frag(frag),
+        Rst::Whitespace(ws) => self.cur_frame_mut().write_ws(ws),
+        Rst::Integer(n) => self.cur_frame_mut().write_value(RantValue::Int(*n)),
+        Rst::Float(n) => self.cur_frame_mut().write_value(RantValue::Float(*n)),
+        Rst::EmptyVal => self.cur_frame_mut().write_value(RantValue::Empty),
+        Rst::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
+        Rst::BlockValue(block) => self.cur_frame_mut().write_value(RantValue::Block(Rc::clone(block))),
+        Rst::Nop => {},
         rst => {
           runtime_error!(RuntimeErrorType::InternalError, format!("unsupported node type: '{}'", rst.display_name()));
-        }
+        },
       }
     }
 
@@ -740,6 +999,33 @@ impl<'rant> VM<'rant> {
     }
     
     Ok(false)
+  }
+
+  #[inline(always)]
+  pub fn push_getter_intents(&mut self, path: &Rc<AccessPath>, override_print: bool, prefer_function: bool, fallback: Option<Rc<Sequence>>) {
+    let dynamic_keys = path.dynamic_exprs();
+
+    // Run the getter to retrieve the function we're calling first...
+    self.cur_frame_mut().push_intent_front(if dynamic_keys.is_empty() {
+      // Getter is static, so run it directly
+      Intent::GetValue { 
+        path: Rc::clone(path), 
+        dynamic_key_count: 0, 
+        override_print,
+        prefer_function,
+        fallback,
+      }
+    } else {
+      // Build dynamic keys before running getter
+      Intent::BuildDynamicGetter {
+        dynamic_key_count: dynamic_keys.len(),
+        path: Rc::clone(path),
+        pending_exprs: dynamic_keys,
+        override_print,
+        prefer_function,
+        fallback,
+      }
+    });
   }
 
   /// Prepares a call to a function with the specified arguments.
@@ -773,7 +1059,7 @@ impl<'rant> VM<'rant> {
 
     // Tell frame to print output if it's available
     if is_printing && !override_print {
-      self.cur_frame_mut().push_intent_front(Intent::PrintValue);
+      self.cur_frame_mut().push_intent_front(Intent::PrintLastValue);
     }
 
     // Call the function
@@ -1040,7 +1326,7 @@ impl<'rant> VM<'rant> {
         BlockAction::Element(elem_seq) => {
           // Determine if we should print anything, or just push the result to the stack
           if is_printing {
-            self.cur_frame_mut().push_intent_front(Intent::PrintValue);
+            self.cur_frame_mut().push_intent_front(Intent::PrintLastValue);
           }
           // Push the next element
           self.push_frame_flavored(
@@ -1056,7 +1342,7 @@ impl<'rant> VM<'rant> {
         BlockAction::PipedElement { elem_func, pipe_func } => {
           // Determine if we should print anything, or just push the result to the stack
           if is_printing {
-            self.cur_frame_mut().push_intent_front(Intent::PrintValue);
+            self.cur_frame_mut().push_intent_front(Intent::PrintLastValue);
           }
 
           let flag = if is_printing {
@@ -1106,6 +1392,11 @@ impl<'rant> VM<'rant> {
     self.check_block()?;
 
     Ok(())
+  }
+
+  #[inline(always)]
+  fn def_compval(&mut self, compval: RantValue) -> RuntimeResult<()> {
+    self.call_stack.def_var_value(self.engine, COMPOSE_VALUE_NAME, AccessPathKind::Local, compval, true)
   }
 
   /// Sets the value of an existing variable.

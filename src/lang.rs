@@ -3,6 +3,8 @@
 use std::{collections::HashMap, fmt::Display, ops::{DerefMut, Deref}, rc::Rc};
 use crate::{RantProgramInfo, InternalString, RantValue, RantValueType};
 
+pub(crate) const COMPOSE_VALUE_NAME: &str = "~COMPOSE";
+
 /// Printflags indicate to the compiler whether a given program element is likely to print something or not.
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -45,6 +47,12 @@ impl Identifier {
 impl From<&'static str> for Identifier {
   fn from(s: &'static str) -> Self {
     Self::new(InternalString::from(s))
+  }
+}
+
+impl std::borrow::Borrow<str> for Identifier {
+  fn borrow(&self) -> &str {
+    self.0.as_str()
   }
 }
 
@@ -456,28 +464,44 @@ pub enum ArgumentSpreadMode {
   Temporal { label: usize },
 }
 
-/// Represents an argument to a function call.
+/// Describes a function argument expression.
 #[derive(Debug)]
 pub struct ArgumentExpr {
+  /// The expression that produces the argument value.
   pub expr: Rc<Sequence>,
+  /// The spread mode for the argument.
   pub spread_mode: ArgumentSpreadMode,
 }
 
-/// Describes a function call.
+/// Describes what to call for a function call.
+#[derive(Debug)]
+pub enum FunctionCallTarget {
+  /// Indicates a path to a function variable.
+  /// Used for named function calls.
+  Path(Rc<AccessPath>),
+  /// Indicates an expression (which returns the function to call).
+  /// Used for anonymous function calls.
+  Expression(Rc<Sequence>),
+}
+
+/// A function call.
 #[derive(Debug)]
 pub struct FunctionCall {
+  /// The primting behavior.
   pub flag: PrintFlag,
-  pub id: Rc<AccessPath>,
+  /// The function to call.
+  pub target: FunctionCallTarget,
+  /// The arguments to pass.
   pub arguments: Rc<Vec<ArgumentExpr>>,
+  /// Runtime flag to enable temporal calling.
   pub is_temporal: bool,
 }
 
-/// Describes an anonymous (nameless) function call.
+/// A composed function call.
 #[derive(Debug)]
-pub struct AnonFunctionCall {
+pub struct ComposedFunctionCall {
   pub flag: PrintFlag,
-  pub expr: Rc<Sequence>,
-  pub args: Rc<Vec<ArgumentExpr>>,
+  pub steps: Rc<Vec<FunctionCall>>,
   pub is_temporal: bool,
 }
 
@@ -499,11 +523,10 @@ impl TemporalSpreadState {
         // Since temporal indices are always incremental, we can assume the next label index will only be 1 ahead at most.
         // This way, duplicate labels share the same counter.
         if label >= counters.len() {
-          let counter_size = if let RantValue::List(list_ref) = &args[i] {
-            list_ref.borrow().len()
-          } else {
-            0
-          };
+          let counter_size = match &args[i] {
+            RantValue::List(list_ref) => list_ref.borrow().len(),
+            _ => 0,
+        };
           counters.push((0, counter_size));
         } else {
           // If it's an existing index, update the counter size to the minimum list length.
@@ -599,10 +622,10 @@ pub enum Rst {
   MapInit(Rc<Vec<(MapKeyExpr, Rc<Sequence>)>>),
   /// Closure expression
   Closure(ClosureExpr),
-  /// Anonymous function call
-  AnonFuncCall(AnonFunctionCall),
-  /// Named function call
+  /// Single function call
   FuncCall(FunctionCall),
+  /// Composed function call
+  ComposedCall(ComposedFunctionCall),
   /// Function definition
   FuncDef(FunctionDef),
   /// Variable definition
@@ -613,6 +636,8 @@ pub enum Rst {
   VarGet(Rc<AccessPath>, Option<Rc<Sequence>>),
   /// Value setter
   VarSet(Rc<AccessPath>, Rc<Sequence>),
+  /// Compose value
+  ComposeValue,
   /// Fragment
   Fragment(InternalString),
   /// Whitespace
@@ -637,7 +662,6 @@ impl Rst {
       Rst::ListInit(_) =>                     "list",
       Rst::MapInit(_) =>                      "map",
       Rst::Closure(_) =>                      "closure",
-      Rst::AnonFuncCall(_) =>                 "anonymous function call",
       Rst::FuncCall(_) =>                     "function call",
       Rst::FuncDef(_) =>                      "function definition",
       Rst::Fragment(_) =>                     "fragment",
