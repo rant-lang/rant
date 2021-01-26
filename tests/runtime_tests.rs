@@ -572,3 +572,8 @@ fn temporal_two_diffsize() {
 fn temporal_two_diffsize_mixed() {
   test_rant_file!("sources/temporal/temporal_two_diffsize_mixed.rant");
 }
+
+#[test]
+fn temporal_comp_temporal() {
+  test_rant_file!("sources/temporal/temporal_comp_temporal.rant");
+}

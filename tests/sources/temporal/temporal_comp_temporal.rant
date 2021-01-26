@@ -1,0 +1,3 @@
+<%test = [concat: **(a; b) |> concat: **(c; d)]>
+
+[assert-eq: <test>; "acadbcbd"]
