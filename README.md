@@ -8,7 +8,7 @@
 
 
 
-**Rant** is a high-level language for **procedural templating**, providing a powerful toolset for easily creating code templates, dynamic game dialogue, stories, name generators, test data, and much more.
+**Rant** is a high-level language for **procedural templating**, providing a diverse and powerful toolset for easily creating dynamic code templates, game dialogue, stories, name generators, test data, and much more.
 
 ***
 
@@ -56,23 +56,31 @@ The Rant equivalent is nearly identical:
 
 ## Features
 
-* **Pain-Free API:** Rant's API is designed to be as straightforward as possible. Integrating Rant into your project only takes a few lines of code!
-* **Rant Standard Library:** Rant's comprehensive standard library lets you get more done and iterate rapidly with far less boilerplate than other languages.
-* **Branching on Steroids:** Diversify your output with a multitude of branch selection modes, including several built-in randomization modes.
-* **Dynamic Variable System:** Inspired by other popular languages, Rant's built-in primitive and collection types let you represent whatever data you need.
-* **Automatic Formatting:** Passively format text output with automatic capitalization, whitespace normalization, and number formatting.
-* **Entanglement:** Synchronize RNG behavior in different parts of your program with a single function call.
-* **Modules:** Create libraries of Rant functions to easily share between your programs.
-* **Fully Cross-Platform:** Rant code is fully portable. Write once and run on any supported platform!
+* 🧰 **Painless API:** Rant's API is designed to be as straightforward as possible. Integrating Rant into your project only takes a few lines of code!
+* 💻 **Cross-Platform:** Write once, run anywhere-- Rant code is fully portable across all supported platforms.
+* 📚 **Rant Standard Library:** Rant's comprehensive standard library lets you get more done and iterate rapidly with far less boilerplate than other languages.
+* 🔱 **Advanced Branching:** Fine-tune branching behavior with a multitude of configuration options and branch selection modes, including several iterative and randomized selection modes.
+* 🎨 **Dynamic Variable System:** Inspired by other popular languages, Rant's built-in primitive and collection types let you represent whatever data you need.
+* 🖨 **Print Semantics:** Every scope has an "output" you can "print" to. Easily build strings and collections without the need for temporary variables.
+* 🧬 **Delightful Combinatorics:** Easily perform nested mappings, filters, zips, combinations, and more with Rant's powerful function composition and iteration engine. 
+* 🎛 **Automatic Formatting:** Passively format text output with automatic capitalization, whitespace normalization, and number formatting.
+* 🧩 **Modules:** Create libraries of Rant functions to easily share between your programs.
+* 🧶 **Entanglement:** Synchronize RNG behavior in different parts of your program with a single function call.
 
 ## Getting started
 
 ### CLI
 
-Rant comes with a CLI tool that includes a REPL. You can install and run it with:
+Rant's CLI can run Rant code from files or the command line.
+Install it from Cargo with:
 
 ```sh
 $ cargo install rant --version=4.0.0-alpha.16 --features=cli
+```
+
+Then run it:
+
+```sh
 $ rant
 ```
 

@@ -1,0 +1,6 @@
+[$fib: n] {
+  [if: [le: <n>; 1]] { <n> }
+  [else] { [add: [sub: <n>; 1 |> ^fib]; [sub: <n>; 2 |> ^fib]] }
+}
+
+[rep: 20] [sep: ,\s] { [fib: [step-index]] }
