@@ -1106,8 +1106,22 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // What kind of function call is this?
         if is_anonymous {
           // Anonymous function call
-          // See if comp value is explicitly piped into anon call
-          let (func_expr, func_expr_end, _) = self.parse_sequence(SequenceParseMode::AnonFunctionExpr)?;
+          
+          self.var_stack.push_layer();
+          // Track compose value inside anonymous function access scope
+          let compval_stats = VarStats {
+            writes: 1,
+            reads: 0,
+            def_span: Default::default(), // we'll never need this anyway
+            is_const: true,
+            role: VarRole::ComposeValue,
+          };
+          self.var_stack.define(Identifier::from(COMPOSE_VALUE_NAME), compval_stats);
+          let (func_expr, func_expr_end, _hint) = self.parse_sequence_inner(SequenceParseMode::AnonFunctionExpr)?;
+          is_compval_used |= self.var_stack.get(COMPOSE_VALUE_NAME).unwrap().reads > 0;
+          self.analyze_top_vars();
+          self.var_stack.pop_layer();
+          
           // Parse arguments if available
           match func_expr_end {
             // No args, fall through
