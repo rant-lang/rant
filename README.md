@@ -4,7 +4,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/rant)](https://crates.io/crates/rant)
 [![Docs.rs](https://docs.rs/rant/badge.svg)](https://docs.rs/rant)
-[![Discord](https://img.shields.io/discord/332251452334669834?color=6C8BD5&label=discord&logo=discord&logoColor=%23fff)](https://discord.gg/5n7bnAD)
+[![Discord](https://img.shields.io/discord/332251452334669834?color=6C8BD5&label=discord&logo=discord&logoColor=%23fff)](https://discord.gg/U8Bj6gSshJ)
 
 
 
@@ -84,7 +84,7 @@ Rant's CLI can run Rant code from files or the command line.
 Install it from Cargo with:
 
 ```sh
-$ cargo install rant --version=4.0.0-alpha.16 --features=cli
+$ cargo install rant --version 4.0.0-alpha.17 --features cli
 ```
 
 Then run it:
