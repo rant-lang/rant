@@ -11,6 +11,11 @@
 * Renamed old `[list]` function to `[collect]`
 * Added new `[list]` function which converts a single argument to a Rant list 
 * Temporal spreading now works on any indexable type (`list`, `string`, `range`)
+* Upgraded library dependencies:
+  * `logos` &rarr; 0.12.0
+  * `rand` &rarr; 0.8.3
+* Upgraded dev dependencies:
+  * `assert_matches` &rarr; 1.5.0
 
 ### Fixes
 

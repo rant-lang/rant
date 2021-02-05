@@ -40,18 +40,18 @@ vm-trace = []
 
 [dependencies]
 # Library
-cast = "0.2.3"
-cervine = "0.0.6"
-fnv = "1.0.7"
-line-col = "0.2.1"
-logos = "0.11.4"
-once_cell = "1.5.2"
-quickscope = "0.1.6"
-rand = "0.8.2"
-rand_xoshiro = "0.6.0"
-smallvec = "1.6.1"
-smartstring = "0.2.6"
-unicode-segmentation = "1.7.1"
+cast = "0.2.3"                    # Automates a lot of native <-> Rant value conversions  
+cervine = "0.0.6"                 # Simplifies Rant's by-ref variable passing code.
+fnv = "1.0.7"                     # Hashing algorithm used by Rant's map type and other internals.
+line-col = "0.2.1"                # Calculates locations for compiler messages.
+logos = "0.12.0"                  # Powers the lexer.
+once_cell = "1.5.2"               # Lazy initialization for various internals.
+quickscope = "0.1.6"              # Powers the variable scoping system.
+rand = "0.8.3"                    # RNG utilities used throughout Rant.
+rand_xoshiro = "0.6.0"            # RNG implementation used by the Rant runtime.
+smallvec = "1.6.1"                # List optimization used throughout Rant.
+smartstring = "0.2.6"             # String optimization used throughout Rant.
+unicode-segmentation = "1.7.1"    # Used by Rant to index strings by grapheme cluster.
 
 # CLI
 argh = { version = "0.1.4", optional = true }
@@ -63,4 +63,4 @@ embedded-triple = { version = "0.1.0", optional = true }
 exitcode = { version = "1.1.2", optional = true }
 
 [dev-dependencies]
-assert_matches = "1.4.0"
+assert_matches = "1.5.0"
