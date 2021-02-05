@@ -577,3 +577,33 @@ fn temporal_two_diffsize_mixed() {
 fn temporal_comp_temporal() {
   test_rant_file!("sources/temporal/temporal_comp_temporal.rant");
 }
+
+#[test]
+fn range_forward() {
+  test_rant_file!("sources/range/range_forward.rant");
+}
+
+#[test]
+fn range_reverse() {
+  test_rant_file!("sources/range/range_reverse.rant");
+}
+
+#[test]
+fn range_forward_step_divisible() {
+  test_rant_file!("sources/range/range_forward_step_divisible.rant");
+}
+
+#[test]
+fn range_reverse_step_divisible() {
+  test_rant_file!("sources/range/range_reverse_step_divisible.rant");
+}
+
+#[test]
+fn range_forward_step_indivisible() {
+  test_rant_file!("sources/range/range_forward_step_indivisible.rant");
+}
+
+#[test]
+fn range_reverse_step_indivisible() {
+  test_rant_file!("sources/range/range_reverse_step_indivisible.rant");
+}

@@ -4,7 +4,7 @@ use once_cell::sync::OnceCell;
 use smallvec::{SmallVec};
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::{InternalString};
+use crate::{InternalString, RantList, RantValue};
 
 type Graphemes = SmallVec<[(usize, usize); 1]>;
 
@@ -66,6 +66,18 @@ impl RantString {
 
     let (start, end) = self.graphemes()[index];
     Some(RantString::from(&self.raw[start..end]))
+  }
+
+  /// Splits the string into individual graphemes and returns them as a Rant list.
+  #[inline]
+  pub fn to_rant_list(&self) -> RantList {
+    let n = self.len();
+    let mut list = RantList::with_capacity(n);
+    for i in 0..n {
+      let c = self.grapheme_at(i).unwrap();
+      list.push(RantValue::String(c));
+    }
+    list
   }
 
   /// Gets the string at the specified slice.

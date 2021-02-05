@@ -1,96 +1,110 @@
 # Changelog
 
+## 4.0.0-alpha.17 (unreleased)
+
+### New
+* Added `range` type
+* Standard Library items:
+  * `[range]`: Create a new range
+
+### Changes
+* Renamed old `[list]` function to `[collect]`
+* Added new `[list]` function which converts a single argument to a Rant list 
+* Temporal spreading now works on any indexable type (`list`, `string`, `range`)
+
+### Fixes
+
 ## 4.0.0-alpha.16
 
 ### New
-  * Added temporal argument spreading
-  * Standard Library items:
-    * `[concat]`: Print a series of arguments
-    * `[list]`: Create a list from a set of arguments
-    * `[nlist]`: Create a list from a set of arguments and nest it inside another list
+* Added temporal argument spreading
+* Standard Library items:
+  * `[concat]`: Print a series of arguments
+  * `[list]`: Create a list from a set of arguments
+  * `[nlist]`: Create a list from a set of arguments and nest it inside another list
 
 ### Changes
-  * Changed compose operator from `&` to `|>`
-  * Changed spread operator from `+` to `*`
-  * Changed defer operator from `*` to `<>`
-  * Adjusted whitespace behavior around blocks to avoid ambiguities
-  * Made separator parameter on `[join]` optional
+* Changed compose operator from `&` to `|>`
+* Changed spread operator from `+` to `*`
+* Changed defer operator from `*` to `<>`
+* Adjusted whitespace behavior around blocks to avoid ambiguities
+* Made separator parameter on `[join]` optional
 
 ### Fixes
-  * Fixed incorrect whitespace print behavior around unflagged function calls
+* Fixed incorrect whitespace print behavior around unflagged function calls
 
 ## 4.0.0-alpha.15
 
 ### New
-  * Added support for constants
-  * Added "pipe" attribute to allow custom block element handling
-  * Print semantics for collection auto-concatenation
-  * Compiler now emits warnings for unused variables
-  * Attribute frame stack now has a max size of 255
-  * `[sel]` can now additionally accept selector mode strings directly to create + apply a transient selector
-  * API features:
-    * `Rant::set_global_const()`
-    * `Rant::set_global_force()`
-    * `lang::AccessPath::is_variable()`
-    * `lang::Rst::ConstDef`
-    * `compiler::message::CompilerMessage.is_warning()`
-  * CLI: added `-W` switch to disable warnings
-  * Standard Library:
-    * `[pipe]`: Sets the pipe attribute.
+* Added support for constants
+* Added "pipe" attribute to allow custom block element handling
+* Print semantics for collection auto-concatenation
+* Compiler now emits warnings for unused variables
+* Attribute frame stack now has a max size of 255
+* `[sel]` can now additionally accept selector mode strings directly to create + apply a transient selector
+* API features:
+  * `Rant::set_global_const()`
+  * `Rant::set_global_force()`
+  * `lang::AccessPath::is_variable()`
+  * `lang::Rst::ConstDef`
+  * `compiler::message::CompilerMessage.is_warning()`
+* CLI: added `-W` switch to disable warnings
+* Standard Library:
+  * `[pipe]`: Sets the pipe attribute.
 
 ### Changes
-  * Updated some AST structures to support constants
-  * The following items are now made constant:
-    * Standard library items
-    * Program arguments
-    * Function arguments
-    * Imported modules
-  * API changes:
-    * Renamed `lang::AccessPath::capture_var_name()` to `var_name()`
-  * Upgraded library dependencies:
-    * `once_cell` &rarr; 0.5.2
-    * `quickscope` &rarr; 0.1.6
-    * `rand` &rarr; 0.8.2
-    * `rand-xoshiro` &rarr; 0.6.0
-    * `smallvec` &rarr; 1.6.1
-    * `smartstring` &rarr; 0.2.6
-    * `unicode-segmentation` &rarr; 1.7.1
-  * Stamdard library:
-    * Swapped the positions of the two parameters in `[join]` so the separator comes last
-  * Upgraded CLI dependencies:
-    * `argh` &rarr; 0.1.4
+* Updated some AST structures to support constants
+* The following items are now made constant:
+  * Standard library items
+  * Program arguments
+  * Function arguments
+  * Imported modules
+* API changes:
+  * Renamed `lang::AccessPath::capture_var_name()` to `var_name()`
+* Upgraded library dependencies:
+  * `once_cell` &rarr; 0.5.2
+  * `quickscope` &rarr; 0.1.6
+  * `rand` &rarr; 0.8.2
+  * `rand-xoshiro` &rarr; 0.6.0
+  * `smallvec` &rarr; 1.6.1
+  * `smartstring` &rarr; 0.2.6
+  * `unicode-segmentation` &rarr; 1.7.1
+* Stamdard library:
+  * Swapped the positions of the two parameters in `[join]` so the separator comes last
+* Upgraded CLI dependencies:
+  * `argh` &rarr; 0.1.4
 
 ### Fixes
-  * Fixed globals created within program scope not being tracked by compiler
-  * Fixed `[whitespace-fmt]` modifying the wrong stack frame
+* Fixed globals created within program scope not being tracked by compiler
+* Fixed `[whitespace-fmt]` modifying the wrong stack frame
 
 ## 4.0.0-alpha.14
 
 ### New
-  * Add support for spread notation in function calls
-  * Add support for slice notation in getters and setters
-  * Added `BUILD_VERSION` constant to stdlib
-  * Added new stdlib functions:
-    * `[try]`: execute a protected call on a function or block with optional error handling callback
+* Add support for spread notation in function calls
+* Add support for slice notation in getters and setters
+* Added `BUILD_VERSION` constant to stdlib
+* Added new stdlib functions:
+  * `[try]`: execute a protected call on a function or block with optional error handling callback
 
 ### Changes
-  * Make some unnecessarily public runtime/compiler APIs crate-visible
-  * Strings are now measured by grapheme clusters instead of bytes; this affects indexing + slicing behavior
+* Make some unnecessarily public runtime/compiler APIs crate-visible
+* Strings are now measured by grapheme clusters instead of bytes; this affects indexing + slicing behavior
 
 ### Fixes
-  * Fixed some unintended module re-exports
-  * Fixed modules imported with `[require]` not living long enough
-  * Fixed panic when trying to return from main program scope
+* Fixed some unintended module re-exports
+* Fixed modules imported with `[require]` not living long enough
+* Fixed panic when trying to return from main program scope
 
 ## 4.0.0-alpha.13
 
 ### Changes
-  * Renamed `ErrorKind` to `CompilerErrorKind` in `rant::compiler`
-  * Exposed the `rant::runtime` module and several types inside
-    * More runtime types will be exposed over time as they are documented. 
+* Renamed `ErrorKind` to `CompilerErrorKind` in `rant::compiler`
+* Exposed the `rant::runtime` module and several types inside
+  * More runtime types will be exposed over time as they are documented. 
 
 ### Fixes
-  * Fixed several stdlib functions not being registered
+* Fixed several stdlib functions not being registered
 
 ## 4.0.0-alpha.12 (yanked)
 

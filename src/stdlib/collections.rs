@@ -3,8 +3,13 @@ use std::cmp::Ordering;
 use super::*;
 use crate::{lang::PrintFlag};
 
-pub(crate) fn list(vm: &mut VM, items: VarArgs<RantValue>) -> RantStdResult {
+pub(crate) fn collect(vm: &mut VM, items: VarArgs<RantValue>) -> RantStdResult {
   vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(items.iter().cloned().collect()))));
+  Ok(())
+}
+
+pub(crate) fn list(vm: &mut VM, collection: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write_value(collection.into_rant_list());
   Ok(())
 }
 

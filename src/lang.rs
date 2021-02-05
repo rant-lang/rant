@@ -523,10 +523,12 @@ impl TemporalSpreadState {
         // Since temporal indices are always incremental, we can assume the next label index will only be 1 ahead at most.
         // This way, duplicate labels share the same counter.
         if label >= counters.len() {
-          let counter_size = match &args[i] {
-            RantValue::List(list_ref) => list_ref.borrow().len(),
-            _ => 0,
-        };
+          let arg = &args[i];
+          let counter_size = if arg.is_indexable() {
+            arg.len()
+          } else {
+            0
+          };
           counters.push((0, counter_size));
         } else {
           // If it's an existing index, update the counter size to the minimum list length.

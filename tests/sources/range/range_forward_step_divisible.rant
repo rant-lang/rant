@@ -1,0 +1,3 @@
+<%r = [range: 0; 6; 2]>
+[assert-eq: [len: <r>]; 3; "range length is wrong"]
+[assert-eq: <r/0>, <r/1>, <r/2>; "0, 2, 4"; "range values are wrong"]

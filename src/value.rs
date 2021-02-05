@@ -86,6 +86,8 @@ pub enum RantValue {
   List(RantListRef),
   /// A Rant value of type `map`. Passed by-reference.
   Map(RantMapRef),
+  /// A Rant value of type `range`. Passed by-value.
+  Range(RantRange),
   /// A Rant value of type `special`. Passed by-value.
   Special(RantSpecial),
   /// A Rant unit value of type `empty`. Passed by-value.
@@ -167,6 +169,17 @@ impl RantValue {
     }
   }
 
+  /// Converts to a Rant `list` value.
+  #[inline]
+  pub fn into_rant_list(self) -> RantValue {
+    RantValue::List(match self {
+      RantValue::String(s) => Rc::new(RefCell::new(s.to_rant_list())),
+      RantValue::List(list) => Rc::new(RefCell::new(list.borrow().clone())),
+      RantValue::Range(range) => Rc::new(RefCell::new(range.to_list())),
+      _ => return RantValue::Empty,
+    })
+  }
+
   /// Gets the length of the value.
   #[inline]
   pub fn len(&self) -> usize {
@@ -177,6 +190,8 @@ impl RantValue {
       RantValue::Block(b) => b.elements.len(),
       // Length of list is element count
       RantValue::List(lst) => lst.borrow().len(),
+      // Length of range is element count
+      RantValue::Range(range) => range.len(),
       // Length of map is element count
       RantValue::Map(map) => map.borrow().raw_len(),
       // Treat everything else as length 1, since all other value types are primitives
@@ -201,12 +216,13 @@ impl RantValue {
     match self {
       RantValue::String(_) =>     RantValueType::String,
       RantValue::Float(_) =>      RantValueType::Float,
-      RantValue::Int(_) =>    RantValueType::Int,
+      RantValue::Int(_) =>        RantValueType::Int,
       RantValue::Boolean(_) =>    RantValueType::Boolean,
       RantValue::Function(_) =>   RantValueType::Function,
       RantValue::List(_) =>       RantValueType::List,
       RantValue::Block(_) =>      RantValueType::Block,
       RantValue::Map(_) =>        RantValueType::Map,
+      RantValue::Range(_) =>      RantValueType::Range,
       RantValue::Special(_) =>    RantValueType::Special,
       RantValue::Empty =>         RantValueType::Empty,
     }
@@ -310,6 +326,12 @@ impl RantValue {
     }
   }
 
+  /// Indicates whether the value can be indexed into.
+  #[inline]
+  pub fn is_indexable(&self) -> bool {
+    matches!(self, RantValue::String(_) | RantValue::List(_) | RantValue::Range(_))
+  }
+
   /// Attempts to get a value by index.
   pub fn index_get(&self, index: i64) -> ValueIndexResult {
     let uindex = self.get_uindex(index).ok_or(IndexError::OutOfRange)?;
@@ -326,6 +348,13 @@ impl RantValue {
         let list = list.borrow();
         if uindex < list.len() {
           Ok(list[uindex].clone())
+        } else {
+          Err(IndexError::OutOfRange)
+        }
+      },
+      RantValue::Range(range) => {
+        if let Some(item) = range.get(uindex) {
+          Ok(RantValue::Int(item))
         } else {
           Err(IndexError::OutOfRange)
         }
@@ -417,6 +446,8 @@ pub enum RantValueType {
   Map,
   /// The `special` type.
   Special,
+  /// The `range` type.
+  Range,
   /// The `empty` type.
   Empty
 }
@@ -434,6 +465,7 @@ impl RantValueType {
       RantValueType::List =>        "list",
       RantValueType::Map =>         "map",
       RantValueType::Special =>     "special",
+      RantValueType::Range =>       "range",
       RantValueType::Empty =>       "empty",
     }
   }
@@ -582,6 +614,93 @@ impl PartialEq for RantSpecial {
   }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct RantRange {
+  pub start: i64,
+  pub end: i64,
+  pub step: u64,
+}
+
+impl RantRange {
+  #[inline]
+  pub fn new(start: i64, end: i64, step: u64) -> Self {
+    Self {
+      start,
+      end,
+      step: step.max(1),
+    }
+  }
+}
+
+impl Default for RantRange {
+  fn default() -> Self {
+    Self {
+      start: 0,
+      end: 0,
+      step: 1,
+    }
+  }
+}
+
+impl RantRange {
+  /// Gets the absolute difference between the start and end bounds, ignoring the step size.
+  #[inline(always)]
+  pub fn abs_size(&self) -> usize {
+    self.end.saturating_sub(self.start).saturating_abs() as usize
+  }
+
+  /// Gets the total number of steps in the range, taking into account the step size.
+  #[inline]
+  pub fn len(&self) -> usize {
+    let abs_size = self.abs_size();
+    if abs_size > 0 {
+      (abs_size - 1) / self.step.max(1) as usize + 1
+    } else {
+      0
+    }
+  }
+
+  /// Indicates whether there are no steps in the range.
+  #[inline]
+  pub fn is_empty(&self) -> bool {
+    self.start == self.end || self.step > self.abs_size() as u64
+  }
+
+  /// Gets the nth value in the range.
+  #[inline]
+  pub fn get(&self, index: usize) -> Option<i64> {
+    // Does it go backwards?
+    let step = self.step.max(1) as usize;
+    let is_negative_step = self.end < self.start;
+    let abs_range_size = self.abs_size();
+    let abs_range_progress = step * index;
+
+    if abs_range_progress >= abs_range_size {
+      return None
+    }
+
+    Some(if is_negative_step {
+      self.start.saturating_sub(abs_range_progress as i64)
+    } else {
+      self.start.saturating_add(abs_range_progress as i64)
+    })
+  }
+
+  #[inline]
+  pub fn to_list(&self) -> RantList {
+    let n = self.len();
+    let mut list = RantList::new();
+
+    for i in 0..n {
+      if let Some(item) = self.get(i) {
+        list.push(RantValue::Int(item));
+      }
+    }
+
+    list
+  }
+}
+
 // TODO: Use `RantNumber` to accept any number type in stdlib functions
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 pub(crate) enum RantNumber {
@@ -653,6 +772,7 @@ impl Debug for RantValue {
       RantValue::Block(block) => write!(f, "[block({})]", block.elements.len()),
       RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
       RantValue::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
+      RantValue::Range(range) => write!(f, "[range({}, {}, {})]", range.start, range.end, range.step),
       RantValue::Special(special) => write!(f, "[special({:?})]", special),
       RantValue::Empty => write!(f, "[empty]"),
     }
@@ -670,6 +790,7 @@ impl Display for RantValue {
       RantValue::Block(block) => write!(f, "[block({})]", block.elements.len()),
       RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
       RantValue::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
+      RantValue::Range(range) => write!(f, "[range({}, {}, {})]", range.start, range.end, range.step),
       RantValue::Special(_) => write!(f, "[special]"),
       RantValue::Empty => Ok(()),
     }

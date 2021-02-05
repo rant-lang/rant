@@ -554,8 +554,10 @@ impl<'rant> VM<'rant> {
               let targs = args.iter().enumerate().map(|(arg_index, arg)| {
                 // Check if this is a temporally spread argument
                 if let Some(tindex) = temporal_state.get(arg_index) {
-                  if let RantValue::List(list_ref) = arg {
-                    return list_ref.borrow().get(tindex).cloned().unwrap_or_default();
+                  if arg.is_indexable() {
+                    if let Ok(tval) = arg.index_get(tindex as i64) {
+                      return tval
+                    }
                   }
                 }
                 arg.clone()
@@ -619,8 +621,10 @@ impl<'rant> VM<'rant> {
           let targs = args.iter().enumerate().map(|(arg_index, arg)| {
             // Check if this is a temporally spread argument
             if let Some(tindex) = temporal_state.get(arg_index) {
-              if let RantValue::List(list_ref) = arg {
-                return list_ref.borrow().get(tindex).cloned().unwrap_or_default();
+              if arg.is_indexable() {
+                if let Ok(tval) = arg.index_get(tindex as i64) {
+                  return tval
+                }
               }
             }
             arg.clone()
