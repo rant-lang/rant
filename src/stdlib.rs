@@ -103,7 +103,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
 
     // Math functions
     abs, add, sub, mul, div, mul_add as "mul-add", mod_ as "mod", neg, pow, recip, 
-    clamp, min, max,
+    clamp, min, max, floor, ceil, frac,
     asin, sin, acos, cos, atan, atan2, tan, sqrt, 
 
     // Conversion functions

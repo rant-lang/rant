@@ -18,6 +18,7 @@
   * `assert_matches` &rarr; 1.5.0
 
 ### Fixes
+* Fixed stdlib functions `[frac]`, `[floor]`, `[ceil]` not being registered (oops.)
 
 ## 4.0.0-alpha.16
 
