@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.0.0-alpha.17 (unreleased)
+## 4.0.0-alpha.17
 
 ### New
 * Added `range` type
