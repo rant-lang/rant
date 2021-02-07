@@ -9,6 +9,7 @@
 
 ### Changes
 * Renamed old `[list]` function to `[collect]`
+* Renamed `[concat]` to `[cat]`
 * Added new `[list]` function which converts a single argument to a Rant list 
 * Temporal spreading now works on any indexable type (`list`, `string`, `range`)
 * Upgraded library dependencies:

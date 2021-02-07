@@ -1,1 +1,1 @@
-[assert-eq: foobarbazqux; [concat: *a*(foo; baz); *a*(bar; qux)]]
+[assert-eq: foobarbazqux; [cat: *a*(foo; baz); *a*(bar; qux)]]

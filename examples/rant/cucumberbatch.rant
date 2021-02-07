@@ -1,2 +1,2 @@
 <%parts = (cu;cum;ber;batch)>
-[concat: **<parts>; **<parts>; **<parts>; **<parts>; \n]
+[cat: **<parts>; **<parts>; **<parts>; **<parts>; \n]
