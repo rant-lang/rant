@@ -19,6 +19,11 @@ pub(crate) fn nlist(vm: &mut VM, items: VarArgs<RantValue>) -> RantStdResult {
   Ok(())
 }
 
+pub(crate) fn rev(vm: &mut VM, val: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write_value(val.reversed());
+  Ok(())
+}
+
 pub(crate) fn squish(vm: &mut VM, (list, target_size): (RantListRef, usize)) -> RantStdResult {
   let mut list = list.borrow_mut();
 

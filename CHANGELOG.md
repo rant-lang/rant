@@ -5,7 +5,9 @@
 ### New
 * Added `range` type
 * Standard Library items:
-  * `[range]`: Create a new range
+  * `[irange]`: Create a new inclusive range
+  * `[range]`: Create a new exclusive range
+  * `[rev]`: Create a reversed copy of an ordered collection (list, string, range)
 
 ### Changes
 * Renamed old `[list]` function to `[collect]`

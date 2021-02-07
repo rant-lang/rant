@@ -51,6 +51,22 @@ impl RantString {
     ).as_ref().unwrap()
   }
 
+  /// Creates a copy of the string with the graphemes in reverse order.
+  #[inline]
+  pub fn reversed(&self) -> Self {
+    let mut buf = InternalString::new();
+    for i in (0..self.len()).rev() {
+      if let Some(g) = self.grapheme_at(i) {
+        buf.push_str(g.as_str());
+      }
+    }
+
+    Self {
+      raw: buf,
+      .. Default::default()
+    }
+  }
+
   /// Gets a reference to the string as a string slice.
   #[inline]
   pub fn as_str(&self) -> &str {

@@ -132,6 +132,19 @@ pub(crate) fn range(vm: &mut VM, (a, b, step): (i64, Option<i64>, Option<u64>)) 
   Ok(())
 }
 
+pub(crate) fn irange(vm: &mut VM, (a, b, step): (i64, Option<i64>, Option<u64>)) -> RantStdResult {
+  let step = step.unwrap_or(1);
+  
+  let range = if let Some(b) = b {
+    RantRange::new_inclusive(a, b, step)
+  } else {
+    RantRange::new_inclusive(0, a, step)
+  };
+
+  vm.cur_frame_mut().write_value(RantValue::Range(range));
+  Ok(())
+}
+
 pub(crate) fn require(vm: &mut VM, module_path: String) -> RantStdResult {
   // Get name of module from path
   if let Some(module_name) = 

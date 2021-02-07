@@ -201,6 +201,17 @@ impl RantValue {
     }
   }
 
+  #[inline]
+  pub fn reversed(&self) -> Self {
+    match self {
+      RantValue::String(s) => RantValue::String(s.reversed()),
+      RantValue::Block(b) => todo!(),
+      RantValue::List(list) => RantValue::List(Rc::new(RefCell::new(list.borrow().iter().rev().cloned().collect()))),
+      RantValue::Range(range) => RantValue::Range(range.reversed()),
+      _ => self.clone(),
+    }
+  }
+
   /// Returns a shallow copy of the value.
   #[inline]
   pub fn shallow_copy(&self) -> Self {
@@ -629,6 +640,7 @@ pub struct RantRange {
   pub start: i64,
   pub end: i64,
   pub step: u64,
+  pub is_inclusive: bool,
 }
 
 impl RantRange {
@@ -638,6 +650,17 @@ impl RantRange {
       start,
       end,
       step: step.max(1),
+      is_inclusive: false,
+    }
+  }
+
+  #[inline]
+  pub fn new_inclusive(start: i64, end: i64, step: u64) -> Self {
+    Self {
+      start,
+      end,
+      step: step.max(1),
+      is_inclusive: true,
     }
   }
 }
@@ -648,13 +671,19 @@ impl Default for RantRange {
       start: 0,
       end: 0,
       step: 1,
+      is_inclusive: false,
     }
   }
 }
 
 impl Display for RantRange {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let comparison = if self.start < self.end { '<' } else { '>' };
+    let comparison = match (self.start < self.end, self.is_inclusive) {
+      (false, false) => ">",
+      (true, false) => "<",
+      (false, true) => ">=",
+      (true, true) => "<=",
+    };
     let op = if self.start < self.end { '+' } else { '-' };
     write!(f, "[range({} {} ", self.start, op)?;
     if self.step > 1 {
@@ -669,7 +698,7 @@ impl RantRange {
   /// Gets the absolute difference between the start and end bounds, ignoring the step size.
   #[inline(always)]
   pub fn abs_size(&self) -> usize {
-    self.end.saturating_sub(self.start).saturating_abs() as usize
+    self.end.saturating_sub(self.start).saturating_abs() as usize + if self.is_inclusive { 1 } else { 0 }
   }
 
   /// Gets the total number of steps in the range, taking into account the step size.
@@ -683,20 +712,54 @@ impl RantRange {
     }
   }
 
+  #[inline]
+  pub fn reversed(&self) -> Self {
+    if self.is_inclusive {
+      Self {
+        start: self.end,
+        end: self.start,
+        step: self.step,
+        is_inclusive: true,
+      }
+    } else {
+      if self.start == self.end {
+        return self.clone()
+      }
+
+      if self.start < self.end {
+        Self {
+          start: self.end - 1,
+          end: self.start,
+          step: self.step,
+          is_inclusive: true,
+        }
+      } else {
+        Self {
+          start: self.end + 1,
+          end: self.start,
+          step: self.step,
+          is_inclusive: true,
+        }
+      }
+    }
+  }
+
   /// Indicates whether there are no steps in the range.
   #[inline]
   pub fn is_empty(&self) -> bool {
-    self.start == self.end || self.step > self.abs_size() as u64
+    let size = self.abs_size() as u64;
+    let incl = self.is_inclusive;
+    (!incl && self.start == self.end) || (!incl && self.step > size) || (incl && self.step >= size)
   }
 
   /// Gets the nth value in the range.
   #[inline]
   pub fn get(&self, index: usize) -> Option<i64> {
     // Does it go backwards?
-    let step = self.step.max(1) as usize;
+    let abs_step = self.step.max(1) as usize;
     let is_negative_step = self.end < self.start;
     let abs_range_size = self.abs_size();
-    let abs_range_progress = step * index;
+    let abs_range_progress = abs_step * index;
 
     if abs_range_progress >= abs_range_size {
       return None
@@ -712,10 +775,10 @@ impl RantRange {
   #[inline]
   fn get_bound(&self, index: usize) -> Option<i64> {
     // Does it go backwards?
-    let step = self.step.max(1) as usize;
+    let abs_step = self.step.max(1) as usize;
     let is_negative_step = self.end < self.start;
     let abs_range_size = self.abs_size();
-    let abs_range_progress = step * index;
+    let abs_range_progress = abs_step * index;
 
     if index == self.len() {
       return Some(self.end)
