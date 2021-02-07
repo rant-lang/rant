@@ -3,11 +3,13 @@ use crate::collections::*;
 use crate::runtime::resolver::*;
 use crate::runtime::*;
 use crate::util::*;
-use std::{fmt::{Display, Debug}, rc::Rc, ops::{Add, Not, Sub, Neg, Mul, Div, Rem}, cell::RefCell};
+use std::{cell::RefCell, fmt::{Display, Debug}, ops::{Add, Div, Mul, Neg, Not, Rem, Sub}, rc::Rc};
 use std::error::Error;
 use std::mem;
 use std::cmp::Ordering;
 use cast::*;
+
+const MAX_DISPLAY_STRING_DEPTH: usize = 4;
 
 /// Adds a barebones `Error` implementation to the specified type.
 macro_rules! impl_error_default {
@@ -280,16 +282,24 @@ impl RantValue {
     match self {
       RantValue::String(s) => Ok(RantValue::String(s.to_slice(slice_from, slice_to).ok_or(SliceError::OutOfRange)?)),
       RantValue::Block(_b) => todo!(),
+      RantValue::Range(range) => {
+        match (slice_from, slice_to) {
+          (None, None) => Ok(self.shallow_copy()),
+          (None, Some(to)) => Ok(RantValue::Range(RantRange::new(range.get(0).unwrap(), range.get(to).unwrap(), range.step))),
+          (Some(from), None) => Ok(RantValue::Range(RantRange::new(range.get(from).unwrap(), range.get_bound(range.len()).unwrap(), range.step))),
+          (Some(from), Some(to)) => Ok(RantValue::Range(RantRange::new(range.get(from).unwrap(), range.get(to).unwrap(), range.step))),
+        }
+      },
       RantValue::List(list) => {
         let list = list.borrow();
         match (slice_from, slice_to) {
-            (None, None) => Ok(self.shallow_copy()),
-            (None, Some(to)) => Ok(RantValue::List(Rc::new(RefCell::new((&list[..to]).iter().cloned().collect())))),
-            (Some(from), None) => Ok(RantValue::List(Rc::new(RefCell::new((&list[from..]).iter().cloned().collect())))),
-            (Some(from), Some(to)) => {
-              let (from, to) = util::minmax(from, to);
-              Ok(RantValue::List(Rc::new(RefCell::new((&list[from..to]).iter().cloned().collect()))))
-            }
+          (None, None) => Ok(self.shallow_copy()),
+          (None, Some(to)) => Ok(RantValue::List(Rc::new(RefCell::new((&list[..to]).iter().cloned().collect())))),
+          (Some(from), None) => Ok(RantValue::List(Rc::new(RefCell::new((&list[from..]).iter().cloned().collect())))),
+          (Some(from), Some(to)) => {
+            let (from, to) = util::minmax(from, to);
+            Ok(RantValue::List(Rc::new(RefCell::new((&list[from..to]).iter().cloned().collect()))))
+          }
         }
       }
       other => Err(SliceError::CannotSliceType(other.get_type()))
@@ -642,6 +652,19 @@ impl Default for RantRange {
   }
 }
 
+impl Display for RantRange {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let comparison = if self.start < self.end { '<' } else { '>' };
+    let op = if self.start < self.end { '+' } else { '-' };
+    write!(f, "[range({} {} ", self.start, op)?;
+    if self.step > 1 {
+      write!(f, "{}", self.step)?;
+    }
+    write!(f, "x {} {})]", comparison, self.end)?;
+    Ok(())
+  }
+}
+
 impl RantRange {
   /// Gets the absolute difference between the start and end bounds, ignoring the step size.
   #[inline(always)]
@@ -676,6 +699,29 @@ impl RantRange {
     let abs_range_progress = step * index;
 
     if abs_range_progress >= abs_range_size {
+      return None
+    }
+
+    Some(if is_negative_step {
+      self.start.saturating_sub(abs_range_progress as i64)
+    } else {
+      self.start.saturating_add(abs_range_progress as i64)
+    })
+  }
+
+  #[inline]
+  fn get_bound(&self, index: usize) -> Option<i64> {
+    // Does it go backwards?
+    let step = self.step.max(1) as usize;
+    let is_negative_step = self.end < self.start;
+    let abs_range_size = self.abs_size();
+    let abs_range_progress = step * index;
+
+    if index == self.len() {
+      return Some(self.end)
+    }
+
+    if abs_range_progress > abs_range_size {
       return None
     }
 
@@ -772,28 +818,72 @@ impl Debug for RantValue {
       RantValue::Block(block) => write!(f, "[block({})]", block.elements.len()),
       RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
       RantValue::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
-      RantValue::Range(range) => write!(f, "[range({}, {}, {})]", range.start, range.end, range.step),
+      RantValue::Range(range) => write!(f, "{}", range),
       RantValue::Special(special) => write!(f, "[special({:?})]", special),
       RantValue::Empty => write!(f, "[empty]"),
     }
   }
 }
 
+fn get_display_string(value: &RantValue, max_depth: usize) -> String {
+  match value {
+    RantValue::String(s) => s.to_string(),
+    RantValue::Float(f) => format!("{}", f),
+    RantValue::Int(i) => format!("{}", i),
+    RantValue::Boolean(b) => (if *b { "true" } else { "false" }).to_string(),
+    RantValue::Function(f) => format!("[function({:?})]", f.body),
+    RantValue::Block(b) => format!("[block({})]", b.elements.len()),
+    RantValue::List(list) => {
+      let mut buf = String::new();
+      let mut is_first = true;
+      buf.push('(');
+      if max_depth > 0 {
+        for val in list.borrow().iter() {
+          if is_first {
+            is_first = false;
+          } else {
+            buf.push_str("; ");
+          }
+          buf.push_str(&get_display_string(val, max_depth - 1));
+        }
+      } else {
+        buf.push_str("...");
+      }
+      buf.push(')');
+      buf
+    },
+    RantValue::Map(map) => {
+      let mut buf = String::new();
+      let mut is_first = true;
+      buf.push_str("@(");
+      if max_depth > 0 {
+        let map = map.borrow();
+        for key in map.raw_keys() {
+          let key_string = key.to_string();
+          if let Some(val) = map.raw_get(&key_string) {
+            if is_first {
+              is_first = false;
+            } else {
+              buf.push_str("; ");
+            }
+            buf.push_str(&format!("{} = {}", key_string, get_display_string(&val, max_depth - 1)));
+          }
+        }
+      } else {
+        buf.push_str("...");
+      }
+      buf.push(')');
+      buf
+    },
+    RantValue::Special(_) => "[special]".to_owned(),
+    RantValue::Range(range) => range.to_string(),
+    RantValue::Empty => (if max_depth < MAX_DISPLAY_STRING_DEPTH { "~" } else { "" }).to_owned(),
+  }
+}
+
 impl Display for RantValue {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      RantValue::String(s) => write!(f, "{}", s),
-      RantValue::Int(n) => write!(f, "{}", n),
-      RantValue::Float(n) => write!(f, "{}", n),
-      RantValue::Boolean(b) => write!(f, "{}", bstr(*b)),
-      RantValue::Function(func) => write!(f, "[function({:?})]", func.body),
-      RantValue::Block(block) => write!(f, "[block({})]", block.elements.len()),
-      RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
-      RantValue::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
-      RantValue::Range(range) => write!(f, "[range({}, {}, {})]", range.start, range.end, range.step),
-      RantValue::Special(_) => write!(f, "[special]"),
-      RantValue::Empty => Ok(()),
-    }
+    write!(f, "{}", get_display_string(self, MAX_DISPLAY_STRING_DEPTH))
   }
 }
 
@@ -807,6 +897,7 @@ impl PartialEq for RantValue {
       (RantValue::Float(a), RantValue::Float(b)) => a == b,
       (RantValue::Float(a), RantValue::Int(b)) => *a == *b as f64,
       (RantValue::Boolean(a), RantValue::Boolean(b)) => a == b,
+      (RantValue::Range(ra), RantValue::Range(rb)) => ra == rb,
       (RantValue::List(a), RantValue::List(b)) => a.borrow().eq(&b.borrow()),
       (RantValue::Map(a), RantValue::Map(b)) => Rc::as_ptr(a) == Rc::as_ptr(b),
       (RantValue::Special(a), RantValue::Special(b)) => a == b,

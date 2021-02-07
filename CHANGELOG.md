@@ -12,6 +12,7 @@
 * Renamed `[concat]` to `[cat]`
 * Added new `[list]` function which converts a single argument to a Rant list 
 * Temporal spreading now works on any indexable type (`list`, `string`, `range`)
+* String representations of collections actually show the contents now (up to 4 layers deep)
 * Upgraded library dependencies:
   * `logos` &rarr; 0.12.0
   * `rand` &rarr; 0.8.3
@@ -20,6 +21,7 @@
 
 ### Fixes
 * Fixed stdlib functions `[frac]`, `[floor]`, `[ceil]` not being registered (oops.)
+* Fixed temporal spreads not handling non-list collections properly
 
 ## 4.0.0-alpha.16
 

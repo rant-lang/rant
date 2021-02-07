@@ -531,11 +531,12 @@ impl TemporalSpreadState {
           };
           counters.push((0, counter_size));
         } else {
-          // If it's an existing index, update the counter size to the minimum list length.
-          // This way, we guarantee that list arguments with a shared temporal label *always* provide the same number of values.
-          if let RantValue::List(list_ref) = &args[i] {
+          // If it's an existing index, update the counter size to the minimum argument length.
+          // This way, we guarantee that temporal arguments with a shared label *always* provide the same number of values.
+          let arg = &args[i];
+          if arg.is_indexable() {
             let (_, n) = &mut counters[label];
-            *n = list_ref.borrow().len().min(*n);
+            *n = arg.len().min(*n);
           }
         }
       }
