@@ -393,9 +393,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           match kwd.as_str() {
             "return" => emit!(Rst::Return(charm_sequence)),
             "continue" => emit!(Rst::Continue(charm_sequence)),
-            "last" => emit!(Rst::Last(charm_sequence)),
             "break" => emit!(Rst::Break(charm_sequence)),
-            "clear" => emit!(Rst::Clear(charm_sequence)),
             "weight" => {
               if mode == SequenceParseMode::BlockElement {
                 charm_extras = Some(ParsedSequenceExtras::WeightedBlockElement {
@@ -1726,6 +1724,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     let start_pos = self.reader.last_token_pos();
     // Keeps track of inherited hinting
     let mut auto_hint = false;
+    /// Is the block weighted?
+    let mut is_weighted = false;
     // Block content
     let mut elements = vec![];
     
@@ -1741,6 +1741,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       let element = BlockElement {
         main: Rc::new(sequence),
         weight: if let Some(ParsedSequenceExtras::WeightedBlockElement { weight_expr }) = extras {
+          is_weighted = true;
           Some(weight_expr)
         } else {
           None
@@ -1767,9 +1768,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     
     // Figure out the printflag before returning the block
     if auto_hint && flag != PrintFlag::Sink {
-      Ok(Block::new(PrintFlag::Hint, elements))
+      Ok(Block::new(PrintFlag::Hint, is_weighted, elements))
     } else {
-      Ok(Block::new(flag, elements))
+      Ok(Block::new(flag, is_weighted, elements))
     }
   }
   

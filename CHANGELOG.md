@@ -3,10 +3,15 @@
 ## 4.0.0-alpha.18 (unreleased)
 
 ### New
+* Added "charms": right-associative operators for control flow
+* `return`, `continue`, and `break` are now reimplemented as charms
 
 ### Changes
 
 ### Fixes
+
+### Removed
+* Removed from stdlib: `[return]`, `[continue]`, `[break]`
 
 ## 4.0.0-alpha.17
 

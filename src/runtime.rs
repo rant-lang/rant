@@ -84,10 +84,14 @@ macro_rules! runtime_error {
 pub enum Intent {
   /// Pop a value off the value stack and print it to the current frame's output.
   PrintLast,
+  /// Pops a value off the value stack and returns it from the current function.
+  ReturnLast,
+  /// Pops a value off the value stack and continues to the next repeater iteration with it.
+  ContinueLast,
+  /// Pops a value off the value stack and breaks from the current repeater with it.
+  BreakLast,
   /// Pops a map off the stack and loads it as a module with the specified name.
   ImportLastAsModule { module_name: String, descope: usize },
-  /// Pops a value from the value stack and (if it's a valid string) attempts to import a module with that name.
-  RequireLast,
   /// Check if the active block is finished and either continue the block or pop the state from the stack
   CheckBlock,
   /// Pop a value off the stack and assign it to an existing variable.
@@ -154,7 +158,9 @@ impl Intent {
       Intent::ImportLastAsModule { .. } => "load_module",
       Intent::RuntimeCall { .. } => "runtime_call",
       Intent::DropStaleUnwinds => "drop_stale_unwinds",
-      Intent::RequireLast => "require_last",
+      Intent::ReturnLast => "return_last",
+      Intent::ContinueLast => "continue_last",
+      Intent::BreakLast => "break_last",
     }
   }
 }
@@ -318,37 +324,20 @@ impl<'rant> VM<'rant> {
           let val = self.pop_val()?;
           self.cur_frame_mut().write_value(val);
         },
-        Intent::RequireLast => {
-          let module_path = match self.pop_val()? {
-            RantValue::String(s) => s,
-            other => runtime_error!(RuntimeErrorType::ArgumentError, format!("@require: module path must be of type 'string', but was '{}'", other.type_name()))
-          };
-
-          // Get name of module from path
-          if let Some(module_name) = 
-          PathBuf::from(module_path.as_str())
-          .with_extension("")
-          .file_name()
-          .map(|name| name.to_str())
-          .flatten()
-          .map(|name| name.to_owned())
-          {
-            // Check if module is cached; if so, don't do anything
-            if let Some(RantValue::Map(module_cache_ref)) = self.context().get_global(crate::MODULES_CACHE_KEY) {
-              if let Some(RantValue::Map(_cached_module)) = module_cache_ref.borrow().raw_get(&module_name) {
-                continue
-              }
-            }
-
-            // If not cached, attempt to load it from file and run its root sequence
-            let caller_origin = Rc::clone(&self.cur_frame().origin());
-            let module_pgm = self.context_mut().try_load_module(module_path.as_str(), caller_origin).into_runtime_result()?;
-            self.cur_frame_mut().push_intent_front(Intent::ImportLastAsModule { module_name, descope: 0 });
-            self.push_frame(Rc::clone(&module_pgm.root), true)?;
-            continue
-          } else {
-            runtime_error!(RuntimeErrorType::ArgumentError, "module name is missing from path");
-          }
+        Intent::ReturnLast => {
+          let val = self.pop_val()?;
+          self.func_return(Some(val))?;
+          return Ok(true)
+        },
+        Intent::ContinueLast => {
+          let val = self.pop_val()?;
+          self.interrupt_repeater(Some(val), true)?;
+          return Ok(true)
+        },
+        Intent::BreakLast => {
+          let val = self.pop_val()?;
+          self.interrupt_repeater(Some(val), false)?;
+          return Ok(true)
         },
         Intent::CheckBlock => {            
           self.check_block()?;
@@ -998,11 +987,37 @@ impl<'rant> VM<'rant> {
         Rst::EmptyVal => self.cur_frame_mut().write_value(RantValue::Empty),
         Rst::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
         Rst::BlockValue(block) => self.cur_frame_mut().write_value(RantValue::Block(Rc::clone(block))),
-        Rst::Require(module_path_seq) => {
-          self.cur_frame_mut().push_intent_front(Intent::RequireLast);
-          self.push_frame_flavored(Rc::clone(module_path_seq), true, StackFrameFlavor::ArgumentExpression)?;
-        },
         Rst::Nop => {},
+        Rst::Return(expr) => {
+          if let Some(expr) = expr {
+            self.cur_frame_mut().push_intent_front(Intent::ReturnLast);
+            self.push_frame(Rc::clone(expr), true)?;
+            continue
+          } else {
+            self.func_return(None)?;
+            return Ok(true)
+          }
+        },
+        Rst::Continue(expr) => {
+          if let Some(expr) = expr {
+            self.cur_frame_mut().push_intent_front(Intent::ContinueLast);
+            self.push_frame(Rc::clone(expr), true)?;
+            continue
+          } else {
+            self.interrupt_repeater(None, true)?;
+            return Ok(true)
+          }
+        },
+        Rst::Break(expr) => {
+          if let Some(expr) = expr {
+            self.cur_frame_mut().push_intent_front(Intent::BreakLast);
+            self.push_frame(Rc::clone(expr), true)?;
+            continue
+          } else {
+            self.interrupt_repeater(None, false)?;
+            return Ok(true)
+          }
+        },
         rst => {
           runtime_error!(RuntimeErrorType::InternalError, format!("unsupported node type: '{}'", rst.display_name()));
         },

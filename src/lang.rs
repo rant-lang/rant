@@ -368,13 +368,15 @@ impl DerefMut for Sequence {
 #[derive(Debug)]
 pub struct Block {
   pub flag: PrintFlag,
+  pub is_weighted: bool,
   pub elements: Rc<Vec<BlockElement>>
 }
 
 impl Block {
-  pub fn new(flag: PrintFlag, elements: Vec<BlockElement>) -> Self {
+  pub fn new(flag: PrintFlag, is_weighted: bool, elements: Vec<BlockElement>) -> Self {
     Block {
       flag,
+      is_weighted,
       elements: Rc::new(elements)
     }
   }
@@ -664,14 +666,8 @@ pub enum Rst {
   Return(Option<Rc<Sequence>>),
   /// Continue
   Continue(Option<Rc<Sequence>>),
-  /// Continue-last
-  Last(Option<Rc<Sequence>>),
   /// Break
   Break(Option<Rc<Sequence>>),
-  /// Clear output
-  Clear(Option<Rc<Sequence>>),
-  /// Require directive
-  Require(Rc<Sequence>),
   /// Provides debug information about the next sequence element
   DebugCursor(DebugInfo),
 }
@@ -702,10 +698,7 @@ impl Rst {
       Rst::ComposeValue =>                    "compose value",
       Rst::Return(_) =>                       "return",
       Rst::Continue(_) =>                     "continue",
-      Rst::Last(_) =>                         "continue-last",
       Rst::Break(_) =>                        "break",
-      Rst::Clear(_) =>                        "clear",
-      Rst::Require(_) =>                      "require",
       Rst::DebugCursor(_) =>                  "debug cursor",
     }
   }
