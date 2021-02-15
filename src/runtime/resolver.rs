@@ -1,5 +1,5 @@
 use std::{cell::RefCell, rc::Rc, mem, error::Error, fmt::Display};
-use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionRef, RantValue, ValueError, lang::{Block, PrintFlag, Sequence}, random::RantRng, runtime_error};
+use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionRef, RantValue, ValueError, lang::{Block, BlockElement, PrintFlag, Sequence}, random::RantRng, runtime_error};
 use smallvec::SmallVec;
 use super::{IntoRuntimeResult, RuntimeError, RuntimeErrorType, RuntimeResult, StackFrameFlavor};
 
@@ -31,7 +31,7 @@ pub enum BlockAction {
 #[derive(Debug)]
 pub struct BlockState {
   /// The elements of the block.
-  elements: Rc<Vec<Rc<Sequence>>>,
+  elements: Rc<Vec<BlockElement>>,
   /// Flag to short-circuit the block.
   force_stop: bool,
   /// Indicates how block output should be handled.
@@ -64,7 +64,8 @@ impl BlockState {
         |sel| sel.borrow_mut().select(self.elements.len(), rng)
       )?;
 
-      let next_elem = Rc::clone(&self.elements[next_index]);
+      // TODO: Use element weights
+      let next_elem = Rc::clone(&self.elements[next_index].main);
 
       // If the pipe function is set, generate piped elements
       if let Some(pipe_func) = self.attrs.pipe.as_ref() {

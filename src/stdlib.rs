@@ -1,6 +1,7 @@
 //! The Rant standard library.
 
 #![allow(unused_variables)]
+#![allow(clippy::unnecessary_wraps)]
 
 use std::rc::Rc;
 use crate::*;

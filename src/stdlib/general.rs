@@ -155,19 +155,17 @@ pub(crate) fn require(vm: &mut VM, module_path: String) -> RantStdResult {
     .flatten()
     .map(|name| name.to_owned())
   {
-    // Check if module is cached
+    // Check if module is cached; if so, don't do anything
     if let Some(RantValue::Map(module_cache_ref)) = vm.context().get_global(crate::MODULES_CACHE_KEY) {
-      if let Some(RantValue::Map(cached_module)) = module_cache_ref.borrow().raw_get(&module_name) {
-        vm.cur_frame_mut().push_intent_front(Intent::LoadModule { module_name });
-        vm.push_val(RantValue::Map(Rc::clone(cached_module)))?;
+      if let Some(RantValue::Map(_cached_module)) = module_cache_ref.borrow().raw_get(&module_name) {
         return Ok(())
       }
     }
 
-    // If not cached, attempt to load it from file
+    // If not cached, attempt to load it from file and run its root sequence
     let caller_origin = Rc::clone(&vm.cur_frame().origin());
     let module_pgm = vm.context_mut().try_load_module(&module_path, caller_origin).into_runtime_result()?;
-    vm.cur_frame_mut().push_intent_front(Intent::LoadModule { module_name });
+    vm.cur_frame_mut().push_intent_front(Intent::ImportLastAsModule { module_name, descope: 1 });
     vm.push_frame(Rc::clone(&module_pgm.root), true)?;
     Ok(())
   } else {

@@ -12,7 +12,8 @@ type ParseResult<T> = Result<T, ()>;
 
 const MAIN_PROGRAM_SCOPE_NAME: &str = "main scope";
 
-#[derive(PartialEq)]
+/// Provides context to the sequence parser; determines valid terminating tokens among other context-sensitive features.
+#[derive(Copy, Clone, PartialEq)]
 enum SequenceParseMode {
   /// Parse a sequence like a top-level program.
   ///
@@ -21,11 +22,7 @@ enum SequenceParseMode {
   /// Parse a sequence like a block element.
   ///
   /// Breaks on `Pipe`, `Colon`, and `RightBrace`.
-  BlockElementAny,
-  /// Parse a sequence like a block element (RHS only).
-  ///
-  /// Breaks on `Pipe` and `RightBrace`.
-  BlockElementRhs,
+  BlockElement,
   /// Parse a sequence like a function argument.
   ///
   /// Breaks on `Semi`, `Compose`, and `RightBracket`.
@@ -108,6 +105,8 @@ enum SequenceEndType {
   CollectionInitDelim,
   /// A single item was parsed using `SingleItem` mode.
   SingleItemEnd,
+  /// A single module path was parsed using `RequirePath` mode.
+  RequirePathEnd,
 }
 
 /// Used to track variable usages during compilation.
@@ -131,6 +130,21 @@ enum VarRole {
 #[inline]
 fn super_range(a: &Range<usize>, b: &Range<usize>) -> Range<usize> {
   a.start.min(b.start)..a.end.max(b.end)
+}
+
+#[derive(Debug)]
+enum ParsedSequenceExtras {
+  WeightedBlockElement {
+    weight_expr: Rc<Sequence>
+  }
+}
+
+/// Contains information about a successfully parsed sequence and its context.
+struct ParsedSequence {
+  sequence: Sequence,
+  end_type: SequenceEndType,
+  is_printing: bool,
+  extras: Option<ParsedSequenceExtras>,
 }
 
 /// A parser that turns Rant code into an RST (Rant Syntax Tree).
@@ -179,7 +193,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       // Err if parsing "succeeded" but there are soft syntax errors
       Ok(..) if self.has_errors => Err(()),
       // Ok if parsing succeeded and there are no syntax errors
-      Ok((seq, ..)) => Ok(Rc::new(seq)),
+      Ok(ParsedSequence { sequence, .. }) => Ok(Rc::new(sequence)),
       // Err on hard syntax error
       Err(()) => Err(())
     }
@@ -206,7 +220,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
   /// Parses a sequence of items. Items are individual elements of a Rant program (fragments, blocks, function calls, etc.)
   #[inline]
-  fn parse_sequence(&mut self, mode: SequenceParseMode) -> ParseResult<(Sequence, SequenceEndType, bool)> {
+  fn parse_sequence(&mut self, mode: SequenceParseMode) -> ParseResult<ParsedSequence> {
     self.var_stack.push_layer();
     let parse_result = self.parse_sequence_inner(mode);
     self.analyze_top_vars();
@@ -216,13 +230,32 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   
   /// Inner logic of `parse_sequence()`. Intended to be wrapped in other specialized sequence-parsing functions.
   #[inline(always)]
-  fn parse_sequence_inner(&mut self, mode: SequenceParseMode) -> ParseResult<(Sequence, SequenceEndType, bool)> {    
+  fn parse_sequence_inner(&mut self, mode: SequenceParseMode) -> ParseResult<ParsedSequence> {    
     let mut sequence = Sequence::empty(&self.info);
     let mut next_print_flag = PrintFlag::None;
     let mut last_print_flag_span: Option<Range<usize>> = None;
     let mut is_seq_printing = false;
     let mut pending_whitespace = None;
     let debug = self.debug_enabled;
+
+    macro_rules! check_dangling_printflags {
+      () => {
+        // Make sure there are no dangling printflags
+        match next_print_flag {
+          PrintFlag::None => {},
+          PrintFlag::Hint => {
+            if let Some(flag_span) = last_print_flag_span.take() {
+              self.report_error(Problem::InvalidHint, &flag_span);
+            }
+          },
+          PrintFlag::Sink => {
+            if let Some(flag_span) = last_print_flag_span.take() {
+              self.report_error(Problem::InvalidSink, &flag_span);
+            }
+          }
+        }
+      }
+    }
     
     while let Some((token, span)) = self.reader.next() {
       macro_rules! inject_debug_info {
@@ -262,11 +295,18 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }
         };
       }
-      
-      macro_rules! seq_add {
+
+      macro_rules! emit {
         ($elem:expr) => {{
           inject_debug_info!();
           sequence.push(Rc::new($elem));
+        }}
+      }
+
+      macro_rules! emit_last_string {
+        () => {{
+          inject_debug_info!();
+          sequence.push(Rc::new(Rst::Fragment(InternalString::from(self.reader.last_token_string()))));
         }}
       }
       
@@ -281,7 +321,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         (allow) => {
           if is_seq_printing {
             if let Some(ws) = pending_whitespace.take() {
-              seq_add!(Rst::Whitespace(ws));
+              emit!(Rst::Whitespace(ws));
             }
           } else {
             pending_whitespace = None;
@@ -307,13 +347,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }};
       }
 
+      /// Eats as many fragments / escape sequences as possible and combines their string representations into the input `String`.
       macro_rules! consume_fragments {
         ($s:ident) => {
           while let Some((token, _)) = self.reader.take_where(|t| matches!(t, Some((RantToken::Escape(..), ..)) | Some((RantToken::Fragment, ..)))) {
             match token {
-              RantToken::Fragment => $s.push_str(&self.reader.last_token_string()),
               RantToken::Escape(ch) => $s.push(ch),
-              _ => unreachable!()
+              _ => $s.push_str(&self.reader.last_token_string()),
             }
           }
         }
@@ -339,6 +379,48 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           last_print_flag_span = Some(span.clone());
           continue
         }),
+
+        RantToken::Charm(kwd) => {
+          whitespace!(ignore both);
+          let ParsedSequence {
+            sequence: charm_sequence,
+            end_type: charm_end_type,
+            is_printing: is_charm_printing,
+            extras: mut charm_extras
+          } = self.parse_sequence(mode)?;
+          let charm_sequence_name = charm_sequence.name.clone();
+          let charm_sequence = (!charm_sequence.is_empty()).then(|| Rc::new(charm_sequence));
+          match kwd.as_str() {
+            "return" => emit!(Rst::Return(charm_sequence)),
+            "continue" => emit!(Rst::Continue(charm_sequence)),
+            "last" => emit!(Rst::Last(charm_sequence)),
+            "break" => emit!(Rst::Break(charm_sequence)),
+            "clear" => emit!(Rst::Clear(charm_sequence)),
+            "weight" => {
+              if mode == SequenceParseMode::BlockElement {
+                charm_extras = Some(ParsedSequenceExtras::WeightedBlockElement {
+                  weight_expr: charm_sequence.unwrap_or_else(|| Rc::new(Sequence::empty(&self.info)))
+                });
+              } else {
+                self.report_error(Problem::WeightNotAllowed, &span);
+              }
+            },
+            other => {
+              self.report_error(Problem::InvalidKeyword(other.to_string()), &span);
+            }
+          };
+          check_dangling_printflags!();
+          return Ok(ParsedSequence {
+            sequence: if let Some(charm_sequence_name) = charm_sequence_name {
+              sequence.with_name(charm_sequence_name)
+            } else {
+              sequence
+            },
+            end_type: charm_end_type,
+            is_printing: is_charm_printing || is_seq_printing,
+            extras: charm_extras,
+          })
+        },
         
         // Defer operator
         RantToken::Defer => {
@@ -366,7 +448,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           }
           
-          seq_add!(Rst::BlockValue(Rc::new(block)));
+          emit!(Rst::BlockValue(Rc::new(block)));
         },
         
         // Block start
@@ -395,7 +477,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           }
           
-          seq_add!(Rst::Block(block));
+          emit!(Rst::Block(block));
         },
 
         // Compose operator
@@ -404,10 +486,20 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           whitespace!(ignore prev);
           match mode {
             SequenceParseMode::FunctionArg => {
-              return Ok((sequence.with_name_str("argument"), SequenceEndType::FunctionArgEndToCompose, is_seq_printing))
+              return Ok(ParsedSequence {
+                sequence: sequence.with_name_str("argument"),
+                end_type: SequenceEndType::FunctionArgEndToCompose,
+                is_printing: is_seq_printing,
+                extras: None,
+              })
             },
             SequenceParseMode::AnonFunctionExpr => {
-              return Ok((sequence.with_name_str("anonymous function expression"), SequenceEndType::AnonFunctionExprToCompose, is_seq_printing))
+              return Ok(ParsedSequence {
+                sequence: sequence.with_name_str("anonymous function expression"),
+                end_type: SequenceEndType::AnonFunctionExprToCompose,
+                is_printing: is_seq_printing,
+                extras: None,
+              })
             },
             _ => unexpected_token_error!()
           }
@@ -416,7 +508,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Compose value
         RantToken::ComposeValue => no_flags!({
           if let Some(compval) = self.var_stack.get_mut(COMPOSE_VALUE_NAME) {
-            seq_add!(Rst::ComposeValue);
+            emit!(Rst::ComposeValue);
             compval.reads += 1;
           } else {
             self.report_error(Problem::NothingToCompose, &span);
@@ -428,8 +520,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Ignore pending whitespace
           whitespace!(ignore prev);
           match mode {
-            SequenceParseMode::BlockElementAny => {
-              return Ok((sequence.with_name_str("block element"), SequenceEndType::BlockDelim, is_seq_printing))
+            SequenceParseMode::BlockElement => {
+              return Ok(ParsedSequence {
+                sequence: sequence.with_name_str("block element"),
+                end_type: SequenceEndType::BlockDelim,
+                is_printing: is_seq_printing,
+                extras: None,
+              })
             },
             SequenceParseMode::DynamicKey => {
               self.report_error(Problem::DynamicKeyBlockMultiElement, &span);
@@ -446,14 +543,29 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Ignore pending whitespace
           whitespace!(ignore prev);
           match mode {
-            SequenceParseMode::BlockElementAny => {
-              return Ok((sequence.with_name_str("block element"), SequenceEndType::BlockEnd, is_seq_printing))
+            SequenceParseMode::BlockElement => {
+              return Ok(ParsedSequence {
+                sequence: sequence.with_name_str("block element"),
+                end_type: SequenceEndType::BlockEnd,
+                is_printing: true,
+                extras: None,
+              })
             },
             SequenceParseMode::FunctionBody => {
-              return Ok((sequence.with_name_str("function body"), SequenceEndType::FunctionBodyEnd, true))
+              return Ok(ParsedSequence {
+                sequence: sequence.with_name_str("function body"),
+                end_type: SequenceEndType::FunctionBodyEnd,
+                is_printing: true,
+                extras: None,
+              })
             },
             SequenceParseMode::DynamicKey => {
-              return Ok((sequence.with_name_str("dynamic key"), SequenceEndType::DynamicKeyEnd, true))
+              return Ok(ParsedSequence {
+                sequence: sequence.with_name_str("dynamic key"),
+                end_type: SequenceEndType::DynamicKeyEnd,
+                is_printing: true,
+                extras: None,
+              })
             }
             _ => unexpected_token_error!()
           }
@@ -481,7 +593,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         RantToken::RightParen => no_flags!({
           match mode {
             SequenceParseMode::CollectionInit => {
-              return Ok((sequence, SequenceEndType::CollectionInitEnd, true))
+              return Ok(ParsedSequence {
+                sequence,
+                end_type: SequenceEndType::CollectionInitEnd,
+                is_printing: true,
+                extras: None,
+              })
             },
             _ => unexpected_token_error!()
           }
@@ -511,14 +628,24 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             _ => {}
           }
           
-          seq_add!(func_access);
+          emit!(func_access);
         },
         
         // Can be terminator for function args and anonymous function expressions
         RantToken::RightBracket => no_flags!({
           match mode {
-            SequenceParseMode::AnonFunctionExpr => return Ok((sequence.with_name_str("anonymous function expression"), SequenceEndType::AnonFunctionExprNoArgs, true)),
-            SequenceParseMode::FunctionArg => return Ok((sequence.with_name_str("argument"), SequenceEndType::FunctionArgEndBreak, true)),
+            SequenceParseMode::AnonFunctionExpr => return Ok(ParsedSequence {
+              sequence: sequence.with_name_str("anonymous function expression"),
+              end_type: SequenceEndType::AnonFunctionExprNoArgs,
+              is_printing: true,
+              extras: None,
+            }),
+            SequenceParseMode::FunctionArg => return Ok(ParsedSequence {
+              sequence: sequence.with_name_str("argument"),
+              end_type: SequenceEndType::FunctionArgEndBreak,
+              is_printing: true,
+              extras: None,
+            }),
             _ => unexpected_token_error!()
           }
         }),
@@ -537,15 +664,25 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               },
               _ => unreachable!()
             }
-            seq_add!(accessor);
+            emit!(accessor);
           }
         }),
         
         // Variable access end
         RantToken::RightAngle => no_flags!({
           match mode {
-            SequenceParseMode::VariableAssignment => return Ok((sequence.with_name_str("setter value"), SequenceEndType::VariableAccessEnd, true)),
-            SequenceParseMode::AccessorFallbackValue => return Ok((sequence.with_name_str("fallback value"), SequenceEndType::AccessorFallbackValueToEnd, true)),
+            SequenceParseMode::VariableAssignment => return Ok(ParsedSequence {
+              sequence: sequence.with_name_str("setter value"),
+              end_type: SequenceEndType::VariableAccessEnd,
+              is_printing: true,
+              extras: None,
+            }),
+            SequenceParseMode::AccessorFallbackValue => return Ok(ParsedSequence {
+              sequence: sequence.with_name_str("fallback value"),
+              end_type: SequenceEndType::AccessorFallbackValueToEnd,
+              is_printing: true,
+              extras: None,
+            }),
             _ => unexpected_token_error!()
           }
         }),
@@ -630,8 +767,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Colon can be either fragment or argument separator.
         RantToken::Colon => no_flags!({
           match mode {
-            SequenceParseMode::AnonFunctionExpr => return Ok((sequence.with_name_str("anonymous function expression"), SequenceEndType::AnonFunctionExprToArgs, true)),
-            _ => seq_add!(Rst::Fragment(InternalString::from(":")))
+            SequenceParseMode::AnonFunctionExpr => return Ok(ParsedSequence {
+              sequence: sequence.with_name_str("anonymous function expression"),
+              end_type: SequenceEndType::AnonFunctionExprToArgs,
+              is_printing: true,
+              extras: None,
+            }),
+            _ => emit_last_string!(),
           }
         }),
         
@@ -639,15 +781,35 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         RantToken::Semi => no_flags!({
           match mode {
             // If we're inside a function argument, terminate the sequence
-            SequenceParseMode::FunctionArg => return Ok((sequence.with_name_str("argument"), SequenceEndType::FunctionArgEndNext, true)),
+            SequenceParseMode::FunctionArg => return Ok(ParsedSequence {
+              sequence: sequence.with_name_str("argument"),
+              end_type: SequenceEndType::FunctionArgEndNext,
+              is_printing: true,
+              extras: None,
+            }),
             // Collection initializer
-            SequenceParseMode::CollectionInit => return Ok((sequence.with_name_str("collection item"), SequenceEndType::CollectionInitDelim, true)),
+            SequenceParseMode::CollectionInit => return Ok(ParsedSequence {
+              sequence: sequence.with_name_str("collection item"),
+              end_type: SequenceEndType::CollectionInitDelim,
+              is_printing: true,
+              extras: None,
+            }),
             // Variable assignment expression
-            SequenceParseMode::VariableAssignment => return Ok((sequence.with_name_str("variable assignment"), SequenceEndType::VariableAssignDelim, true)),
+            SequenceParseMode::VariableAssignment => return Ok(ParsedSequence {
+              sequence: sequence.with_name_str("variable assignment"),
+              end_type: SequenceEndType::VariableAssignDelim,
+              is_printing: true,
+              extras: None,
+            }),
             // Accessor fallback value
-            SequenceParseMode::AccessorFallbackValue => return Ok((sequence.with_name_str("fallback value"), SequenceEndType::AccessorFallbackValueToDelim, true)),
+            SequenceParseMode::AccessorFallbackValue => return Ok(ParsedSequence {
+              sequence: sequence.with_name_str("fallback"),
+              end_type: SequenceEndType::AccessorFallbackValueToDelim,
+              is_printing: true,
+              extras: None,
+            }),
             // If we're anywhere else, just print the semicolon like normal text
-            _ => seq_add!(Rst::Fragment(InternalString::from(";")))
+            _ => emit_last_string!(),
           }
         }),
         
@@ -661,7 +823,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
       // If in Single Item mode, return the sequence immediately without looping
       if mode == SequenceParseMode::SingleItem {
-        return Ok((sequence, SequenceEndType::SingleItemEnd, is_seq_printing))
+        return Ok(ParsedSequence {
+          sequence,
+          end_type: SequenceEndType::SingleItemEnd,
+          is_printing: is_seq_printing,
+          extras: None,
+        })
       }
       
       // Clear flag
@@ -671,23 +838,15 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     // Reached when the whole program has been read
     // This should only get hit for top-level sequences
     
-    // Make sure there are no dangling printflags
-    match next_print_flag {
-      PrintFlag::None => {},
-      PrintFlag::Hint => {
-        if let Some(flag_span) = last_print_flag_span.take() {
-          self.report_error(Problem::InvalidHint, &flag_span);
-        }
-      },
-      PrintFlag::Sink => {
-        if let Some(flag_span) = last_print_flag_span.take() {
-          self.report_error(Problem::InvalidSink, &flag_span);
-        }
-      }
-    }
+    check_dangling_printflags!();
     
     // Return the top-level sequence
-    Ok((sequence.with_name_str(MAIN_PROGRAM_SCOPE_NAME), SequenceEndType::ProgramEnd, is_seq_printing))
+    Ok(ParsedSequence {
+      sequence: sequence.with_name_str(MAIN_PROGRAM_SCOPE_NAME),
+      end_type: SequenceEndType::ProgramEnd,
+      is_printing: is_seq_printing,
+      extras: None,
+    })
   }
   
   /// Parses a list/map initializer.
@@ -706,14 +865,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         loop {
           self.reader.skip_ws();
           
-          let (seq, seq_end, _) = self.parse_sequence(SequenceParseMode::CollectionInit)?;
+          let ParsedSequence { sequence, end_type: seq_end, .. } = self.parse_sequence(SequenceParseMode::CollectionInit)?;
           
           match seq_end {
             SequenceEndType::CollectionInitDelim => {
-              sequences.push(Rc::new(seq));
+              sequences.push(Rc::new(sequence));
             },
             SequenceEndType::CollectionInitEnd => {
-              sequences.push(Rc::new(seq));
+              sequences.push(Rc::new(sequence));
               break
             },
             SequenceEndType::ProgramEnd => {
@@ -766,9 +925,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             return Err(())
           }
           self.reader.skip_ws();
-          let (value_expr, value_end, _) = self.parse_sequence(SequenceParseMode::CollectionInit)?;
+          let ParsedSequence { 
+            sequence: value_expr, 
+            end_type: value_expr_end, 
+            .. 
+          } = self.parse_sequence(SequenceParseMode::CollectionInit)?;
           
-          match value_end {
+          match value_expr_end {
             SequenceEndType::CollectionInitDelim => {
               pairs.push((key_expr, Rc::new(value_expr)));
             },
@@ -1043,7 +1206,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               }
 
               // Parse argument
-              let (arg_seq, arg_end, _) = if is_composed {
+              let ParsedSequence {
+                sequence: arg_seq,
+                end_type: arg_end,
+                ..
+              } = if is_composed {
                 self.var_stack.push_layer();
                 // Track compose value inside arguement scope
                 let compval_stats = VarStats {
@@ -1054,11 +1221,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   role: VarRole::ComposeValue,
                 };
                 self.var_stack.define(Identifier::from(COMPOSE_VALUE_NAME), compval_stats);
-                let (arg_seq, arg_end, _hint) = self.parse_sequence_inner(SequenceParseMode::FunctionArg)?;
+                let parsed_arg_expr = self.parse_sequence_inner(SequenceParseMode::FunctionArg)?;
                 is_compval_used |= self.var_stack.get(COMPOSE_VALUE_NAME).unwrap().reads > 0;
                 self.analyze_top_vars();
                 self.var_stack.pop_layer();
-                (arg_seq, arg_end, _hint)
+                parsed_arg_expr
               } else {
                 self.parse_sequence(SequenceParseMode::FunctionArg)?
               };
@@ -1117,7 +1284,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             role: VarRole::ComposeValue,
           };
           self.var_stack.define(Identifier::from(COMPOSE_VALUE_NAME), compval_stats);
-          let (func_expr, func_expr_end, _hint) = self.parse_sequence_inner(SequenceParseMode::AnonFunctionExpr)?;
+          let ParsedSequence {
+            sequence: func_expr,
+            end_type: func_expr_end,
+            ..
+          } = self.parse_sequence_inner(SequenceParseMode::AnonFunctionExpr)?;
           is_compval_used |= self.var_stack.get(COMPOSE_VALUE_NAME).unwrap().reads > 0;
           self.analyze_top_vars();
           self.var_stack.pop_layer();
@@ -1243,7 +1414,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
     if allow_anonymous && self.reader.eat_where(|t| matches!(t, Some((RantToken::Bang, ..)))) {
       self.reader.skip_ws();
-      let (anon_expr, anon_end_type, ..) = self.parse_sequence(SequenceParseMode::SingleItem)?;
+      let ParsedSequence {
+        sequence: anon_expr,
+        end_type: anon_end_type,
+        ..
+      } = self.parse_sequence(SequenceParseMode::SingleItem)?;
       match anon_end_type {
         SequenceEndType::SingleItemEnd => {
           idparts.push(AccessPathComponent::AnonymousValue(Rc::new(anon_expr)));
@@ -1463,9 +1638,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
     
     let start_span = self.reader.last_token_span();
-    let (seq, seq_end, _) = self.parse_sequence(SequenceParseMode::DynamicKey)?;
+    let ParsedSequence { sequence, end_type, .. } = self.parse_sequence(SequenceParseMode::DynamicKey)?;
     
-    match seq_end {
+    match end_type {
       SequenceEndType::DynamicKeyEnd => {},
       SequenceEndType::ProgramEnd => {
         // Hard error if block isn't closed
@@ -1476,7 +1651,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       _ => unreachable!()
     }
     
-    Ok(seq)
+    Ok(sequence)
   }
 
   /// Parses a function body and captures variables.
@@ -1520,8 +1695,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     let (_, mut capture_set) = self.capture_stack.pop().unwrap();
 
     match parse_result {
-      Ok((seq, seq_end, ..)) => {
-        match seq_end {
+      Ok(ParsedSequence { sequence, end_type, .. }) => {
+        match end_type {
           SequenceEndType::FunctionBodyEnd => {},
           SequenceEndType::ProgramEnd => {
             // Hard error if block isn't closed
@@ -1532,7 +1707,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           _ => unreachable!()
         }
   
-        Ok((seq, capture_set.drain().collect()))
+        Ok((sequence, capture_set.drain().collect()))
       },
       Err(()) => {
         Err(())
@@ -1552,18 +1727,32 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     // Keeps track of inherited hinting
     let mut auto_hint = false;
     // Block content
-    let mut sequences = vec![];
+    let mut elements = vec![];
     
     loop {
-      let (seq, seq_end, is_seq_printing) = self.parse_sequence(SequenceParseMode::BlockElementAny)?;
-      auto_hint |= is_seq_printing;
+      let ParsedSequence { 
+        sequence, 
+        end_type, 
+        is_printing, 
+        extras 
+      } = self.parse_sequence(SequenceParseMode::BlockElement)?;
+      auto_hint |= is_printing;
+
+      let element = BlockElement {
+        main: Rc::new(sequence),
+        weight: if let Some(ParsedSequenceExtras::WeightedBlockElement { weight_expr }) = extras {
+          Some(weight_expr)
+        } else {
+          None
+        },
+      };
       
-      match seq_end {
+      match end_type {
         SequenceEndType::BlockDelim => {
-          sequences.push(Rc::new(seq));
+          elements.push(element);
         },
         SequenceEndType::BlockEnd => {
-          sequences.push(Rc::new(seq));
+          elements.push(element);
           break
         },
         SequenceEndType::ProgramEnd => {
@@ -1578,9 +1767,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     
     // Figure out the printflag before returning the block
     if auto_hint && flag != PrintFlag::Sink {
-      Ok(Block::new(PrintFlag::Hint, sequences))
+      Ok(Block::new(PrintFlag::Hint, elements))
     } else {
-      Ok(Block::new(flag, sequences))
+      Ok(Block::new(flag, elements))
     }
   }
   
@@ -1804,18 +1993,22 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             // Definition and assignment
             RantToken::Equals => {
               self.reader.skip_ws();
-              let (var_assign_expr, end_type, ..) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
+              let ParsedSequence { 
+                sequence: setter_expr, 
+                end_type: setter_end_type, 
+                .. 
+              } = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
 
               let def_span = access_start_span.start .. self.reader.last_token_span().start;
               if is_const_def {
                 self.track_variable(&var_name, &access_kind, true, VarRole::Normal, &def_span);
-                add_accessor!(Rst::ConstDef(var_name, access_kind, Some(Rc::new(var_assign_expr))));
+                add_accessor!(Rst::ConstDef(var_name, access_kind, Some(Rc::new(setter_expr))));
               } else {
                 self.track_variable(&var_name, &access_kind, false, VarRole::Normal, &def_span);
-                add_accessor!(Rst::VarDef(var_name, access_kind, Some(Rc::new(var_assign_expr))));
+                add_accessor!(Rst::VarDef(var_name, access_kind, Some(Rc::new(setter_expr))));
               }
               
-              match end_type {
+              match setter_end_type {
                 SequenceEndType::VariableAssignDelim => {
                   continue 'read
                 },
@@ -1860,12 +2053,16 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             // If we hit a `?`, it's a getter with a fallback
             RantToken::Question => {
               self.reader.skip_ws();
-              let (fallback, end_type, ..) = self.parse_sequence(SequenceParseMode::AccessorFallbackValue)?;
+              let ParsedSequence {
+                sequence: fallback_expr,
+                end_type: fallback_end_type,
+                ..
+              } = self.parse_sequence(SequenceParseMode::AccessorFallbackValue)?;
 
               self.track_variable_access(&var_path, false, &var_path_span);
-              add_accessor!(Rst::VarGet(Rc::new(var_path), Some(Rc::new(fallback))));
+              add_accessor!(Rst::VarGet(Rc::new(var_path), Some(Rc::new(fallback_expr))));
 
-              match end_type {
+              match fallback_end_type {
                 SequenceEndType::AccessorFallbackValueToDelim => continue 'read,
                 SequenceEndType::AccessorFallbackValueToEnd => break 'read,
                 // Error
@@ -1879,7 +2076,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             // If we hit a '=' here, it's a setter
             RantToken::Equals => {
               self.reader.skip_ws();
-              let (var_assign_rhs, end_type, _) = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
+              let ParsedSequence {
+                sequence: setter_rhs_expr,
+                end_type: setter_rhs_end,
+                ..
+              } = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
               let assign_end_span = self.reader.last_token_span();
               let setter_span = super_range(&access_start_span, &assign_end_span);
               // Don't allow setters directly on anonymous values
@@ -1888,9 +2089,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               }
 
               self.track_variable_access(&var_path, true, &setter_span);
-              add_accessor!(Rst::VarSet(Rc::new(var_path), Rc::new(var_assign_rhs)));
+              add_accessor!(Rst::VarSet(Rc::new(var_path), Rc::new(setter_rhs_expr)));
 
-              match end_type {
+              match setter_rhs_end {
                 // Accessor was terminated
                 SequenceEndType::VariableAccessEnd => {                  
                   break 'read;

@@ -83,7 +83,11 @@ macro_rules! runtime_error {
 /// * "Call" means that all argument values are already known (either in the intent or on the value stack).
 pub enum Intent {
   /// Pop a value off the value stack and print it to the current frame's output.
-  PrintLastValue,
+  PrintLast,
+  /// Pops a map off the stack and loads it as a module with the specified name.
+  ImportLastAsModule { module_name: String, descope: usize },
+  /// Pops a value from the value stack and (if it's a valid string) attempts to import a module with that name.
+  RequireLast,
   /// Check if the active block is finished and either continue the block or pop the state from the stack
   CheckBlock,
   /// Pop a value off the stack and assign it to an existing variable.
@@ -124,8 +128,6 @@ pub enum Intent {
   BuildList { init: Rc<Vec<Rc<Sequence>>>, index: usize, list: RantList },
   /// Pop value and optional key from stack and add them to a map. If `pair_index` is out of range, print the map.
   BuildMap { init: Rc<Vec<(MapKeyExpr, Rc<Sequence>)>>, pair_index: usize, map: RantMap },
-  /// Pops a map off the stack and loads it as a module with the specified name.
-  LoadModule { module_name: String },
   /// Calls a function that accepts a mutable reference to the current runtime. Optionally interrupts the intent loop to force another tick.
   RuntimeCall { function: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, interrupt: bool },
   /// Drops all unwind states that are no longer within the call stack.
@@ -135,7 +137,7 @@ pub enum Intent {
 impl Intent {
   fn name(&self) -> &'static str {
     match self {
-      Intent::PrintLastValue => "print",
+      Intent::PrintLast => "print",
       Intent::CheckBlock => "check_block",
       Intent::SetVar { .. } => "set_var",
       Intent::DefVar { .. } => "def_var",
@@ -149,9 +151,10 @@ impl Intent {
       Intent::CallTemporal { .. } => "call_temporal",
       Intent::BuildList { .. } => "build_list",
       Intent::BuildMap { .. } => "build_map",
-      Intent::LoadModule { .. } => "load_module",
+      Intent::ImportLastAsModule { .. } => "load_module",
       Intent::RuntimeCall { .. } => "runtime_call",
       Intent::DropStaleUnwinds => "drop_stale_unwinds",
+      Intent::RequireLast => "require_last",
     }
   }
 }
@@ -311,9 +314,41 @@ impl<'rant> VM<'rant> {
     while let Some(intent) = self.cur_frame_mut().take_intent() {
       runtime_trace!("intent: {}", intent.name());
       match intent {
-        Intent::PrintLastValue => {
+        Intent::PrintLast => {
           let val = self.pop_val()?;
           self.cur_frame_mut().write_value(val);
+        },
+        Intent::RequireLast => {
+          let module_path = match self.pop_val()? {
+            RantValue::String(s) => s,
+            other => runtime_error!(RuntimeErrorType::ArgumentError, format!("@require: module path must be of type 'string', but was '{}'", other.type_name()))
+          };
+
+          // Get name of module from path
+          if let Some(module_name) = 
+          PathBuf::from(module_path.as_str())
+          .with_extension("")
+          .file_name()
+          .map(|name| name.to_str())
+          .flatten()
+          .map(|name| name.to_owned())
+          {
+            // Check if module is cached; if so, don't do anything
+            if let Some(RantValue::Map(module_cache_ref)) = self.context().get_global(crate::MODULES_CACHE_KEY) {
+              if let Some(RantValue::Map(_cached_module)) = module_cache_ref.borrow().raw_get(&module_name) {
+                continue
+              }
+            }
+
+            // If not cached, attempt to load it from file and run its root sequence
+            let caller_origin = Rc::clone(&self.cur_frame().origin());
+            let module_pgm = self.context_mut().try_load_module(module_path.as_str(), caller_origin).into_runtime_result()?;
+            self.cur_frame_mut().push_intent_front(Intent::ImportLastAsModule { module_name, descope: 0 });
+            self.push_frame(Rc::clone(&module_pgm.root), true)?;
+            continue
+          } else {
+            runtime_error!(RuntimeErrorType::ArgumentError, "module name is missing from path");
+          }
         },
         Intent::CheckBlock => {            
           self.check_block()?;
@@ -352,7 +387,7 @@ impl<'rant> VM<'rant> {
             // Run fallback if available
             (Err(_), Some(fallback)) => {
               if !override_print {
-                self.cur_frame_mut().push_intent_front(Intent::PrintLastValue);
+                self.cur_frame_mut().push_intent_front(Intent::PrintLast);
               }
               self.push_frame(fallback, true)?;
               return Ok(true)
@@ -738,7 +773,7 @@ impl<'rant> VM<'rant> {
             return Ok(true)
           }
         },
-        Intent::LoadModule { module_name } => {
+        Intent::ImportLastAsModule { module_name, descope } => {
           let module = self.pop_val()?;
 
           // Cache the module
@@ -750,7 +785,7 @@ impl<'rant> VM<'rant> {
             self.engine.set_global(crate::MODULES_CACHE_KEY, RantValue::Map(Rc::new(RefCell::new(cache))));
           }
 
-          self.def_var_value(&module_name, AccessPathKind::Descope(1), module, true)?;
+          self.def_var_value(&module_name, AccessPathKind::Descope(descope), module, true)?;
         },
         Intent::RuntimeCall { function, interrupt } => {
           function(self)?;
@@ -963,6 +998,10 @@ impl<'rant> VM<'rant> {
         Rst::EmptyVal => self.cur_frame_mut().write_value(RantValue::Empty),
         Rst::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
         Rst::BlockValue(block) => self.cur_frame_mut().write_value(RantValue::Block(Rc::clone(block))),
+        Rst::Require(module_path_seq) => {
+          self.cur_frame_mut().push_intent_front(Intent::RequireLast);
+          self.push_frame_flavored(Rc::clone(module_path_seq), true, StackFrameFlavor::ArgumentExpression)?;
+        },
         Rst::Nop => {},
         rst => {
           runtime_error!(RuntimeErrorType::InternalError, format!("unsupported node type: '{}'", rst.display_name()));
@@ -1039,7 +1078,7 @@ impl<'rant> VM<'rant> {
 
     // Tell frame to print output if it's available
     if is_printing && !override_print {
-      self.cur_frame_mut().push_intent_front(Intent::PrintLastValue);
+      self.cur_frame_mut().push_intent_front(Intent::PrintLast);
     }
 
     // Call the function
@@ -1306,7 +1345,7 @@ impl<'rant> VM<'rant> {
         BlockAction::Element(elem_seq) => {
           // Determine if we should print anything, or just push the result to the stack
           if is_printing {
-            self.cur_frame_mut().push_intent_front(Intent::PrintLastValue);
+            self.cur_frame_mut().push_intent_front(Intent::PrintLast);
           }
           // Push the next element
           self.push_frame_flavored(
@@ -1322,7 +1361,7 @@ impl<'rant> VM<'rant> {
         BlockAction::PipedElement { elem_func, pipe_func } => {
           // Determine if we should print anything, or just push the result to the stack
           if is_printing {
-            self.cur_frame_mut().push_intent_front(Intent::PrintLastValue);
+            self.cur_frame_mut().push_intent_front(Intent::PrintLast);
           }
 
           let flag = if is_printing {

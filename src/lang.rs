@@ -368,11 +368,11 @@ impl DerefMut for Sequence {
 #[derive(Debug)]
 pub struct Block {
   pub flag: PrintFlag,
-  pub elements: Rc<Vec<Rc<Sequence>>>
+  pub elements: Rc<Vec<BlockElement>>
 }
 
 impl Block {
-  pub fn new(flag: PrintFlag, elements: Vec<Rc<Sequence>>) -> Self {
+  pub fn new(flag: PrintFlag, elements: Vec<BlockElement>) -> Self {
     Block {
       flag,
       elements: Rc::new(elements)
@@ -383,6 +383,13 @@ impl Block {
   pub fn len(&self) -> usize {
     self.elements.len()
   }
+}
+
+/// A single element of a regular block.
+#[derive(Debug)]
+pub struct BlockElement {
+  pub main: Rc<Sequence>,
+  pub weight: Option<Rc<Sequence>>,
 }
 
 /// Describes the arity requirements of a function parameter.
@@ -653,6 +660,18 @@ pub enum Rst {
   Boolean(bool),
   /// Empty value
   EmptyVal,
+  /// Return
+  Return(Option<Rc<Sequence>>),
+  /// Continue
+  Continue(Option<Rc<Sequence>>),
+  /// Continue-last
+  Last(Option<Rc<Sequence>>),
+  /// Break
+  Break(Option<Rc<Sequence>>),
+  /// Clear output
+  Clear(Option<Rc<Sequence>>),
+  /// Require directive
+  Require(Rc<Sequence>),
   /// Provides debug information about the next sequence element
   DebugCursor(DebugInfo),
 }
@@ -673,12 +692,21 @@ impl Rst {
       Rst::Float(_) =>                        "float",
       Rst::Boolean(_) =>                      "boolean",
       Rst::EmptyVal =>                        "empty",
-      Rst::Nop =>                             "nothing",
+      Rst::Nop =>                             "no-op",
       Rst::VarDef(..) =>                      "variable definition",
       Rst::ConstDef(..) =>                    "constant definition",
       Rst::VarGet(..) =>                      "getter",
       Rst::VarSet(..) =>                      "setter",
-      _ =>                                    "???"
+      Rst::BlockValue(_) =>                   "block value",
+      Rst::ComposedCall(_) =>                 "composed call",
+      Rst::ComposeValue =>                    "compose value",
+      Rst::Return(_) =>                       "return",
+      Rst::Continue(_) =>                     "continue",
+      Rst::Last(_) =>                         "continue-last",
+      Rst::Break(_) =>                        "break",
+      Rst::Clear(_) =>                        "clear",
+      Rst::Require(_) =>                      "require",
+      Rst::DebugCursor(_) =>                  "debug cursor",
     }
   }
 }

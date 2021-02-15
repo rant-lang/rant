@@ -130,6 +130,8 @@ pub enum Problem {
   NestedFunctionDefMarkedConstant,
   ConstantReassignment(String),
   ConstantRedefinition(String),
+  InvalidKeyword(String),
+  WeightNotAllowed,
   FileNotFound(String),
   FileIOError(String),
 }
@@ -177,6 +179,10 @@ impl Problem {
       // Hint/sink errors (0130 - 0139)
       Problem::InvalidSink | Problem::InvalidSinkOn(_) =>         "R-0130",
       Problem::InvalidHint | Problem::InvalidHintOn(_) =>         "R-0131",
+
+      // Charms (0200 - 0249)
+      Problem::InvalidKeyword(_) =>                               "R-0200",
+      Problem::WeightNotAllowed =>                                "R-0201",
 
       // Common warnings (1000 - 1099)
       Problem::UnusedVariable(_) =>                               "R-1000",
@@ -230,6 +236,8 @@ impl Problem {
       Problem::NothingToCompose => "no compose value is available in this scope".to_owned(),
       Problem::ConstantReassignment(cname) => format!("reassignment of known constant '{}'", cname),
       Problem::ConstantRedefinition(cname) => format!("redefinition of known constant '{}'", cname),
+      Problem::InvalidKeyword(kw) => format!("invalid keyword: '@{}'", kw),
+      Problem::WeightNotAllowed => "@weight is not allowed in this context".to_owned(),
     }
   }
   
