@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc, mem, error::Error, fmt::Display};
+use std::{cell::RefCell, error::Error, fmt::Display, mem, ops::Index, rc::Rc};
 use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionRef, RantValue, ValueError, lang::{Block, BlockElement, PrintFlag, Sequence}, random::RantRng, runtime_error};
 use smallvec::SmallVec;
 use super::{IntoRuntimeResult, RuntimeError, RuntimeErrorType, RuntimeResult, StackFrameFlavor};
@@ -27,20 +27,77 @@ pub enum BlockAction {
   Separator(RantValue),
 }
 
+#[derive(Debug)]
+pub struct Weights {
+  pub weights: Vec<f64>,
+  sum: f64,
+}
+
+impl Weights {
+  #[inline]
+  pub fn new(capacity: usize) -> Self {
+    Self {
+      weights: Vec::with_capacity(capacity),
+      sum: 0.0,
+    }
+  }
+
+  #[inline]
+  pub fn push(&mut self, weight: f64) {
+    let weight = if weight == 0.0 || weight.is_normal() {
+      if weight < 0.0 {
+        (weight.abs() * 10.0).recip()
+      } else {
+        weight
+      }
+    } else {
+      1.0
+    };
+    self.weights.push(weight);
+    self.sum += weight;
+  }
+
+  #[inline]
+  pub fn len(&self) -> usize {
+    self.weights.len()
+  }
+
+  #[inline]
+  pub fn sum(&self) -> f64 {
+    self.sum
+  }
+
+  #[inline]
+  pub fn is_empty(&self) -> bool {
+    self.weights.is_empty()
+  }
+}
+
+impl Index<usize> for Weights {
+  type Output = f64;
+
+  #[inline]
+  fn index(&self, index: usize) -> &Self::Output {
+    &self.weights[index]
+  }
+}
+
 /// Stores state information for a block that is currently being resolved.
 #[derive(Debug)]
 pub struct BlockState {
   /// The elements of the block.
   elements: Rc<Vec<BlockElement>>,
-  /// Flag to short-circuit the block.
+  /// Element weights associated with the block
+  weights: Option<Weights>,
+  /// Flag to short-circuit the block
   force_stop: bool,
-  /// Indicates how block output should be handled.
+  /// Indicates how block output should be handled
   flag: PrintFlag,
-  /// The attributes associated with the block.
+  /// The attributes associated with the block
   attrs: AttributeFrame,
-  /// How many steps have been run.
+  /// How many steps have been run so far
   cur_steps: usize,
-  /// How many steps in total the block will run.
+  /// How many steps in total the block will run
   total_steps: usize,
   /// Indicates whether the previous step was eligible to be followed by a separator.
   prev_step_separated: bool,
@@ -59,12 +116,17 @@ impl BlockState {
       // TODO: Allow customization of default selector
       let next_index = self.attrs.selector.as_ref().map_or_else(
         // Default block selection behavior
-        || Ok(rng.next_usize(self.elements.len())), 
+        || {
+          Ok(if let Some(weights) = &self.weights {
+            rng.next_usize_weighted(self.elements.len(), weights.weights.as_slice(), weights.sum)
+          } else {
+            rng.next_usize(self.elements.len())
+          })
+        }, 
         // Selector behavior
         |sel| sel.borrow_mut().select(self.elements.len(), rng)
       )?;
 
-      // TODO: Use element weights
       let next_elem = Rc::clone(&self.elements[next_index].main);
 
       // If the pipe function is set, generate piped elements
@@ -189,10 +251,11 @@ impl Resolver {
 impl Resolver {
   /// Adds a new block state to the block stack.
   #[inline]
-  pub fn push_block(&mut self, block: &Block, flag: PrintFlag) {
+  pub fn push_block(&mut self, block: &Block, weights: Option<Weights>, flag: PrintFlag) {
     let attrs = self.take_attrs();
     let state = BlockState {
       elements: Rc::clone(&block.elements),
+      weights,
       flag: PrintFlag::prioritize(block.flag, flag),
       cur_steps: 0,
       total_steps: attrs.reps.get_rep_count_for(block),

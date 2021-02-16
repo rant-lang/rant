@@ -3,7 +3,7 @@ use crate::runtime::resolver::{SelectorMode, Reps, Selector};
 
 pub(crate) fn resolve(vm: &mut VM, value: RantValue) -> RantStdResult {
   if let RantValue::Block(block) = value {
-    vm.push_block(block.as_ref(), block.flag)?;
+    vm.pre_push_block(&block, block.flag)?;
     Ok(())
   } else {
     Err(RuntimeError {

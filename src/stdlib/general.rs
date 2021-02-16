@@ -181,7 +181,7 @@ pub(crate) fn try_(vm: &mut VM, (context, handler): (RantValue, Option<RantFunct
       vm.call_func(func, vec![], PrintFlag::Sink, false)?;
     },
     RantValue::Block(block) => {
-      vm.push_block(&block, PrintFlag::Sink)?;
+      vm.pre_push_block(&block, PrintFlag::Sink)?;
     }
     other => runtime_error!(RuntimeErrorType::ArgumentError, "try: cannot protect '{}' value; only functions and blocks can be protected", other.get_type())
   }

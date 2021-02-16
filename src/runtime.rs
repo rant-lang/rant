@@ -7,6 +7,8 @@ use crate::runtime::resolver::{SelectorError, Resolver, BlockAction};
 use std::{cell::RefCell, error::Error, fmt::{Debug, Display}, ops::Deref, rc::Rc};
 use smallvec::{SmallVec, smallvec};
 
+use self::resolver::Weights;
+
 pub(crate) mod format;
 pub(crate) mod resolver;
 mod output;
@@ -132,6 +134,8 @@ pub enum Intent {
   BuildList { init: Rc<Vec<Rc<Sequence>>>, index: usize, list: RantList },
   /// Pop value and optional key from stack and add them to a map. If `pair_index` is out of range, print the map.
   BuildMap { init: Rc<Vec<(MapKeyExpr, Rc<Sequence>)>>, pair_index: usize, map: RantMap },
+  /// Evaluate block weights and then run the block
+  BuildWeightedBlock { block: Rc<Block>, weights: Weights, pop_next_weight: bool, },
   /// Calls a function that accepts a mutable reference to the current runtime. Optionally interrupts the intent loop to force another tick.
   RuntimeCall { function: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, interrupt: bool },
   /// Drops all unwind states that are no longer within the call stack.
@@ -161,6 +165,7 @@ impl Intent {
       Intent::ReturnLast => "return_last",
       Intent::ContinueLast => "continue_last",
       Intent::BreakLast => "break_last",
+      Intent::BuildWeightedBlock { .. } => "build_weighted_block",
     }
   }
 }
@@ -309,7 +314,7 @@ impl<'rant> VM<'rant> {
     // Value stack should *always* be 1 when program ends.
     debug_assert_eq!(self.val_stack.len(), 1, "value stack is imbalanced");
     
-    // Once stack is empty, program is done-- return last frame's output as a string
+    // Once stack is empty, program is done-- return last frame's output
     Ok(self.pop_val().unwrap_or_default())
   }
 
@@ -341,6 +346,44 @@ impl<'rant> VM<'rant> {
         },
         Intent::CheckBlock => {            
           self.check_block()?;
+        },
+        Intent::BuildWeightedBlock { block, mut weights, mut pop_next_weight } => {
+          while weights.len() < block.elements.len() {
+            if pop_next_weight {
+              let weight_value = self.pop_val()?;
+              weights.push(match weight_value {
+                RantValue::Int(n) => n as f64,
+                RantValue::Float(n) => n,
+                other => runtime_error!(RuntimeErrorType::ArgumentError, format!("weight values cannot be of type '{}'", other.type_name())),
+              });
+              pop_next_weight = false;
+              continue
+            }
+
+            match &block.elements[weights.len()].weight {
+              Some(weight) => match weight {
+                BlockWeight::Dynamic(weight_expr) => {
+                  let weight_expr = Rc::clone(weight_expr);
+                  self.cur_frame_mut().push_intent_front(Intent::BuildWeightedBlock {
+                    block,
+                    weights,
+                    pop_next_weight: true,
+                  });
+                  self.push_frame(weight_expr, true)?;
+                  return Ok(true)
+                },
+                BlockWeight::Constant(weight_value) => {
+                  weights.push(*weight_value);
+                },
+              },
+              None => {
+                weights.push(1.0);
+              },
+            }
+          }
+
+          // Weights are finished
+          self.push_block(block.as_ref(), Some(weights), block.flag)?;
         },
         Intent::SetVar { vname, access_kind } => {
           let val = self.pop_val()?;
@@ -807,7 +850,7 @@ impl<'rant> VM<'rant> {
           return Ok(true)
         },
         Rst::Block(block) => {
-          self.push_block(block, block.flag)?;
+          self.pre_push_block(&block, block.flag)?;
           return Ok(true)
         },
         Rst::VarDef(vname, access_kind, val_expr) => {
@@ -1401,7 +1444,7 @@ impl<'rant> VM<'rant> {
             },
             // If the separator is a block, resolve it
             RantValue::Block(sep_block) => {
-              self.push_block(&sep_block, sep_block.flag)?;
+              self.pre_push_block(&sep_block, sep_block.flag)?;
             },
             // Print the separator if it's a non-function value
             val => {
@@ -1415,11 +1458,27 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
+  /// Performs any necessary preparation (such as pushing weight intents) before pushing a block.
+  /// If the block can be pushed immediately, it will be.
+  #[inline]
+  pub fn pre_push_block(&mut self, block: &Rc<Block>, flag: PrintFlag) -> RuntimeResult<()> {
+    if block.is_weighted {
+      self.cur_frame_mut().push_intent_front(Intent::BuildWeightedBlock {
+        block: Rc::clone(block),
+        weights: Weights::new(block.elements.len()),
+        pop_next_weight: false,
+      });
+    } else {
+      self.push_block(block, None, block.flag)?;
+    }
+    Ok(())
+  }
+
   /// Consumes attributes and pushes a block onto the resolver stack.
-  #[inline(always)]
-  pub fn push_block(&mut self, block: &Block, flag: PrintFlag) -> RuntimeResult<()> {
+  #[inline]
+  pub fn push_block(&mut self, block: &Block, weights: Option<Weights>, flag: PrintFlag) -> RuntimeResult<()> {
     // Push a new state onto the block stack
-    self.resolver.push_block(block, flag);
+    self.resolver.push_block(block, weights, flag);
 
     // Check the block to make sure it actually does something.
     // If the block has some skip condition, it will automatically remove it, and this method will have no net effect.

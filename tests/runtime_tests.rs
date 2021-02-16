@@ -384,8 +384,8 @@ fn getter_fallback_from_key() {
 }
 
 #[test]
-fn top_level_return() {
-  test_rant_file!("sources/top_level_return.rant");
+fn charms_top_level_return() {
+  test_rant_file!("sources/charms/top_level_return.rant");
 }
 
 #[test]

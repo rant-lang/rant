@@ -390,8 +390,19 @@ impl Block {
 /// A single element of a regular block.
 #[derive(Debug)]
 pub struct BlockElement {
+  /// The main body of the element.
   pub main: Rc<Sequence>,
-  pub weight: Option<Rc<Sequence>>,
+  /// The weight of the element.
+  pub weight: Option<BlockWeight>,
+}
+
+/// A block weight.
+#[derive(Debug)]
+pub enum BlockWeight {
+  /// A weight that is evaluated from an expression.
+  Dynamic(Rc<Sequence>),
+  /// A weight that is a constant value.
+  Constant(f64),
 }
 
 /// Describes the arity requirements of a function parameter.
@@ -625,7 +636,7 @@ pub enum Rst {
   /// Program sequence
   Sequence(Rc<Sequence>),
   /// Rant block containing zero or more sequences
-  Block(Block),
+  Block(Rc<Block>),
   /// Block as value
   BlockValue(Rc<Block>),
   /// List initializer

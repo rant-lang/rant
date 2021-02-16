@@ -85,6 +85,23 @@ impl RantRng {
   pub fn next_usize(&self, max: usize) -> usize {
     self.rng.borrow_mut().gen_range(0 .. max)
   }
+
+  #[inline]
+  pub(crate) fn next_usize_weighted(&self, max: usize, weights: &[f64], weight_sum: f64) -> usize {
+    if weight_sum > 0.0 {
+      let mut rem = self.rng.borrow_mut().gen_range(0.0 .. weight_sum);
+      for (i, w) in weights.iter().enumerate() {
+        if *w == 0.0 {
+          continue
+        }
+        if &rem < w {
+          return i
+        }
+        rem -= w;
+      }
+    }    
+    max - 1
+  }
   
   /// Generates a pseudorandom `f64` between 0 and 1.
   #[inline]

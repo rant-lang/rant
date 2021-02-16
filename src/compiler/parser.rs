@@ -475,7 +475,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           }
           
-          emit!(Rst::Block(block));
+          emit!(Rst::Block(Rc::new(block)));
         },
 
         // Compose operator
@@ -1724,7 +1724,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     let start_pos = self.reader.last_token_pos();
     // Keeps track of inherited hinting
     let mut auto_hint = false;
-    /// Is the block weighted?
+    // Is the block weighted?
     let mut is_weighted = false;
     // Block content
     let mut elements = vec![];
@@ -1736,13 +1736,19 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         is_printing, 
         extras 
       } = self.parse_sequence(SequenceParseMode::BlockElement)?;
+      
       auto_hint |= is_printing;
 
       let element = BlockElement {
         main: Rc::new(sequence),
         weight: if let Some(ParsedSequenceExtras::WeightedBlockElement { weight_expr }) = extras {
           is_weighted = true;
-          Some(weight_expr)
+          // Optimize constant weights
+          Some(match (weight_expr.len(), weight_expr.first().map(Rc::as_ref)) {
+            (1, Some(Rst::Integer(n))) => BlockWeight::Constant(*n as f64),
+            (1, Some(Rst::Float(n))) => BlockWeight::Constant(*n),
+            _ => BlockWeight::Dynamic(weight_expr)
+          })
         } else {
           None
         },
