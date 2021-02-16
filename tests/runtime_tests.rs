@@ -389,6 +389,36 @@ fn charms_top_level_return() {
 }
 
 #[test]
+fn charms_func_return_output() {
+  test_rant_file!("sources/charms/func_return_output.rant");
+}
+
+#[test]
+fn charms_func_return_value() {
+  test_rant_file!("sources/charms/func_return_value.rant");
+}
+
+#[test]
+fn charms_rep_continue_output() {
+  test_rant_file!("sources/charms/rep_continue_output.rant");
+}
+
+#[test]
+fn charms_rep_continue_value() {
+  test_rant_file!("sources/charms/rep_continue_value.rant");
+}
+
+#[test]
+fn charms_rep_break_output() {
+  test_rant_file!("sources/charms/rep_break_output.rant");
+}
+
+#[test]
+fn charms_rep_break_value() {
+  test_rant_file!("sources/charms/rep_break_value.rant");
+}
+
+#[test]
 fn assert_pass() {
   test_rant_file!("sources/assert/assert_pass.rant");
 }

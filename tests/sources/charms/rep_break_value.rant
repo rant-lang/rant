@@ -1,0 +1,3 @@
+<%test-val = [rep:3]{A @break B}>
+
+[assert-eq: <test-val>; B]

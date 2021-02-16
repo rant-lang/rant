@@ -27,17 +27,17 @@ pub trait FromRant: Sized {
 }
 
 trait ToCastResult<T> {
-  fn to_cast_result(self) -> Result<T, CastError>;
+  fn into_cast_result(self) -> Result<T, CastError>;
 }
 
 impl<T> ToCastResult<T> for Result<T, CastError> {
-  fn to_cast_result(self) -> Result<T, CastError> {
+  fn into_cast_result(self) -> Result<T, CastError> {
     self
   }
 }
 
 impl ToCastResult<i64> for i64 {
-  fn to_cast_result(self) -> Result<i64, CastError> {
+  fn into_cast_result(self) -> Result<i64, CastError> {
     Ok(self)
   }
 }
@@ -50,7 +50,7 @@ fn rant_cast_error(from: &'static str, to: &'static str, err: CastError) -> Valu
       CastError::Overflow => "integer overflow",
       CastError::Underflow => "integer underflow",
       CastError::Infinite => "infinity",
-      CastError::NaN => "not a number"
+      CastError::NaN => "NaN"
     }.to_owned())
   }
 }
@@ -59,7 +59,7 @@ macro_rules! rant_int_conversions {
   ($int_type: ident) => {
     impl ToRant for $int_type {
       fn to_rant(self) -> ValueResult<RantValue> {
-        match i64(self).to_cast_result() {
+        match i64(self).into_cast_result() {
           Ok(i) => Ok(RantValue::Int(i)),
           Err(err) => Err(rant_cast_error(
             stringify!($int_type), 

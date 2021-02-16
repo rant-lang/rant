@@ -7,10 +7,6 @@
 * Added block weights using the `@weight` charm
 * `return`, `continue`, and `break` are now reimplemented as charms
 
-### Changes
-
-### Fixes
-
 ### Removed
 * Removed from stdlib: `[return]`, `[continue]`, `[break]`
 

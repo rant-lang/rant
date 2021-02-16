@@ -1,0 +1,5 @@
+[$foo] {
+  bar @return baz
+}
+
+[foo |> assert-eq: baz]
