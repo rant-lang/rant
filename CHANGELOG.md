@@ -4,6 +4,7 @@
 
 ### New
 * Added "charms": right-associative operators for control flow
+* Added block weights using the `@weight` charm
 * `return`, `continue`, and `break` are now reimplemented as charms
 
 ### Changes
