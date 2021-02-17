@@ -1,23 +1,19 @@
-# This one was a really bad idea... but someone had to do it.
-# Please don't actually use Rant for this; it is neither practical nor performant.
+# I wrote this mostly as a joke. It's very slow.
 
 [%vlen: vec] { [map: <vec>; [?: x] { [pow: <x>; 2.0] } |> sum |> sqrt] }
 [%vadd: vec-a; vec-b] { [zip: <vec-a>; <vec-b>; <add>] }
 [%vsub: vec-a; vec-b] { [zip: <vec-a>; <vec-b>; <sub>] }
-[%vdiv: vec-a; vec-b] { [zip: <vec-a>; <vec-b>; <div>] }
 [%vmulf: vec; b] { [map: <vec>; [?:x]{[mul:<x>;<b>]}] }
-[%vsubf: vec; b] { [map: <vec>; [?:x]{[sub:<x>;<b>]}] }
 [%vdivf: vec; b] { [map: <vec>; [?:x]{[div:<x>;<b>]}] }
 
 [%mandelbrot: w; h; n] {
-  [rep: <h>]
-  [sep: \n]
+  [rep: <h>][sep: \n]
   {
     <$y = [step-index |> float]>
     [rep: <w>]
     {
-      <$x = [step-index |> float |> mul: 0.35]>
       <
+        $x = [step-index |> float |> mul: 0.35];
         $c = [vdivf: (<x>; <y>); <h> |> vmulf: 2.0 |> vsub: (2.0; 1.0)];
         $z = (0.0; 0.0);
         $out = \s;
@@ -29,11 +25,7 @@
           ([pow: <z/0>; 2 |> sub: [pow: <z/1>; 2]]; [mul: <z/0>; <z/1> |> mul: 2.0]); 
           <c>
         ]>
-        [if: [vlen: <z> |> gt: 2.0]]
-        {
-          <out = \#>
-          [break]
-        }
+        [if: [vlen: <z> |> gt: 2.0]] { <out = \#> @break }
       }
       <out>
     }

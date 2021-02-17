@@ -8,73 +8,64 @@
 
 
 
-**Rant** is a high-level language for **procedural templating**, providing a diverse and powerful toolset for easily creating dynamic code templates, game dialogue, stories, name generators, test data, and much more.
+**Rant** is a high-level procedural templating language with a diverse toolset for easily creating dynamic code templates, game dialogue, stories, name generators, test data, and much more.
 
 ***
 
-## WARNING:
+## NOTICE:
 
 **This project is in alpha. Expect to see broken/missing features.**
 
-**While I encourage you to try it out and give feedback, please do not use in production environments until a stable version is released.**
+**While I encourage you to try it out and give feedback, please don't use in production environments until a stable version is released.**
 
-**Features may appear or disappear at any time for any reason. Assume that every alpha release will be breaking.**
+**Features may appear or disappear at any time for any reason. Assume that every alpha release is breaking.**
 
 ***
 
 ## Introducing Rant 4
 
-Rant 4 is a complete redesign and reimplementation from the ground up, written in Rust. 
+Rant 4 is a complete redesign and reimplementation of the Rant language, written in Rust. 
 It's designed around the needs of everyone-- programmers, writers, and everyone in-between!
 
-### Intuitive syntax
 
 Rant is basically the opposite of [Regex](https://en.wikipedia.org/wiki/Regular_expression): 
 just as a regular expression compares inputs to a pattern, Rant generates matching outputs from a pattern!
 
-Consider this regex:
+## Why Rant?
 
-```regex
-# Matching inputs:
-#  - "Hey world!"
-#  - "Hi world!"
-#  - "Hello world!"
+🧰 **Painless API** <br/> 
+Rant's API is designed to be as straightforward to use as possible. Integrating Rant into your project only takes a few lines of code.
 
-(Hey|Hi|Hello) world!
-```
+💻 **Cross-Platform** <br/> 
+Write once, run anywhere-- Rant code is fully portable across all supported platforms.
 
-The Rant equivalent is nearly identical:
+🎲 **Built with ♥ for RNG** <br/>
+Throw the dice with a wide array of powerful, built-in utilities for generating random numbers, strings, booleans, lists, list subsets, and much more. Synchronize RNG behavior in different parts of your program with a single function call.
 
-```rant
-{Hey|Hi|Hello} world!
+The built-in RNG can be externally seeded to produce deterministic program outputs.
 
-# Possible outputs:
-#  - "Hey world!"
-#  - "Hi world!"
-#  - "Hello world!"
-```
+🔱 **Advanced Branching** <br/> 
+Fine-tune branching behavior with a multitude of configuration options and branch selection modes for iterative, random, and weighted selection.
 
-## Features
+🎨 **Dynamic Variable System** <br/> 
+Inspired by popular scripting languages, Rant's dynamic variable system lets you work with common primitives, collection types, callbacks, and more without any fuss.
 
-🧰 **Painless API** <br/> Rant's API is designed to be as straightforward as possible. Integrating Rant into your project only takes a few lines of code!
+🖨 **Print Semantics** <br/> 
+Rant is all about "printing": each lexical scope has an output that can be printed to, which then prints itself to the parent output, and so on. This lets you easily build strings and collections from multiple parts with minimal code bloat.
 
-💻 **Cross-Platform** <br/> Write once, run anywhere-- Rant code is fully portable across all supported platforms.
+🧬 **Delightful Combinatorics** <br/> 
+Effortlessly perform nested mappings, filters, zips, combinations, and more with Rant's intuitive function composition and iteration engine.
 
-📚 **Rant Standard Library** <br/> Rant's comprehensive standard library lets you get more done and iterate rapidly with far less boilerplate than other languages.
+🎛 **Automatic Formatting** <br/> 
+Passively format text output with automatic capitalization, whitespace normalization, and number formatting.
 
-🔱 **Advanced Branching** <br/> Fine-tune branching behavior with a multitude of configuration options and branch selection modes, including several iterative and randomized selection modes.
+🧩 **Modules** <br/> 
+Create libraries of Rant functions and share them between your programs using Rant's simple module system.
 
-🎨 **Dynamic Variable System** <br/> Inspired by other popular languages, Rant's built-in primitive and collection types let you represent whatever data you need.
+📚 **Rant Standard Library** <br/> 
+Rant's comprehensive standard library lets you get more done and iterate rapidly with far less boilerplate than other languages.
 
-🖨 **Print Semantics** <br/> Every scope has an "output" you can "print" to. Easily build strings and collections without the need for temporary variables.
-
-🧬 **Delightful Combinatorics** <br/> Easily perform nested mappings, filters, zips, combinations, and more with Rant's powerful function composition and iteration engine. 
-
-🎛 **Automatic Formatting** <br/> Passively format text output with automatic capitalization, whitespace normalization, and number formatting.
-
-🧩 **Modules** <br/> Create libraries of Rant functions to easily share between your programs.
-
-🧶 **Entanglement** <br/> Synchronize RNG behavior in different parts of your program with a single function call.
+## Language 
 
 ## Getting started
 
@@ -127,6 +118,10 @@ fn main() -> Result<(), Box<dyn Error>> {
   Ok(())
 }
 ```
+
+## [Examples](./examples/rant/)
+
+This repository contains a directory of example programs written in Rant for you to learn from. Check them out!
 
 ## Documentation
 
