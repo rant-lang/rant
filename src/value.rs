@@ -637,10 +637,10 @@ impl PartialEq for RantSpecial {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RantRange {
-  pub start: i64,
-  pub end: i64,
-  pub step: u64,
-  pub is_inclusive: bool,
+  start: i64,
+  end: i64,
+  step: u64,
+  is_inclusive: bool,
 }
 
 impl RantRange {
@@ -695,6 +695,30 @@ impl Display for RantRange {
 }
 
 impl RantRange {
+  /// Gets the start bound of the range.
+  #[inline]
+  pub fn start(&self) -> i64 {
+    self.start
+  }
+
+  /// Gets the end bound of the range.
+  #[inline]
+  pub fn end(&self) -> i64 {
+    self.end
+  }
+
+  /// Indicates whether the end range bound is inclusive.
+  #[inline]
+  pub fn is_inclusive(&self) -> bool {
+    self.is_inclusive
+  }
+
+  /// Gets the step size of the range.
+  #[inline]
+  pub fn step(&self) -> u64 {
+    self.step
+  }
+
   /// Gets the absolute difference between the start and end bounds, ignoring the step size.
   #[inline(always)]
   pub fn abs_size(&self) -> usize {
@@ -706,12 +730,13 @@ impl RantRange {
   pub fn len(&self) -> usize {
     let abs_size = self.abs_size();
     if abs_size > 0 {
-      (abs_size - 1) / self.step.max(1) as usize + 1
+      (abs_size - 1) / self.step as usize + 1
     } else {
       0
     }
   }
 
+  /// Gets a reversed copy of the range.
   #[inline]
   pub fn reversed(&self) -> Self {
     if self.is_inclusive {
@@ -749,33 +774,31 @@ impl RantRange {
   pub fn is_empty(&self) -> bool {
     let size = self.abs_size() as u64;
     let incl = self.is_inclusive;
-    (!incl && self.start == self.end) || (!incl && self.step > size) || (incl && self.step >= size)
+    (!incl && (self.start == self.end || self.step > size)) || (incl && self.step >= size)
   }
 
   /// Gets the nth value in the range.
   #[inline]
   pub fn get(&self, index: usize) -> Option<i64> {
     // Does it go backwards?
-    let abs_step = self.step.max(1) as usize;
+    let abs_step = self.step as usize;
     let is_negative_step = self.end < self.start;
     let abs_range_size = self.abs_size();
     let abs_range_progress = abs_step * index;
 
-    if abs_range_progress >= abs_range_size {
-      return None
-    }
-
-    Some(if is_negative_step {
-      self.start.saturating_sub(abs_range_progress as i64)
-    } else {
-      self.start.saturating_add(abs_range_progress as i64)
+    (abs_range_progress < abs_range_size).then(|| {
+      if is_negative_step {
+        self.start.saturating_sub(abs_range_progress as i64)
+      } else {
+        self.start.saturating_add(abs_range_progress as i64)
+      }
     })
   }
 
   #[inline]
   fn get_bound(&self, index: usize) -> Option<i64> {
     // Does it go backwards?
-    let abs_step = self.step.max(1) as usize;
+    let abs_step = self.step as usize;
     let is_negative_step = self.end < self.start;
     let abs_range_size = self.abs_size();
     let abs_range_progress = abs_step * index;
@@ -784,17 +807,16 @@ impl RantRange {
       return Some(self.end)
     }
 
-    if abs_range_progress > abs_range_size {
-      return None
-    }
-
-    Some(if is_negative_step {
-      self.start.saturating_sub(abs_range_progress as i64)
-    } else {
-      self.start.saturating_add(abs_range_progress as i64)
+    (abs_range_progress <= abs_range_size).then(|| {
+      if is_negative_step {
+        self.start.saturating_sub(abs_range_progress as i64)
+      } else {
+        self.start.saturating_add(abs_range_progress as i64)
+      }
     })
   }
 
+  /// Enumerates the values of the range and returns the results as a Rant `list` object.
   #[inline]
   pub fn to_list(&self) -> RantList {
     let n = self.len();

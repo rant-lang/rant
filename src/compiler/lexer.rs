@@ -180,7 +180,7 @@ fn parse_temporal_spread_label(lex: &mut Lexer<RantToken>) -> InternalString {
   InternalString::from(&slice[1 .. slice.len() - 1])
 }
 
-fn parse_string_literal(lex: &mut Lexer<RantToken>) -> Option<InternalString> {
+fn parse_string_literal(lex: &mut Lexer<RantToken>) -> InternalString {
   let literal = lex.slice();
   let literal_content = &literal[1..literal.len() - 1];
   let mut string_content = InternalString::new();
@@ -200,7 +200,7 @@ fn parse_string_literal(lex: &mut Lexer<RantToken>) -> Option<InternalString> {
       }
     }
   }
-  Some(string_content)
+  string_content
 }
 
 fn parse_keyword(lex: &mut Lexer<RantToken>) -> InternalString {

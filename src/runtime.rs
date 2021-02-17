@@ -2,12 +2,12 @@ pub use stack::*;
 
 use crate::*;
 use crate::lang::*;
-use crate::runtime::resolver::{SelectorError, Resolver, BlockAction};
+use crate::util::*;
+use self::resolver::*;
 
 use std::{cell::RefCell, error::Error, fmt::{Debug, Display}, ops::Deref, rc::Rc};
 use smallvec::{SmallVec, smallvec};
 
-use self::resolver::Weights;
 
 pub(crate) mod format;
 pub(crate) mod resolver;
@@ -354,6 +354,8 @@ impl<'rant> VM<'rant> {
               weights.push(match weight_value {
                 RantValue::Int(n) => n as f64,
                 RantValue::Float(n) => n,
+                RantValue::Boolean(b) => bf64(b),
+                RantValue::Empty => 1.0,
                 other => runtime_error!(RuntimeErrorType::ArgumentError, format!("weight values cannot be of type '{}'", other.type_name())),
               });
               pop_next_weight = false;
@@ -1469,7 +1471,7 @@ impl<'rant> VM<'rant> {
         pop_next_weight: false,
       });
     } else {
-      self.push_block(block, None, block.flag)?;
+      self.push_block(block, None, flag)?;
     }
     Ok(())
   }

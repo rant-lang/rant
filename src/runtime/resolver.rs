@@ -29,7 +29,7 @@ pub enum BlockAction {
 
 #[derive(Debug)]
 pub struct Weights {
-  pub weights: Vec<f64>,
+  weights: Vec<f64>,
   sum: f64,
 }
 
@@ -68,8 +68,18 @@ impl Weights {
   }
 
   #[inline]
+  pub fn is_zero(&self) -> bool {
+    self.sum <= 0.0
+  }
+
+  #[inline]
   pub fn is_empty(&self) -> bool {
     self.weights.is_empty()
+  }
+
+  #[inline]
+  pub fn as_slice(&self) -> &[f64] {
+    self.weights.as_slice()
   }
 }
 
@@ -106,7 +116,9 @@ pub struct BlockState {
 impl BlockState {
   #[inline]
   pub fn next_element(&mut self, rng: &RantRng) -> Result<Option<BlockAction>, SelectorError> {
-    if self.is_done() { return Ok(None) }
+    if self.is_done() || self.weights.as_ref().map_or(false, |weights| weights.is_zero()) { 
+      return Ok(None) 
+    }
 
     // Check if element or separator is next
     if self.cur_steps == 0 || self.prev_step_separated {
@@ -118,7 +130,7 @@ impl BlockState {
         // Default block selection behavior
         || {
           Ok(if let Some(weights) = &self.weights {
-            rng.next_usize_weighted(self.elements.len(), weights.weights.as_slice(), weights.sum)
+            rng.next_usize_weighted(self.elements.len(), weights.as_slice(), weights.sum)
           } else {
             rng.next_usize(self.elements.len())
           })

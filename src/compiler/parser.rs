@@ -335,9 +335,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         (queue $ws:expr) => {
           pending_whitespace = Some($ws);
         };
-        (ignore prev) => {
+        (ignore prev) => {{
+          #![allow(unused_assignments)]
           pending_whitespace = None;
-        };
+        }};
         (ignore next) => {
           self.reader.skip_ws();
         };

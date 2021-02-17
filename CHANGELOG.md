@@ -1,6 +1,16 @@
 # Changelog
 
-## 4.0.0-alpha.18 (unreleased)
+## 4.0.0-alpha.19 (unreleased)
+
+### New
+
+### Changes
+* Encapsulate `RantRange` fields to prevent unwanted mutation
+
+### Fixes
+* (internal) Fix `flag` parameter on `rant::runtime::VM::pre_push_block()` not being used
+
+## 4.0.0-alpha.18
 
 ### New
 * Added "charms": right-associative operators for control flow
