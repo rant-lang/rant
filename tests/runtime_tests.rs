@@ -419,6 +419,11 @@ fn charms_rep_break_value() {
 }
 
 #[test]
+fn charms_weight_all_zero() {
+  test_rant_file!("sources/charms/weight_all_zero.rant");
+}
+
+#[test]
 fn assert_pass() {
   test_rant_file!("sources/assert/assert_pass.rant");
 }
