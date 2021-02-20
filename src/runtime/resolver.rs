@@ -44,12 +44,8 @@ impl Weights {
 
   #[inline]
   pub fn push(&mut self, weight: f64) {
-    let weight = if weight == 0.0 || weight.is_normal() {
-      if weight < 0.0 {
-        (weight.abs() * 10.0).recip()
-      } else {
-        weight
-      }
+    let weight = if weight <= 0.0 || weight.is_normal() {
+      weight.max(0.0)
     } else {
       1.0
     };
