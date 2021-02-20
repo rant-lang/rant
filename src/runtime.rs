@@ -844,7 +844,7 @@ impl<'rant> VM<'rant> {
     while let Some(rst) = &self.cur_frame_mut().seq_next() {
       match Rc::deref(rst) {        
         Rst::ListInit(elements) => {
-          self.cur_frame_mut().push_intent_front(Intent::BuildList { init: Rc::clone(elements), index: 0, list: RantList::new() });
+          self.cur_frame_mut().push_intent_front(Intent::BuildList { init: Rc::clone(elements), index: 0, list: RantList::with_capacity(elements.len()) });
           return Ok(true)
         },
         Rst::MapInit(elements) => {
