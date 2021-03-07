@@ -15,6 +15,7 @@ pub struct CallStack {
 }
 
 impl Default for CallStack {
+  #[inline]
   fn default() -> Self {
     Self::new()
   }

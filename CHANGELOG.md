@@ -9,6 +9,8 @@
 
 ### Fixes
 * (internal) Fix `flag` parameter on `rant::runtime::VM::pre_push_block()` not being used
+* Fix nested function lookups accidentally considering their container as a function
+* Fix incorrect const redef error on nested function definitions against a constant collection
 
 ## 4.0.0-alpha.18
 

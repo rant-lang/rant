@@ -1287,6 +1287,8 @@ impl<'rant> VM<'rant> {
   /// Runs a getter.
   #[inline]
   fn get_value(&mut self, path: Rc<AccessPath>, dynamic_key_count: usize, override_print: bool, prefer_function: bool) -> RuntimeResult<()> {
+    let prefer_function = prefer_function && path.len() == 1;
+
     // Gather evaluated dynamic keys from stack
     let mut dynamic_keys = vec![];
     for _ in 0..dynamic_key_count {

@@ -25,7 +25,7 @@
 ## Introducing Rant 4
 
 Rant 4 is a complete redesign and reimplementation of the Rant language, written in Rust. 
-It's designed around the needs of everyone-- programmers, writers, and everyone in-between!
+It's designed with usability in mind for everyone-- programmers, writers, and everyone in-between!
 
 
 Rant is basically the opposite of [Regex](https://en.wikipedia.org/wiki/Regular_expression): 
@@ -54,7 +54,7 @@ Inspired by popular scripting languages, Rant's dynamic variable system lets you
 Rant is all about "printing": each lexical scope has an output that can be printed to, which then prints itself to the parent output, and so on. This lets you easily build strings and collections from multiple parts with minimal code bloat.
 
 🧬 **Delightful Combinatorics** <br/> 
-Effortlessly perform nested mappings, filters, zips, combinations, and more with Rant's intuitive function composition and iteration engine.
+Effortlessly perform nested mappings, filters, zips, combinations, and more with Rant's intuitive function call syntax.
 
 🎛 **Automatic Formatting** <br/> 
 Passively format text output with automatic capitalization, whitespace normalization, and number formatting.
@@ -64,8 +64,6 @@ Create libraries of Rant functions and share them between your programs using Ra
 
 📚 **Rant Standard Library** <br/> 
 Rant's comprehensive standard library lets you get more done and iterate rapidly with far less boilerplate than other languages.
-
-## Language 
 
 ## Getting started
 

@@ -1107,9 +1107,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let (body, captures) = self.parse_func_body(&params)?;
 
           // Track variable
-          if let Some(id) = &func_path.var_name() {
-            let func_def_span = super_range(&start_span, &end_func_sig_span);
-            self.track_variable(id, &func_path.kind(), is_const, VarRole::Function, &func_def_span);
+          if func_path.is_variable() {
+            if let Some(id) = &func_path.var_name() {
+              let func_def_span = super_range(&start_span, &end_func_sig_span);
+              self.track_variable(id, &func_path.kind(), is_const, VarRole::Function, &func_def_span);
+            }
           }
           
           Ok(Rst::FuncDef(FunctionDef {
