@@ -13,9 +13,9 @@ use cast::Error as CastError;
 use std::{rc::Rc, ops::{DerefMut, Deref}, cell::RefCell};
 
 /// Enables conversion from a native type to a `RantValue`.
-pub trait ToRant {
+pub trait IntoRant {
   /// Convert to a `RantValue`.
-  fn to_rant(self) -> Result<RantValue, ValueError>;
+  fn into_rant(self) -> Result<RantValue, ValueError>;
 }
 
 /// Enables conversion from a `RantValue` to a native type.
@@ -57,8 +57,8 @@ fn rant_cast_error(from: &'static str, to: &'static str, err: CastError) -> Valu
 
 macro_rules! rant_int_conversions {
   ($int_type: ident) => {
-    impl ToRant for $int_type {
-      fn to_rant(self) -> ValueResult<RantValue> {
+    impl IntoRant for $int_type {
+      fn into_rant(self) -> ValueResult<RantValue> {
         match i64(self).into_cast_result() {
           Ok(i) => Ok(RantValue::Int(i)),
           Err(err) => Err(rant_cast_error(
@@ -217,34 +217,34 @@ impl FromRant for f64 {
   }
 }
 
-impl ToRant for f32 {
-  fn to_rant(self) -> Result<RantValue, ValueError> {
+impl IntoRant for f32 {
+  fn into_rant(self) -> Result<RantValue, ValueError> {
     Ok(RantValue::Float(self as f64))
   }
 }
 
-impl ToRant for f64 {
-  fn to_rant(self) -> Result<RantValue, ValueError> {
+impl IntoRant for f64 {
+  fn into_rant(self) -> Result<RantValue, ValueError> {
     Ok(RantValue::Float(self))
   }
 }
 
 
-impl ToRant for String {
-  fn to_rant(self) -> ValueResult<RantValue> {
+impl IntoRant for String {
+  fn into_rant(self) -> ValueResult<RantValue> {
     Ok(RantValue::String(self.into()))
   }
 }
 
-impl ToRant for &'static str {
-  fn to_rant(self) -> ValueResult<RantValue> {
+impl IntoRant for &'static str {
+  fn into_rant(self) -> ValueResult<RantValue> {
     Ok(RantValue::String(self.into()))
   }
 }
 
-impl<T: ToRant> ToRant for Vec<T> {
-  fn to_rant(mut self) -> Result<RantValue, ValueError> {
-    let list = self.drain(..).map(|v| v.to_rant()).collect::<Result<RantList, ValueError>>()?;
+impl<T: IntoRant> IntoRant for Vec<T> {
+  fn into_rant(mut self) -> Result<RantValue, ValueError> {
+    let list = self.drain(..).map(|v| v.into_rant()).collect::<Result<RantList, ValueError>>()?;
     Ok(RantValue::List(Rc::new(RefCell::new(list))))
   }
 }
@@ -310,11 +310,11 @@ impl<T: FromRant> FromRant for Option<T> {
   }
 }
 
-impl<T: ToRant> ToRant for Option<T> {
-  fn to_rant(self) -> ValueResult<RantValue> {
+impl<T: IntoRant> IntoRant for Option<T> {
+  fn into_rant(self) -> ValueResult<RantValue> {
     match self {
       None => Ok(RantValue::Empty),
-      Some(val) => Ok(val.to_rant()?)
+      Some(val) => Ok(val.into_rant()?)
     }
   }
 }

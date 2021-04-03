@@ -19,7 +19,7 @@ pub(crate) fn seg(vm: &mut VM, (s, seg_size): (String, usize)) -> RantStdResult 
         segs.push(s[i * seg_size .. (i + 1) * seg_size].to_owned());
       }
     }
-    vm.cur_frame_mut().write_value(segs.to_rant().into_runtime_result()?);
+    vm.cur_frame_mut().write_value(segs.into_rant().into_runtime_result()?);
   }
   Ok(())
 }
@@ -34,7 +34,7 @@ pub(crate) fn split(vm: &mut VM, (s, at): (String, Option<String>)) -> RantStdRe
       .split(at.unwrap().as_str())
       .map(|part| part.to_owned())
       .collect::<Vec<String>>()
-  }.to_rant().into_runtime_result()?;
+  }.into_rant().into_runtime_result()?;
 
   vm.cur_frame_mut().write_value(list);
   Ok(())

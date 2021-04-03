@@ -8,6 +8,7 @@
 
 ### Changes
 * Encapsulate `RantRange` fields to prevent unwanted mutation
+* Rename `ToRant` trait to `IntoRant` in order to better reflect its behavior
 
 ### Fixes
 * (internal) Fix `flag` parameter on `rant::runtime::VM::pre_push_block()` not being used
