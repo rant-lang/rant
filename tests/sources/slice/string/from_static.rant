@@ -1,0 +1,7 @@
+<$a = ABCDEFGH>
+
+[assert-eq: <a/0:>; ABCDEFGH]
+[assert-eq: <a/-8:>; ABCDEFGH]
+[assert-eq: <a/1:>; BCDEFGH]
+[assert-eq: <a/-7:>; BCDEFGH]
+[assert-eq: <a/-1:>; H]

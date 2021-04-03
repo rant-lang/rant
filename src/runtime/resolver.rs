@@ -112,7 +112,7 @@ pub struct BlockState {
 impl BlockState {
   #[inline]
   pub fn next_element(&mut self, rng: &RantRng) -> Result<Option<BlockAction>, SelectorError> {
-    if self.is_done() || self.weights.as_ref().map_or(false, |weights| weights.is_zero()) { 
+    if self.is_done() || self.elements.is_empty() || self.weights.as_ref().map_or(false, |weights| weights.is_zero()) { 
       return Ok(None) 
     }
 

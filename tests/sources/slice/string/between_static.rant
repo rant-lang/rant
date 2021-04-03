@@ -1,0 +1,18 @@
+<$a = ABCDEFGH>
+
+[assert-eq: <a/0:8>; ABCDEFGH]
+[assert-eq: <a/8:0>; ABCDEFGH]
+
+[assert-eq: <a/0:4>; ABCD]
+[assert-eq: <a/4:0>; ABCD]
+
+[assert-eq: <a/4:8>; EFGH]
+[assert-eq: <a/8:4>; EFGH]
+
+[assert-eq: <a/1:-1>; BCDEFG]
+[assert-eq: <a/-1:1>; BCDEFG]
+
+[assert-eq: <a/-4:-1>; EFG]
+[assert-eq: <a/-1:-4>; EFG]
+
+[assert-eq: <a/0:0>; ""]

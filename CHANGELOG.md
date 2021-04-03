@@ -3,14 +3,18 @@
 ## 4.0.0-alpha.19 (unreleased)
 
 ### New
+* Add `[rev]` support to the `block` type
+* Add slice support to `block` type
 
 ### Changes
 * Encapsulate `RantRange` fields to prevent unwanted mutation
 
 ### Fixes
 * (internal) Fix `flag` parameter on `rant::runtime::VM::pre_push_block()` not being used
-* Fix nested function lookups accidentally considering their container as a function
-* Fix incorrect const redef error on nested function definitions against a constant collection
+* Fixed nested function lookups accidentally considering their container as a function
+* Fixed incorrect const redef error on nested function definitions against a constant collection
+* Fixed panic when block with no elements is resolved
+* Fixed bad slicing behavior on ranges
 
 ## 4.0.0-alpha.18
 

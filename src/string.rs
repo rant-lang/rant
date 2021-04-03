@@ -4,7 +4,7 @@ use once_cell::sync::OnceCell;
 use smallvec::{SmallVec};
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::{InternalString, RantList, RantValue};
+use crate::{InternalString, RantList, RantValue, util};
 
 type Graphemes = SmallVec<[(usize, usize); 1]>;
 
@@ -129,6 +129,10 @@ impl RantString {
         Self::from(&self.raw[raw_start..])
       },
       (Some(start), Some(end)) => {
+        let (start, end) = util::minmax(start, end);
+        if start == end {
+          return Some(Self::default())
+        }
         let raw_start = graphemes[start].0;
         let raw_end = if end < len {
           graphemes[end].0

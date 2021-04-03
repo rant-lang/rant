@@ -1,0 +1,3 @@
+<$a = ABCDEFGH>
+
+[assert-eq: <a/:>; ABCDEFGH]

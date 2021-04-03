@@ -205,7 +205,7 @@ impl RantValue {
   pub fn reversed(&self) -> Self {
     match self {
       RantValue::String(s) => RantValue::String(s.reversed()),
-      RantValue::Block(b) => todo!(),
+      RantValue::Block(b) => RantValue::Block(Rc::new(b.reversed())),
       RantValue::List(list) => RantValue::List(Rc::new(RefCell::new(list.borrow().iter().rev().cloned().collect()))),
       RantValue::Range(range) => RantValue::Range(range.reversed()),
       _ => self.clone(),
@@ -292,14 +292,28 @@ impl RantValue {
 
     match self {
       RantValue::String(s) => Ok(RantValue::String(s.to_slice(slice_from, slice_to).ok_or(SliceError::OutOfRange)?)),
-      RantValue::Block(_b) => todo!(),
-      RantValue::Range(range) => {
+      RantValue::Block(b) => {
         match (slice_from, slice_to) {
-          (None, None) => Ok(self.shallow_copy()),
-          (None, Some(to)) => Ok(RantValue::Range(RantRange::new(range.get(0).unwrap(), range.get(to).unwrap(), range.step))),
-          (Some(from), None) => Ok(RantValue::Range(RantRange::new(range.get(from).unwrap(), range.get_bound(range.len()).unwrap(), range.step))),
-          (Some(from), Some(to)) => Ok(RantValue::Range(RantRange::new(range.get(from).unwrap(), range.get(to).unwrap(), range.step))),
+          (None, None) => Ok(RantValue::Block(Rc::clone(b))),
+          (None, Some(to)) => Ok(RantValue::Block(Rc::new(Block {
+            elements: Rc::new((&b.elements[..to]).to_vec()),
+            .. *b.as_ref()
+          }))),
+          (Some(from), None) => Ok(RantValue::Block(Rc::new(Block {
+            elements: Rc::new((&b.elements[from..]).to_vec()),
+            .. *b.as_ref()
+          }))),
+          (Some(from), Some(to)) => {
+            let (from, to) = util::minmax(from, to);
+            Ok(RantValue::Block(Rc::new(Block {
+              elements: Rc::new((&b.elements[from..to]).to_vec()),
+              .. *b.as_ref()
+            })))
+          },
         }
+      },
+      RantValue::Range(range) => {
+        Ok(RantValue::Range(range.sliced(slice_from, slice_to).unwrap()))
       },
       RantValue::List(list) => {
         let list = list.borrow();
@@ -639,28 +653,26 @@ impl PartialEq for RantSpecial {
 pub struct RantRange {
   start: i64,
   end: i64,
-  step: u64,
-  is_inclusive: bool,
+  step: i64,
 }
 
 impl RantRange {
   #[inline]
-  pub fn new(start: i64, end: i64, step: u64) -> Self {
-    Self {
-      start,
-      end,
-      step: step.max(1),
-      is_inclusive: false,
-    }
-  }
+  pub fn new(start: i64, end: i64, abs_step: u64) -> Self {
+    let abs_step = if abs_step == 0 {
+      1
+    } else {
+      abs_step
+    };
 
-  #[inline]
-  pub fn new_inclusive(start: i64, end: i64, step: u64) -> Self {
     Self {
       start,
       end,
-      step: step.max(1),
-      is_inclusive: true,
+      step: if end < start {
+        -(abs_step as i64)
+      } else {
+        abs_step as i64
+      },
     }
   }
 }
@@ -671,18 +683,16 @@ impl Default for RantRange {
       start: 0,
       end: 0,
       step: 1,
-      is_inclusive: false,
     }
   }
 }
 
 impl Display for RantRange {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let comparison = match (self.start < self.end, self.is_inclusive) {
-      (false, false) => ">",
-      (true, false) => "<",
-      (false, true) => ">=",
-      (true, true) => "<=",
+    let comparison = if self.start < self.end {
+      ">"
+    } else {
+      "<"
     };
     let op = if self.start < self.end { '+' } else { '-' };
     write!(f, "[range({} {} ", self.start, op)?;
@@ -707,112 +717,85 @@ impl RantRange {
     self.end
   }
 
-  /// Indicates whether the end range bound is inclusive.
+  /// Gets the absolute step value of the range.
   #[inline]
-  pub fn is_inclusive(&self) -> bool {
-    self.is_inclusive
+  pub fn abs_step(&self) -> u64 {
+    self.step.saturating_abs() as u64
   }
 
-  /// Gets the step size of the range.
+  /// Gets the signed step value of the range.
   #[inline]
-  pub fn step(&self) -> u64 {
+  pub fn step(&self) -> i64 {
     self.step
   }
 
   /// Gets the absolute difference between the start and end bounds, ignoring the step size.
   #[inline(always)]
   pub fn abs_size(&self) -> usize {
-    self.end.saturating_sub(self.start).saturating_abs() as usize + if self.is_inclusive { 1 } else { 0 }
+    self.end.saturating_sub(self.start).saturating_abs() as usize
   }
 
   /// Gets the total number of steps in the range, taking into account the step size.
   #[inline]
   pub fn len(&self) -> usize {
-    let abs_size = self.abs_size();
-    if abs_size > 0 {
-      (abs_size - 1) / self.step as usize + 1
-    } else {
-      0
-    }
+    ((self.end - self.start) as f64 / self.step as f64).ceil() as usize
   }
 
   /// Gets a reversed copy of the range.
   #[inline]
   pub fn reversed(&self) -> Self {
-    if self.is_inclusive {
-      Self {
-        start: self.end,
-        end: self.start,
-        step: self.step,
-        is_inclusive: true,
-      }
-    } else {
-      if self.start == self.end {
-        return self.clone()
-      }
+    if self.start == self.end {
+      return self.clone()
+    }
 
-      if self.start < self.end {
-        Self {
-          start: self.end - 1,
-          end: self.start,
-          step: self.step,
-          is_inclusive: true,
-        }
-      } else {
-        Self {
-          start: self.end + 1,
-          end: self.start,
-          step: self.step,
-          is_inclusive: true,
-        }
-      }
+    let shift: i64 = if self.start < self.end { -1 } else { 1 };
+
+    Self {
+      start: self.end + shift,
+      end: self.start + shift,
+      step: -self.step,
     }
   }
 
   /// Indicates whether there are no steps in the range.
   #[inline]
   pub fn is_empty(&self) -> bool {
-    let size = self.abs_size() as u64;
-    let incl = self.is_inclusive;
-    (!incl && (self.start == self.end || self.step > size)) || (incl && self.step >= size)
+    self.start == self.end || self.abs_step() as usize > self.abs_size()
   }
 
   /// Gets the nth value in the range.
   #[inline]
   pub fn get(&self, index: usize) -> Option<i64> {
-    // Does it go backwards?
-    let abs_step = self.step as usize;
-    let is_negative_step = self.end < self.start;
-    let abs_range_size = self.abs_size();
-    let abs_range_progress = abs_step * index;
-
-    (abs_range_progress < abs_range_size).then(|| {
-      if is_negative_step {
-        self.start.saturating_sub(abs_range_progress as i64)
-      } else {
-        self.start.saturating_add(abs_range_progress as i64)
-      }
-    })
+    let offset = self.step * index as i64;
+    let value = self.start + offset;
+    (index < self.len()).then(|| self.start + offset)
   }
 
   #[inline]
   fn get_bound(&self, index: usize) -> Option<i64> {
-    // Does it go backwards?
-    let abs_step = self.step as usize;
-    let is_negative_step = self.end < self.start;
-    let abs_range_size = self.abs_size();
-    let abs_range_progress = abs_step * index;
-
-    if index == self.len() {
-      return Some(self.end)
+    let offset = self.step * index as i64;
+    let value = self.start + offset;
+    let len = self.len();
+    if index < len {
+      Some(self.start + offset)
+    } else if index == len {
+      Some(self.end)
+    } else {
+      None
     }
+  }
 
-    (abs_range_progress <= abs_range_size).then(|| {
-      if is_negative_step {
-        self.start.saturating_sub(abs_range_progress as i64)
-      } else {
-        self.start.saturating_add(abs_range_progress as i64)
-      }
+  #[inline]
+  pub fn sliced(&self, from: Option<usize>, to: Option<usize>) -> Option<Self> {
+    let abs_step = self.abs_step();
+    Some(match (from, to) {
+      (None, None) => self.clone(),
+      (None, Some(to)) => Self::new(self.get_bound(0)?, self.get_bound(to)?, abs_step),
+      (Some(from), None) => Self::new(self.get_bound(from)?, self.get_bound(self.len())?, abs_step),
+      (Some(from), Some(to)) => {
+        let (from, to) = util::minmax(from, to);
+        Self::new(self.get_bound(from)?, self.get_bound(to)?, abs_step)
+      },
     })
   }
 

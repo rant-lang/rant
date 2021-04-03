@@ -1,0 +1,8 @@
+<$a = <>{A|B|C|D|E|F|G|H}>
+[%bcat:block]{[sel:forward][rep:all][resolve:<block>]}
+
+[assert-eq: [bcat:<a/{0}:>]; ABCDEFGH]
+[assert-eq: [bcat:<a/{-8}:>]; ABCDEFGH]
+[assert-eq: [bcat:<a/{1}:>]; BCDEFGH]
+[assert-eq: [bcat:<a/{-7}:>]; BCDEFGH]
+[assert-eq: [bcat:<a/{-1}:>]; H]

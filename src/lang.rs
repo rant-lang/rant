@@ -380,6 +380,14 @@ impl Block {
       elements: Rc::new(elements)
     }
   }
+
+  #[inline]
+  pub fn reversed(&self) -> Self {
+    Self {
+      elements: Rc::new(self.elements.iter().rev().cloned().collect()),
+      .. *self
+    }
+  }
   
   #[inline]
   pub fn len(&self) -> usize {
@@ -396,6 +404,16 @@ pub struct BlockElement {
   pub weight: Option<BlockWeight>,
 }
 
+impl Clone for BlockElement {
+  #[inline]
+  fn clone(&self) -> Self {
+    Self {
+      main: Rc::clone(&self.main),
+      weight: self.weight.clone()
+    }
+  }
+}
+
 /// A block weight.
 #[derive(Debug)]
 pub enum BlockWeight {
@@ -403,6 +421,16 @@ pub enum BlockWeight {
   Dynamic(Rc<Sequence>),
   /// A weight that is a constant value.
   Constant(f64),
+}
+
+impl Clone for BlockWeight {
+  #[inline]
+  fn clone(&self) -> Self {
+    match self {
+      BlockWeight::Dynamic(s) => Self::Dynamic(Rc::clone(s)),
+      BlockWeight::Constant(c) => Self::Constant(*c),
+    }
+  }
 }
 
 /// Describes the arity requirements of a function parameter.

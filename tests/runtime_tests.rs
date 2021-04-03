@@ -444,38 +444,143 @@ fn math_max() {
 }
 
 #[test]
-fn slice_full() {
-  test_rant_file!("sources/slice/full.rant");
+fn slice_list_full() {
+  test_rant_file!("sources/slice/list/full.rant");
 }
 
 #[test]
-fn slice_between_static() {
-  test_rant_file!("sources/slice/between_static.rant");
+fn slice_list_between_static() {
+  test_rant_file!("sources/slice/list/between_static.rant");
 }
 
 #[test]
-fn slice_from_static() {
-  test_rant_file!("sources/slice/from_static.rant");
+fn slice_list_from_static() {
+  test_rant_file!("sources/slice/list/from_static.rant");
 }
 
 #[test]
-fn slice_to_static() {
-  test_rant_file!("sources/slice/to_static.rant");
+fn slice_list_to_static() {
+  test_rant_file!("sources/slice/list/to_static.rant");
 }
 
 #[test]
-fn slice_between_dynamic() {
-  test_rant_file!("sources/slice/between_dynamic.rant");
+fn slice_list_between_dynamic() {
+  test_rant_file!("sources/slice/list/between_dynamic.rant");
 }
 
 #[test]
-fn slice_from_dynamic() {
-  test_rant_file!("sources/slice/from_dynamic.rant");
+fn slice_list_from_dynamic() {
+  test_rant_file!("sources/slice/list/from_dynamic.rant");
 }
 
 #[test]
-fn slice_to_dynamic() {
-  test_rant_file!("sources/slice/to_dynamic.rant");
+fn slice_list_to_dynamic() {
+  test_rant_file!("sources/slice/list/to_dynamic.rant");
+}
+
+#[test]
+fn slice_block_full() {
+  test_rant_file!("sources/slice/block/full.rant");
+}
+
+#[test]
+fn slice_block_between_static() {
+  test_rant_file!("sources/slice/block/between_static.rant");
+}
+
+#[test]
+fn slice_block_from_static() {
+  test_rant_file!("sources/slice/block/from_static.rant");
+}
+
+#[test]
+fn slice_block_to_static() {
+  test_rant_file!("sources/slice/block/to_static.rant");
+}
+
+#[test]
+fn slice_block_between_dynamic() {
+  test_rant_file!("sources/slice/block/between_dynamic.rant");
+}
+
+#[test]
+fn slice_block_from_dynamic() {
+  test_rant_file!("sources/slice/block/from_dynamic.rant");
+}
+
+#[test]
+fn slice_block_to_dynamic() {
+  test_rant_file!("sources/slice/block/to_dynamic.rant");
+}
+
+#[test]
+fn slice_string_full() {
+  test_rant_file!("sources/slice/string/full.rant");
+}
+
+#[test]
+fn slice_string_between_static() {
+  test_rant_file!("sources/slice/string/between_static.rant");
+}
+
+#[test]
+fn slice_string_from_static() {
+  test_rant_file!("sources/slice/string/from_static.rant");
+}
+
+#[test]
+fn slice_string_to_static() {
+  test_rant_file!("sources/slice/string/to_static.rant");
+}
+
+#[test]
+fn slice_string_between_dynamic() {
+  test_rant_file!("sources/slice/string/between_dynamic.rant");
+}
+
+#[test]
+fn slice_string_from_dynamic() {
+  test_rant_file!("sources/slice/string/from_dynamic.rant");
+}
+
+#[test]
+fn slice_string_to_dynamic() {
+  test_rant_file!("sources/slice/string/to_dynamic.rant");
+}
+
+#[test]
+fn slice_range_full() {
+  test_rant_file!("sources/slice/range/full.rant");
+}
+
+#[test]
+fn slice_range_between_static() {
+  test_rant_file!("sources/slice/range/between_static.rant");
+}
+
+#[test]
+fn slice_range_from_static() {
+  test_rant_file!("sources/slice/range/from_static.rant");
+}
+
+#[test]
+fn slice_range_to_static() {
+  test_rant_file!("sources/slice/range/to_static.rant");
+}
+
+#[test]
+fn slice_range_between_dynamic() {
+  test_rant_file!("sources/slice/range/between_dynamic.rant");
+}
+
+#[test]
+fn slice_range_from_dynamic() {
+  test_rant_file!("sources/slice/range/from_dynamic.rant");
+}
+
+#[test]
+fn slice_range_to_dynamic() {
+  test_rant_file!("sources/slice/range/to_dynamic.rant");
 }
 
 #[test]
