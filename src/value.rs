@@ -767,21 +767,15 @@ impl RantRange {
   #[inline]
   pub fn get(&self, index: usize) -> Option<i64> {
     let offset = self.step * index as i64;
-    let value = self.start + offset;
     (index < self.len()).then(|| self.start + offset)
   }
 
   #[inline]
   fn get_bound(&self, index: usize) -> Option<i64> {
-    let offset = self.step * index as i64;
-    let value = self.start + offset;
-    let len = self.len();
-    if index < len {
-      Some(self.start + offset)
-    } else if index == len {
-      Some(self.end)
-    } else {
-      None
+    match index.cmp(&self.len()) {
+      Ordering::Less => Some(self.start + self.step * index as i64),
+      Ordering::Equal => Some(self.end),
+      Ordering::Greater => None
     }
   }
 
