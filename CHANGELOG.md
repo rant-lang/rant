@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.0.0-alpha.20 (unreleased)
+
+### New
+
+### Changes
+* Renamed module `rant::random` to `rant::rng`
+
+### Fixes
+
 ## 4.0.0-alpha.19
 
 ### New

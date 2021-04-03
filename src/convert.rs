@@ -1,13 +1,13 @@
 //! # rant::convert
-//! Provides conversions between RantValues and native types.
+//! Provides conversions between `RantValue`s and native types.
 
 #![allow(unused_mut)]
 #![allow(unused_parens)]
 #![allow(unused_variables)]
 
-use crate::value::*;
-use crate::{lang::{Varity, Parameter, Identifier}, InternalString, RantMapRef, stdlib::RantStdResult};
-use crate::{RantList, runtime::*, RantListRef};
+use crate::*;
+use crate::runtime::*;
+use crate::{lang::{Varity, Parameter, Identifier}, stdlib::RantStdResult};
 use cast::*;
 use cast::Error as CastError;
 use std::{rc::Rc, ops::{DerefMut, Deref}, cell::RefCell};

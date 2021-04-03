@@ -31,22 +31,24 @@ pub mod runtime;
 mod collections;
 mod convert;
 mod lang;
-mod random;
+mod rng;
 mod stdlib;
 mod string;
 mod util;
 mod value;
+mod func;
 mod var;
 
 pub use collections::*;
 pub use convert::*;
 pub use string::*;
 pub use value::*;
+pub use func::*;
 pub use var::*;
 
 use crate::compiler::*;
 use crate::lang::Sequence;
-use crate::random::RantRng;
+use crate::rng::RantRng;
 use crate::runtime::{RuntimeResult, IntoRuntimeResult, RuntimeError, RuntimeErrorType, VM};
 
 use std::{path::Path, rc::Rc, cell::RefCell, fmt::Display, path::PathBuf, io::ErrorKind, collections::HashMap};
