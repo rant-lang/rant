@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.0.0-alpha.19 (unreleased)
+## 4.0.0-alpha.19
 
 ### New
 * Add `[rev]` support to the `block` type
