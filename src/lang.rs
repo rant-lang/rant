@@ -18,6 +18,7 @@ pub enum PrintFlag {
 }
 
 impl PrintFlag {
+  /// Determines which of two `PrintFlag` values should take priority.
   #[inline]
   pub fn prioritize(prev: PrintFlag, next: PrintFlag) -> PrintFlag {
     match next {
@@ -233,21 +234,25 @@ impl AccessPath {
     }
   }
 
+  /// Determines whether the access path is explicitly accessing a global value.
   #[inline]
   pub fn is_explicit_global(&self) -> bool {
     matches!(self.kind, AccessPathKind::ExplicitGlobal)
   }
 
+  /// Determines whether the root of the access path is an inline value.
   #[inline]
   pub fn is_anonymous(&self) -> bool {
     matches!(self.first(), Some(AccessPathComponent::AnonymousValue(..)))
   }
 
+  /// Determines whether the root of the access path is a variable.
   #[inline]
   pub fn is_variable(&self) -> bool {
     self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::Name(..)) | Some(AccessPathComponent::DynamicKey(..)))
   }
 
+  /// Gets the kind access path this is.
   #[inline]
   pub fn kind(&self) -> AccessPathKind {
     self.kind
@@ -309,11 +314,15 @@ impl Display for AccessPath {
 #[derive(Debug)]
 pub struct Sequence {
   elements: Vec<Rc<Rst>>,
+  /// An optional name for the sequence.
   pub name: Option<InternalString>,
+  /// Information about where the sequence came from, such as its source file.
   pub origin: Rc<RantProgramInfo>,
 }
 
 impl Sequence {
+  /// Creates a new sequence.
+  #[inline]
   pub fn new(seq: Vec<Rc<Rst>>, origin: &Rc<RantProgramInfo>) -> Self {
     Self {
       elements: seq,
@@ -322,6 +331,8 @@ impl Sequence {
     }
   }
   
+  /// Creates a new sequence with a single element.
+  #[inline]
   pub fn one(rst: Rst, origin: &Rc<RantProgramInfo>) -> Self {
     Self {
       elements: vec![Rc::new(rst)],
@@ -330,22 +341,26 @@ impl Sequence {
     }
   }
   
+  /// Creates an empty sequence.
   pub fn empty(origin: &Rc<RantProgramInfo>) -> Self {
     Self::new(vec![], origin)
   }
 
+  /// Creates an empty sequence with the specified name.
   #[inline(always)]
   pub fn with_name(mut self, name: InternalString) -> Self {
     self.name = Some(name);
     self
   }
 
+  /// Creates an empty sequence with the specified name.
   #[inline(always)]
   pub fn with_name_str(mut self, name: &str) -> Self {
     self.name = Some(InternalString::from(name));
     self
   }
 
+  /// Gets the name of the sequence.
   pub fn name(&self) -> Option<&InternalString> {
     self.name.as_ref()
   }
@@ -367,12 +382,16 @@ impl DerefMut for Sequence {
 /// A block is a set of zero or more distinct Rant code snippets.
 #[derive(Debug)]
 pub struct Block {
+  /// The print flag attached to the block.
   pub flag: PrintFlag,
+  /// Determines whether the block uses weights.
   pub is_weighted: bool,
+  /// The elements associated with the block.
   pub elements: Rc<Vec<BlockElement>>
 }
 
 impl Block {
+  /// Creates a new block.
   pub fn new(flag: PrintFlag, is_weighted: bool, elements: Vec<BlockElement>) -> Self {
     Block {
       flag,
@@ -381,6 +400,7 @@ impl Block {
     }
   }
 
+  /// Creates a copy of the block with the same elements in reverse order.
   #[inline]
   pub fn reversed(&self) -> Self {
     Self {
@@ -389,6 +409,7 @@ impl Block {
     }
   }
   
+  /// Gets the number of elements contained in the block.
   #[inline]
   pub fn len(&self) -> usize {
     self.elements.len()
@@ -548,19 +569,25 @@ pub struct FunctionCall {
 /// A composed function call.
 #[derive(Debug)]
 pub struct ComposedFunctionCall {
+  /// The print flag associated with the call.
   pub flag: PrintFlag,
+  /// The function calls in the chain.
   pub steps: Rc<Vec<FunctionCall>>,
+  /// Determines whether the call executes temporally.
   pub is_temporal: bool,
 }
 
 /// Keeps track of combination indices in a temporally-spread function call.
 #[derive(Debug)]
 pub struct TemporalSpreadState {
+  /// Counters associated with each temporal call in the chain.
   counters: Vec<(usize, usize)>,
+  /// Maps argument indices to temporal counter indices.
   arg_labels: HashMap<usize, usize>,
 }
 
 impl TemporalSpreadState {
+  /// Creates a new `TemporalSpreadState`.
   #[inline]
   pub fn new(arg_exprs: &[ArgumentExpr], args: &[RantValue]) -> Self {
     let mut counters = Vec::with_capacity(args.len());
@@ -595,16 +622,19 @@ impl TemporalSpreadState {
     }
   }
 
+  /// Gets the number of counters in the state.
   #[inline]
   pub fn len(&self) -> usize {
     self.counters.len()
   }
 
+  /// Determines whether there are no counters in the state.
   #[inline]
   pub fn is_empty(&self) -> bool {
     self.counters.is_empty() || self.counters.iter().all(|(.., n)| *n == 0)
   }
 
+  /// Gets the current counter value of the specified argument index.
   #[inline]
   pub fn get(&self, arg_index: usize) -> Option<usize> {
     self.arg_labels.get(&arg_index).map(|i| self.counters[*i].0)
@@ -629,21 +659,29 @@ impl TemporalSpreadState {
   }
 }
 
-/// Describes a function definition.
+/// Describes a Rant function definition.
 #[derive(Debug)]
 pub struct FunctionDef {
+  /// The path to the function to define.
   pub path: Rc<AccessPath>,
+  /// Indicates whether the function will be constant.
   pub is_const: bool, // only used on variable definitions
+  /// The parameters associated with the function being defined.
   pub params: Rc<Vec<Parameter>>,
+  /// The variables to capture into the function being defined.
   pub capture_vars: Rc<Vec<Identifier>>,
+  /// The body of the function being defined.
   pub body: Rc<Sequence>,
 }
 
-/// Describes a boxing (closure) operation to turn a block into a function.
+/// Describes a Rant closure.
 #[derive(Debug)]
 pub struct ClosureExpr {
-  pub expr: Rc<Sequence>,
+  /// The body of the closure. 
+  pub body: Rc<Sequence>,
+  /// The parameters associated with the closure.
   pub params: Rc<Vec<Parameter>>,
+  /// The variables to capture into the closure.
   pub capture_vars: Rc<Vec<Identifier>>,
 }
 
@@ -712,6 +750,7 @@ pub enum Rst {
 }
 
 impl Rst {
+  /// Gets the diagnostic display name for the node.
   pub fn display_name(&self) -> &'static str {
     match self {
       Rst::Sequence(_) =>                     "sequence",
@@ -752,5 +791,6 @@ impl Display for Rst {
 /// Provides debug information about a program element.
 #[derive(Debug)]
 pub enum DebugInfo {
+  /// Provides source code location information for the following sequence element.
   Location { line: usize, col: usize },
 }

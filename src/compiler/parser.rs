@@ -1132,7 +1132,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           
           Ok(Rst::Closure(ClosureExpr {
             capture_vars: Rc::new(captures),
-            expr: Rc::new(body.with_name_str("closure")),
+            body: Rc::new(body.with_name_str("closure")),
             params: Rc::new(params.into_iter().map(|(p, _)| p).collect()),
           }))
         },

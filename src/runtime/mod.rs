@@ -945,7 +945,7 @@ impl<'rant> VM<'rant> {
         Rst::Closure(closure_expr) => {
           let ClosureExpr {
             capture_vars,
-            expr,
+            body: expr,
             params,
           } = closure_expr;
 

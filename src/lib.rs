@@ -67,7 +67,7 @@ pub const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const ENV_MODULES_PATH_KEY: &str = "RANT_MODULES_PATH";
 
 /// The Rant language version implemented by this library.
-pub const RANT_VERSION: &str = "4.0";
+pub const RANT_LANG_VERSION: &str = "4.0";
 
 /// The default name given to programs compiled from raw strings.
 pub const DEFAULT_PROGRAM_NAME: &str = "program";
@@ -78,6 +78,7 @@ pub const RANT_FILE_EXTENSION: &str = "rant";
 /// Name of global variable that stores cached modules.
 pub(crate) const MODULES_CACHE_KEY: &str = "__MODULES";
 
+/// Result type used by the module loader.
 pub(crate) type ModuleLoadResult = Result<RantProgram, ModuleLoadError>;
 
 /// A Rant execution context.

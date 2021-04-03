@@ -135,6 +135,6 @@ pub(crate) fn load_stdlib(context: &mut Rant)
   }
 
   // Constants
-  context.set_global_force("RANT_VERSION", RantValue::String(RANT_VERSION.into()), true);
+  context.set_global_force("RANT_VERSION", RantValue::String(RANT_LANG_VERSION.into()), true);
   context.set_global_force("BUILD_VERSION", RantValue::String(BUILD_VERSION.into()), true);
 }
