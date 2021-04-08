@@ -153,7 +153,7 @@ pub enum RantToken {
   Integer(i64),
   
   /// Float literal
-  #[regex(r"\-?[0-9]+\.[0-9]+", parse_float, priority = 3)]
+  #[regex(r"\-?[0-9]+(\.[0-9]+([Ee][+\-]?\d+)?|[Ee][+\-]?\d+)", parse_float, priority = 3)]
   Float(f64),
   
   /// Represents inline and multi-line comments

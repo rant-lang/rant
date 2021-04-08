@@ -9,7 +9,6 @@ use std::{cell::RefCell, error::Error, fmt::{Debug, Display}, ops::Deref, rc::Rc
 use smallvec::{SmallVec, smallvec};
 
 
-pub(crate) mod format;
 pub(crate) mod resolver;
 mod output;
 mod stack;

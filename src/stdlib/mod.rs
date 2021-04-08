@@ -78,7 +78,9 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     assert as "assert", assert_eq as "assert-eq", assert_neq as "assert-neq",
 
     // Formatting functions
-    whitespace_fmt as "whitespace-fmt",
+    whitespace_fmt as "whitespace-fmt", 
+    num_fmt_system as "num-fmt-system", 
+    num_fmt_padding as "num-fmt-padding",
 
     // Attribute / control flow functions
     if_ as "if", else_if as "else-if", else_ as "else", mksel, rep, sel, sep, pipe,
@@ -137,4 +139,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
   // Constants
   context.set_global_force("RANT_VERSION", RantValue::String(RANT_LANG_VERSION.into()), true);
   context.set_global_force("BUILD_VERSION", RantValue::String(BUILD_VERSION.into()), true);
+  context.set_global_force("INFINITY", RantValue::Float(f64::INFINITY), true);
+  context.set_global_force("NEG_INFINITY", RantValue::Float(f64::NEG_INFINITY), true);
+  context.set_global_force("NAN", RantValue::Float(f64::NAN), true);
 }

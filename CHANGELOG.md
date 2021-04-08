@@ -3,9 +3,23 @@
 ## 4.0.0-alpha.20 (unreleased)
 
 ### New
+* Added number formatter
+* Added stdlib functions:
+  * `[num-fmt: options?]` (?)
+  * `[num-fmt-system: system?]`
+  * `[num-fmt-padding: padding?]` (?)
+  * `[num-fmt-precision: precision?]` (?)
+  * `[num-fmt-sign: sign-mode?]` (?)
+  * `[num-fmt-alt: enable?]` (?)
+  * `[num-fmt-upper: enable?]` (?)
+  * `[num-fmt-infinity: infinity-mode?]` (?)
+  * `[num-fmt-endianness: endianness?]` (?)
+* Added stdlib constants:
+  * Float constants: `INFINITY`, `NEG_INFINITY`, `NAN`
 
 ### Changes
 * Renamed module `rant::random` to `rant::rng`
+* E notation is now accepted on float literals
 
 ### Fixes
 

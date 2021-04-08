@@ -1,5 +1,5 @@
-use crate::{InternalString, RantList, RantMap, RantValue};
-use super::format::{WhitespaceNormalizationMode, OutputFormat};
+use crate::{InternalString, RantList, RantMap, RantValue, format::OutputFormat};
+use super::format::{WhitespaceNormalizationMode};
 use std::{cell::RefCell, rc::Rc};
 
 const INITIAL_CHAIN_CAPACITY: usize = 64;
@@ -126,7 +126,7 @@ impl OutputWriter {
             for buf in self.buffers {
               if !matches!(buf, OutputBuffer::Value(RantValue::Empty)) {
                 has_any_nonempty = true;
-                output.push_str(buf.render().as_str())
+                output.push_str(buf.render(&self.format).as_str())
               }
             }
             // If there is at least one non-empty, return the string; otherwise, return empty value
@@ -185,10 +185,12 @@ enum OutputBuffer {
 impl<'a> OutputBuffer {
   /// Consumes the buffer and returns its contents rendered as a single `String`.
   #[inline]
-  pub(crate) fn render(self) -> InternalString {
+  pub(crate) fn render(self, format: &OutputFormat) -> InternalString {
     match self {
       OutputBuffer::Fragment(s) => s,
       OutputBuffer::Whitespace(s) => s,
+      OutputBuffer::Value(RantValue::Int(n)) => format.num_format.format_integer(n),
+      OutputBuffer::Value(RantValue::Float(n)) => format.num_format.format_float(n),
       OutputBuffer::Value(v) => InternalString::from(v.to_string())
     }
   }

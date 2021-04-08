@@ -30,6 +30,7 @@ pub mod runtime;
 
 mod collections;
 mod convert;
+mod format;
 mod lang;
 mod rng;
 mod stdlib;
@@ -39,12 +40,12 @@ mod value;
 mod func;
 mod var;
 
-pub use collections::*;
-pub use convert::*;
-pub use string::*;
-pub use value::*;
-pub use func::*;
-pub use var::*;
+pub use crate::collections::*;
+pub use crate::convert::*;
+pub use crate::string::*;
+pub use crate::value::*;
+pub use crate::func::*;
+pub use crate::var::*;
 
 use crate::compiler::*;
 use crate::lang::Sequence;
