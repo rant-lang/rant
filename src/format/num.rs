@@ -53,17 +53,17 @@ pub struct NumberFormat {
   /// Byte ordering for binary, octal, and hex formats.
   pub endianness: Endianness,
   /// Sets how infinite floating-point values are formatted.
-  pub infinity_handling: InfinityHandlingMode,
-  /// The sign type to use.
-  pub sign: SignMode,
+  pub infinity: InfinityStyle,
+  /// The sign style to use.
+  pub sign: SignStyle,
   /// The maximum number of leading zeros to add to formatted numbers.
   pub padding: u16,
   /// The decimal precision of formatted numbers.
   pub precision: Option<u16>,
   /// The digit group separator.
   pub group_sep: Option<InternalString>,
-  /// The decimal point to use.
-  pub decimal_point: Option<InternalString>,
+  /// The decimal separator to use.
+  pub decimal_sep: Option<InternalString>,
 }
 
 impl Default for NumberFormat {
@@ -73,12 +73,12 @@ impl Default for NumberFormat {
       alternate: false,
       uppercase: false,
       endianness: Endianness::Big,
-      infinity_handling: InfinityHandlingMode::Keyword,
-      sign: SignMode::NegativeOnly,
+      infinity: InfinityStyle::Keyword,
+      sign: SignStyle::NegativeOnly,
       padding: 0,
       precision: None,
       group_sep: None,
-      decimal_point: None,
+      decimal_sep: None,
     }
   }
 }
@@ -86,7 +86,7 @@ impl Default for NumberFormat {
 /// Defines sign display modes for formatted numbers.
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
-pub enum SignMode {
+pub enum SignStyle {
   /// Show a minus (-) for negative numbers and nothing for zero or positive numbers.
   NegativeOnly,
   /// Show a minus (-) for negative numbers and a plus (+) for zero or positive numbers.
@@ -98,7 +98,7 @@ pub enum SignMode {
 /// Defines infinity handling modes for formatted floating-point numbers.
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
-pub enum InfinityHandlingMode {
+pub enum InfinityStyle {
   /// Show `infinity` for positive infinity and `-infinity` for negative infinity.
   Keyword,
   /// Show `∞` for positive infinity and `-∞` for negative infinity.
@@ -218,9 +218,9 @@ impl NumberFormat {
           return DEFAULT_NAN.into()
         } else if n.is_infinite() {
           let is_positive = n.is_sign_positive();
-          return match self.infinity_handling {
-            InfinityHandlingMode::Keyword => if is_positive { DEFAULT_INFINITY_KW } else { DEFAULT_NEG_INFINITY_KW }.into(),
-            InfinityHandlingMode::Symbol => if is_positive { DEFAULT_INFINITY_SYMBOL } else { DEFAULT_NEG_INFINITY_SYMBOL }.into(),
+          return match self.infinity {
+            InfinityStyle::Keyword => if is_positive { DEFAULT_INFINITY_KW } else { DEFAULT_NEG_INFINITY_KW }.into(),
+            InfinityStyle::Symbol => if is_positive { DEFAULT_INFINITY_SYMBOL } else { DEFAULT_NEG_INFINITY_SYMBOL }.into(),
           }
         }
 
@@ -256,14 +256,14 @@ impl NumberFormat {
   fn get_float_sign(&self, n: f64) -> &'static str {
     if n.abs() < f64::EPSILON {
       match self.sign {
-        SignMode::ExplicitNonZero => DEFAULT_SIGN_POSITIVE,
+        SignStyle::ExplicitNonZero => DEFAULT_SIGN_POSITIVE,
         _ => "",
       }
     } else if n.is_sign_negative() {
       DEFAULT_SIGN_NEGATIVE
     } else {
       match self.sign {
-        SignMode::Explicit | SignMode::ExplicitNonZero => DEFAULT_SIGN_POSITIVE,
+        SignStyle::Explicit | SignStyle::ExplicitNonZero => DEFAULT_SIGN_POSITIVE,
         _ => "",
       }
     }
@@ -274,11 +274,11 @@ impl NumberFormat {
     match n.cmp(&0) {
       Ordering::Less => DEFAULT_SIGN_NEGATIVE,
       Ordering::Equal => match self.sign {
-        SignMode::ExplicitNonZero => DEFAULT_SIGN_POSITIVE,
+        SignStyle::ExplicitNonZero => DEFAULT_SIGN_POSITIVE,
         _ => "",
       },
       Ordering::Greater => match self.sign {
-        SignMode::Explicit | SignMode::ExplicitNonZero => DEFAULT_SIGN_POSITIVE,
+        SignStyle::Explicit | SignStyle::ExplicitNonZero => DEFAULT_SIGN_POSITIVE,
         _ => "",
       },
     }
@@ -541,7 +541,7 @@ impl NumberFormat {
 
     if raw_parts.len() == 2 {
       // Add decimal point
-      buf.push_str(self.decimal_point.as_deref().unwrap_or("."));
+      buf.push_str(self.decimal_sep.as_deref().unwrap_or("."));
 
       let raw_frac = raw_parts[1];
 

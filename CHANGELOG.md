@@ -4,6 +4,14 @@
 
 ### New
 * Added number formatter
+  * Currently supports these numeral systems:
+    * Arabic (Western + Eastern)
+    * Persian
+    * Babylonian cuneiform (base 60)
+    * Roman (upper/lower)
+    * Hexadecimal (upper/lower)
+    * Octal
+    * Binary
 * Added stdlib functions:
   * `[num-fmt: options?]` (?)
   * `[num-fmt-system: system?]`

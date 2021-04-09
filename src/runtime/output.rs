@@ -1,4 +1,4 @@
-use crate::{InternalString, RantList, RantMap, RantValue, format::OutputFormat};
+use crate::{InternalString, RantList, RantMap, RantValue, format::{NumberFormat, OutputFormat}};
 use super::format::{WhitespaceNormalizationMode};
 use std::{cell::RefCell, rc::Rc};
 
@@ -13,6 +13,7 @@ pub struct OutputWriter {
 }
 
 impl OutputWriter {
+  #[inline]
   pub fn new(prev_output: Option<&Self>) -> Self {
     Self {
       buffers: Vec::with_capacity(INITIAL_CHAIN_CAPACITY),
@@ -31,6 +32,26 @@ impl OutputWriter {
   #[inline]
   pub fn format_mut(&mut self) -> &mut OutputFormat {
     Rc::make_mut(&mut self.format)
+  }
+
+  #[inline]
+  fn last_buffer(&self) -> Option<&OutputBuffer> {
+    self.buffers.last()
+  }
+
+  #[inline]
+  fn last_buffer_mut(&mut self) -> Option<&mut OutputBuffer> {
+    self.buffers.last_mut()
+  }
+
+  #[inline]
+  pub fn update_number_format(&mut self) {
+    let fmt = self.format.num_format.clone();
+    if let Some(OutputBuffer::NumberFormatUpdate(upd)) = self.last_buffer_mut() {
+      *upd = fmt;
+    } else {
+      self.write_buffer(OutputBuffer::NumberFormatUpdate(fmt));
+    }
   }
 
   /// Writes a value to the output.
@@ -112,9 +133,9 @@ impl OutputWriter {
       1 => {
         let buffer = self.buffers.pop().unwrap();
         match buffer {
-          OutputBuffer::Fragment(s) | OutputBuffer::Whitespace(s)
-            => RantValue::String(s.as_str().into()),
+          OutputBuffer::Fragment(s) | OutputBuffer::Whitespace(s) => RantValue::String(s.as_str().into()),
           OutputBuffer::Value(v) => v,
+          _ => todo!(),
         }
       },
       _ => {
@@ -123,10 +144,11 @@ impl OutputWriter {
             // Multiple buffers are concatenated into a single string, unless they are all empty
             let mut has_any_nonempty = false;
             let mut output = InternalString::new();
+            let mut format: OutputFormat = Default::default();
             for buf in self.buffers {
-              if !matches!(buf, OutputBuffer::Value(RantValue::Empty)) {
+              if let Some(s) = buf.render_string(&mut format) {
                 has_any_nonempty = true;
-                output.push_str(buf.render(&self.format).as_str())
+                output.push_str(s.as_str());
               }
             }
             // If there is at least one non-empty, return the string; otherwise, return empty value
@@ -179,19 +201,25 @@ enum OutputPrintMode {
 enum OutputBuffer {
   Fragment(InternalString),
   Whitespace(InternalString),
-  Value(RantValue)
+  Value(RantValue),
+  NumberFormatUpdate(NumberFormat),
 }
 
-impl<'a> OutputBuffer {
+impl OutputBuffer {
   /// Consumes the buffer and returns its contents rendered as a single `String`.
   #[inline]
-  pub(crate) fn render(self, format: &OutputFormat) -> InternalString {
-    match self {
+  pub(crate) fn render_string(self, format: &mut OutputFormat) -> Option<InternalString> {
+    Some(match self {
       OutputBuffer::Fragment(s) => s,
       OutputBuffer::Whitespace(s) => s,
+      OutputBuffer::Value(RantValue::Empty) => return None,
       OutputBuffer::Value(RantValue::Int(n)) => format.num_format.format_integer(n),
       OutputBuffer::Value(RantValue::Float(n)) => format.num_format.format_float(n),
-      OutputBuffer::Value(v) => InternalString::from(v.to_string())
-    }
+      OutputBuffer::Value(v) => InternalString::from(v.to_string()),
+      OutputBuffer::NumberFormatUpdate(fmt) => {
+        format.num_format = fmt;
+        return None
+      },
+    })
   }
 }
