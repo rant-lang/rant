@@ -1,4 +1,4 @@
-use std::{mem, rc::Rc, fmt::Debug};
+use std::{mem::{transmute, size_of}, rc::Rc, fmt::Debug};
 use crate::*;
 use crate::lang::*;
 use crate::runtime::*;
@@ -48,11 +48,12 @@ pub enum RantFunctionInterface {
 
 impl Debug for RantFunctionInterface {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    unsafe {
-      match self {
-        RantFunctionInterface::Foreign(func) => write!(f, "{:#016x}", mem::transmute::<_, u128>(Rc::as_ptr(func))),
-        RantFunctionInterface::User(func) => write!(f, "{:#016x}", Rc::as_ptr(func) as usize)
-      }
+    match self {
+      RantFunctionInterface::Foreign(func) => unsafe {
+        let (a, b) = transmute::<_, (usize, usize)>(Rc::as_ptr(func));
+        write!(f, "{:#02$x}{:02$x}", a, b, &(size_of::<usize>() * 2))
+      },
+      RantFunctionInterface::User(func) => write!(f, "{:#p}", Rc::as_ptr(func))
     }
   }
 }

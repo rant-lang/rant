@@ -18,6 +18,7 @@
   * Float constants: `INFINITY`, `NEG_INFINITY`, `NAN`
 
 ### Changes
+* Removed unnecessary `unsafe` usage from string formatter for `function` type
 * Renamed module `rant::random` to `rant::rng`
 * E notation is now accepted on float literals
 
