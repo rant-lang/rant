@@ -80,10 +80,18 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     // Formatting functions
     whitespace_fmt as "whitespace-fmt", 
     num_fmt_system as "num-fmt-system", 
+    num_fmt_alt as "num-fmt-alt",
     num_fmt_padding as "num-fmt-padding",
+    num_fmt_precision as "num-fmt-precision",
+    num_fmt_upper as "num-fmt-upper",
+    num_fmt_endian as "num-fmt-endian",
+    num_fmt_sign as "num-fmt-sign",
+    num_fmt_infinity as "num-fmt-infinity",
+    num_fmt_group_sep as "num-fmt-group-sep",
+    num_fmt_decimal_sep as "num-fmt-decimal-sep",
 
-    // Attribute / control flow functions
-    if_ as "if", else_if as "else-if", else_ as "else", mksel, rep, sel, sep, pipe,
+    // Attribute functions
+    if_ as "if", elseif as "elseif", else_ as "else", mksel, rep, sel, sep, pipe,
 
     // Attribute frame stack functions
     push_attrs as "push-attrs", pop_attrs as "pop-attrs", count_attrs as "count-attrs", reset_attrs as "reset-attrs",

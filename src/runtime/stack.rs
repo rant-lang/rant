@@ -72,6 +72,12 @@ impl CallStack {
     self.frames.iter_mut().rev().nth(depth)
   }
 
+  /// Returns a reference to the frame `depth` frames below the top of the stack.
+  #[inline]
+  pub fn parent(&self, depth: usize) -> Option<&StackFrame> {
+    self.frames.iter().rev().nth(depth)
+  }
+
   /// Returna reference to the topmost frame in the stack.
   #[inline]
   pub fn top(&self) -> Option<&StackFrame> {

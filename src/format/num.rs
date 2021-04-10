@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::{InternalString};
+use crate::{FromRant, InternalString, IntoRant, RantValue, ValueError};
 
 const DEFAULT_SIGN_POSITIVE: &str = "+";
 const DEFAULT_SIGN_NEGATIVE: &str = "-";
@@ -28,16 +28,6 @@ const BABYLONIAN_ZERO: &str = "\u{2423}";
 const BABYLONIAN_ONES: &[&str] = &["", "\u{12415}", "\u{12416}", "\u{12417}", "\u{12418}", "\u{12419}", "\u{1241a}", "\u{1241b}", "\u{1241c}", "\u{1241d}"];
 const BABYLONIAN_TENS: &[&str] = &["", "\u{1230b}", "\u{1230b}\u{1230b}", "\u{1230d}", "\u{1240f}", "\u{12410}"];
 const BABYLONIAN_TENS_ALT: &[&str] = &["", "\u{1230b}", "\u{1230b}\u{1230b}", "\u{1230d}", "\u{12469}", "\u{1246a}"];
-
-const NUMSYS_NAME_DEFAULT: &str = "default";
-const NUMSYS_NAME_ARABIC_W: &str = "west-arabic";
-const NUMSYS_NAME_ARABIC_E: &str = "east-arabic";
-const NUMSYS_NAME_PERSIAN: &str = "persian";
-const NUMSYS_NAME_ROMAN: &str = "roman";
-const NUMSYS_NAME_BABYLONIAN: &str = "babylonian";
-const NUMSYS_NAME_BINARY: &str = "binary";
-const NUMSYS_NAME_OCTAL: &str = "octal";
-const NUMSYS_NAME_HEXADECIMAL: &str = "hex";
 
 /// Specifies a format for converting a number to a string.
 #[derive(Debug, Clone)]
@@ -69,12 +59,12 @@ pub struct NumberFormat {
 impl Default for NumberFormat {
   fn default() -> Self {
     Self {
-      system: NumeralSystem::WestArabic,
+      system: Default::default(),
       alternate: false,
       uppercase: false,
-      endianness: Endianness::Big,
-      infinity: InfinityStyle::Keyword,
-      sign: SignStyle::NegativeOnly,
+      endianness: Default::default(),
+      infinity: Default::default(),
+      sign: Default::default(),
       padding: 0,
       precision: None,
       group_sep: None,
@@ -95,6 +85,52 @@ pub enum SignStyle {
   ExplicitNonZero,
 }
 
+impl SignStyle {
+  /// Alias for the `NegativeOnly` variant used by Rant.
+  pub const ALIAS_NEGATIVE_ONLY: &'static str = "negative-only";
+  /// Alias for the `Explicit` variant used by Rant.
+  pub const ALIAS_EXPLICIT: &'static str = "explicit";
+  /// Alias for the `ExplicitNonZero` variant used by Rant.
+  pub const ALIAS_EXPLICIT_NON_ZERO: &'static str = "explicit-non-zero";
+}
+
+impl Default for SignStyle {
+  fn default() -> Self {
+    Self::NegativeOnly
+  }
+}
+
+impl FromRant for SignStyle {
+  fn from_rant(val: RantValue) -> Result<Self, ValueError> {
+    let mut s = val.to_string();
+    s.make_ascii_lowercase();
+    Ok(match s.as_str() {
+      Self::ALIAS_NEGATIVE_ONLY | "default" => Self::NegativeOnly,
+      Self::ALIAS_EXPLICIT => Self::Explicit,
+      Self::ALIAS_EXPLICIT_NON_ZERO => Self::ExplicitNonZero,
+      _ => return Err(ValueError::InvalidConversion {
+        from: val.type_name(),
+        to: "sign style",
+        message: None,
+      })
+    })
+  }
+
+  fn is_rant_optional() -> bool {
+    false
+  }
+}
+
+impl IntoRant for SignStyle {
+  fn into_rant(self) -> Result<RantValue, ValueError> {
+    match self {
+      Self::Explicit => Self::ALIAS_EXPLICIT,
+      Self::ExplicitNonZero => Self::ALIAS_EXPLICIT_NON_ZERO,
+      Self::NegativeOnly => Self::ALIAS_NEGATIVE_ONLY,
+    }.into_rant()
+  }
+}
+
 /// Defines infinity handling modes for formatted floating-point numbers.
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
@@ -103,6 +139,48 @@ pub enum InfinityStyle {
   Keyword,
   /// Show `∞` for positive infinity and `-∞` for negative infinity.
   Symbol,
+}
+
+impl InfinityStyle {
+  /// Alias for the `Keyword` variant used by Rant.
+  pub const ALIAS_KEYWORD: &'static str = "keyword";
+  /// Alias for the `Symbol` variant used by Rant.
+  pub const ALIAS_SYMBOL: &'static str = "symbol";
+}
+
+impl Default for InfinityStyle {
+  fn default() -> Self {
+    Self::Keyword
+  }
+}
+
+impl FromRant for InfinityStyle {
+  fn from_rant(val: RantValue) -> Result<Self, ValueError> {
+    let mut s = val.to_string();
+    s.make_ascii_lowercase();
+    Ok(match s.as_str() {
+      Self::ALIAS_KEYWORD | "default" => Self::Keyword,
+      Self::ALIAS_SYMBOL => Self::Symbol,
+      _ => return Err(ValueError::InvalidConversion {
+        from: val.type_name(),
+        to: "infinity style",
+        message: None,
+      })
+    })
+  }
+
+  fn is_rant_optional() -> bool {
+    false
+  }
+}
+
+impl IntoRant for InfinityStyle {
+  fn into_rant(self) -> Result<RantValue, ValueError> {
+    match self {
+      Self::Keyword => Self::ALIAS_KEYWORD,
+      Self::Symbol => Self::ALIAS_SYMBOL,
+    }.into_rant()
+  }
 }
 
 /// Defines numeral systems for formatted numbers.
@@ -127,41 +205,73 @@ pub enum NumeralSystem {
   Binary,
 }
 
+impl NumeralSystem {
+  /// Alias for the `WestArabic` variant used by Rant.
+  pub const ALIAS_WEST_ARABIC: &'static str = "west-arabic";
+  /// Alias for the `EastArabic` variant used by Rant.
+  pub const ALIAS_EAST_ARABIC: &'static str = "east-arabic";
+  /// Alias for the `Persian` variant used by Rant.
+  pub const ALIAS_PERSIAN: &'static str = "persian";
+  /// Alias for the `Roman` variant used by Rant.
+  pub const ALIAS_ROMAN: &'static str = "roman";
+  /// Alias for the `Babylonian` variant used by Rant.
+  pub const ALIAS_BABYLONIAN: &'static str = "babylonian";
+  /// Alias for the `Hex` variant used by Rant.
+  pub const ALIAS_HEX: &'static str = "hex";
+  /// Alias for the `Octal` variant used by Rant.
+  pub const ALIAS_OCTAL: &'static str = "octal";
+  /// Alias for the `Binary` variant used by Rant.
+  pub const ALIAS_BINARY: &'static str = "binary";
+}
+
 impl Default for NumeralSystem {
   fn default() -> Self {
     Self::WestArabic
   }
 }
 
-impl NumeralSystem {
-  pub fn from_name(name: &str) -> Option<Self> {
-    Some(match name {
-      NUMSYS_NAME_DEFAULT => Self::WestArabic,
-      NUMSYS_NAME_ARABIC_W => Self::WestArabic,
-      NUMSYS_NAME_ARABIC_E => Self::EastArabic,
-      NUMSYS_NAME_PERSIAN => Self::Persian,
-      NUMSYS_NAME_BABYLONIAN => Self::Babylonian,
-      NUMSYS_NAME_ROMAN=> Self::Roman,
-      NUMSYS_NAME_HEXADECIMAL => Self::Hex,
-      NUMSYS_NAME_OCTAL => Self::Octal,
-      NUMSYS_NAME_BINARY => Self::Binary,
-      _ => return None,
+impl FromRant for NumeralSystem {
+  fn from_rant(val: RantValue) -> Result<Self, ValueError> {
+    let mut s = val.to_string();
+    s.make_ascii_lowercase();
+    Ok(match s.as_str() {
+      Self::ALIAS_WEST_ARABIC | "default" => Self::WestArabic,
+      Self::ALIAS_EAST_ARABIC => Self::EastArabic,
+      Self::ALIAS_PERSIAN => Self::Persian,
+      Self::ALIAS_ROMAN => Self::Roman,
+      Self::ALIAS_BABYLONIAN => Self::Babylonian,
+      Self::ALIAS_HEX => Self::Hex,
+      Self::ALIAS_OCTAL => Self::Octal,
+      Self::ALIAS_BINARY => Self::Binary,
+      _ => return Err(ValueError::InvalidConversion {
+        from: val.type_name(),
+        to: "numeral system",
+        message: None,
+      })
     })
   }
 
-  pub fn name(&self) -> &'static str {
-    match self {
-      Self::WestArabic => NUMSYS_NAME_ARABIC_W,
-      Self::EastArabic => NUMSYS_NAME_ARABIC_E,
-      Self::Persian => NUMSYS_NAME_PERSIAN,
-      Self::Roman => NUMSYS_NAME_ROMAN,
-      Self::Babylonian => NUMSYS_NAME_BABYLONIAN,
-      Self::Hex => NUMSYS_NAME_HEXADECIMAL,
-      Self::Octal => NUMSYS_NAME_OCTAL,
-      Self::Binary => NUMSYS_NAME_BINARY,
-    }
+  fn is_rant_optional() -> bool {
+    false
   }
+}
 
+impl IntoRant for NumeralSystem {
+  fn into_rant(self) -> Result<RantValue, ValueError> {
+    match self {
+      NumeralSystem::WestArabic => Self::ALIAS_WEST_ARABIC,
+      NumeralSystem::EastArabic => Self::ALIAS_EAST_ARABIC,
+      NumeralSystem::Persian => Self::ALIAS_PERSIAN,
+      NumeralSystem::Roman => Self::ALIAS_ROMAN,
+      NumeralSystem::Babylonian => Self::ALIAS_BABYLONIAN,
+      NumeralSystem::Hex => Self::ALIAS_HEX,
+      NumeralSystem::Octal => Self::ALIAS_OCTAL,
+      NumeralSystem::Binary => Self::ALIAS_BINARY,
+    }.into_rant()
+  }
+}
+
+impl NumeralSystem {
   #[inline]
   fn get_decimal_digit(&self, digit_index: usize) -> Option<char> {
     if digit_index > 9 { return None }
@@ -206,6 +316,41 @@ pub enum Endianness {
   Big,
   /// Little-endian byte ordering (LSB comes last)
   Little,
+}
+
+impl Default for Endianness {
+  fn default() -> Self {
+    Self::Big
+  }
+}
+
+impl FromRant for Endianness {
+  fn from_rant(val: RantValue) -> Result<Self, ValueError> {
+    let mut s = val.to_string();
+    s.make_ascii_lowercase();
+    Ok(match s.as_str() {
+      "little" => Self::Little,
+      "big" => Self::Big,
+      _ => return Err(ValueError::InvalidConversion {
+        from: val.type_name(),
+        to: "endianness",
+        message: None,
+      }),
+    })
+  }
+
+  fn is_rant_optional() -> bool {
+    false
+  }
+}
+
+impl IntoRant for Endianness {
+  fn into_rant(self) -> Result<RantValue, ValueError> {
+    match self {
+      Self::Big => "big",
+      Self::Little => "little",
+    }.into_rant()
+  }
 }
 
 impl NumberFormat {
@@ -301,6 +446,7 @@ impl NumberFormat {
 
   fn format_bitwise_float(&self, input: f64, radix: usize) -> InternalString {
     let mut digit_stack: Vec<char> = vec![];
+    let sign_padding_index = if input.is_sign_negative() { radix - 1 } else { 0 };
     let mut n = u64::from_be_bytes(match self.endianness {
       Endianness::Big => input.to_be_bytes(),
       Endianness::Little => input.to_le_bytes(),
@@ -334,7 +480,7 @@ impl NumberFormat {
     // Add big-endian padding
     if self.endianness == Endianness::Big {
       for _ in 0..needed_padding {
-        buf.push(DIGITS_DEFAULT[0]);
+        buf.push(DIGITS_DEFAULT[sign_padding_index]);
       }
     }
 
@@ -346,7 +492,7 @@ impl NumberFormat {
     // Add little-endian padding
     if self.endianness == Endianness::Little {
       for _ in 0..needed_padding {
-        buf.push(DIGITS_DEFAULT[0]);
+        buf.push(DIGITS_DEFAULT[sign_padding_index]);
       }
     }
 
@@ -355,12 +501,13 @@ impl NumberFormat {
 
   fn format_bitwise_integer(&self, input: i64, radix: usize) -> InternalString {
     let mut digit_stack: Vec<char> = vec![];
-    let mut n = i64::from_be_bytes(match self.endianness {
+    let sign_padding_index = if input < 0 { radix - 1 } else { 0 };
+    let mut n = u64::from_be_bytes(match self.endianness {
       Endianness::Big => input.to_be_bytes(),
       Endianness::Little => input.to_le_bytes(),
     });
 
-    let r = radix as i64;
+    let r = radix as u64;
 
     loop {
       let digit = DIGITS_DEFAULT[(n % r) as usize];
@@ -388,7 +535,7 @@ impl NumberFormat {
     // Add big-endian padding
     if self.endianness == Endianness::Big {
       for _ in 0..needed_padding {
-        buf.push(DIGITS_DEFAULT[0]);
+        buf.push(DIGITS_DEFAULT[sign_padding_index]);
       }
     }
 
@@ -400,7 +547,7 @@ impl NumberFormat {
     // Add little-endian padding
     if self.endianness == Endianness::Little {
       for _ in 0..needed_padding {
-        buf.push(DIGITS_DEFAULT[0]);
+        buf.push(DIGITS_DEFAULT[sign_padding_index]);
       }
     }
 

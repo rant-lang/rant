@@ -178,6 +178,12 @@ impl FromRant for bool {
   }
 }
 
+impl IntoRant for bool {
+  fn into_rant(self) -> Result<RantValue, ValueError> {
+    Ok(RantValue::Boolean(self))
+  }
+}
+
 impl FromRant for f32 {
   fn from_rant(val: RantValue) -> ValueResult<Self> {
     match val {
@@ -233,6 +239,28 @@ impl IntoRant for f64 {
 impl IntoRant for String {
   fn into_rant(self) -> ValueResult<RantValue> {
     Ok(RantValue::String(self.into()))
+  }
+}
+
+impl IntoRant for RantString {
+  fn into_rant(self) -> Result<RantValue, ValueError> {
+    Ok(RantValue::String(self))
+  }
+}
+
+impl IntoRant for InternalString {
+  fn into_rant(self) -> Result<RantValue, ValueError> {
+    RantString::from(self.as_str()).into_rant()
+  }
+}
+
+impl FromRant for InternalString {
+  fn from_rant(val: RantValue) -> Result<Self, ValueError> {
+    Ok(InternalString::from(val.to_string()))
+  }
+
+  fn is_rant_optional() -> bool {
+    false
   }
 }
 

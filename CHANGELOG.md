@@ -13,19 +13,20 @@
     * Octal
     * Binary
 * Added stdlib functions:
-  * `[num-fmt: options?]` (?)
-  * `[num-fmt-system: system?]`
-  * `[num-fmt-padding: padding?]` (?)
-  * `[num-fmt-precision: precision?]` (?)
-  * `[num-fmt-sign: sign-mode?]` (?)
-  * `[num-fmt-alt: enable?]` (?)
-  * `[num-fmt-upper: enable?]` (?)
-  * `[num-fmt-infinity: infinity-mode?]` (?)
-  * `[num-fmt-endianness: endianness?]` (?)
+  * `[num-fmt: options?; depth?]` (?)
+  * `[num-fmt-system: system?; depth?]`
+  * `[num-fmt-padding: padding?; depth]`
+  * `[num-fmt-precision: precision?; depth?]`
+  * `[num-fmt-sign: sign-mode?; depth?]`
+  * `[num-fmt-alt: enable?; depth?]`
+  * `[num-fmt-upper: enable?; depth?]`
+  * `[num-fmt-infinity: infinity?; depth?]`
+  * `[num-fmt-endian: endianness?; depth?]`
 * Added stdlib constants:
   * Float constants: `INFINITY`, `NEG_INFINITY`, `NAN`
 
 ### Changes
+* Renamed `[else-if]` to `[elseif]`
 * Removed unnecessary `unsafe` usage from string formatter for `function` type
 * Renamed module `rant::random` to `rant::rng`
 * E notation is now accepted on float literals

@@ -1722,6 +1722,12 @@ impl<'rant> VM<'rant> {
     self.call_stack.parent_mut(depth)
   }
 
+  /// Safely attempts to get a reference to the frame `depth` frames below the top of the call stack.
+  #[inline(always)]
+  pub fn parent_frame(&self, depth: usize) -> Option<&StackFrame> {
+    self.call_stack.parent(depth)
+  }
+
   /// Gets a reference to the topmost frame on the call stack.
   #[inline(always)]
   pub fn cur_frame(&self) -> &StackFrame {

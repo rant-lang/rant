@@ -5,7 +5,7 @@ pub(crate) fn if_(vm: &mut VM, condition: bool) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn else_if(vm: &mut VM, condition: bool) -> RantStdResult {
+pub(crate) fn elseif(vm: &mut VM, condition: bool) -> RantStdResult {
   vm.resolver_mut().attrs_mut().make_else_if(condition);
   Ok(())
 }
