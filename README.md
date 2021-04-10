@@ -73,7 +73,7 @@ Rant's CLI can run Rant code from files or the command line.
 Install it from Cargo with:
 
 ```sh
-$ cargo install rant --version 4.0.0-alpha.19 --features cli
+$ cargo install rant --version 4.0.0-alpha.20 --features cli
 ```
 
 Then run it:
