@@ -79,6 +79,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
 
     // Formatting functions
     whitespace_fmt as "whitespace-fmt", 
+    num_fmt as "num-fmt",
     num_fmt_system as "num-fmt-system", 
     num_fmt_alt as "num-fmt-alt",
     num_fmt_padding as "num-fmt-padding",

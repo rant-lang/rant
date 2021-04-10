@@ -160,6 +160,11 @@ impl RantMap {
   pub fn raw_keys(&self) -> RantList {
     self.map.keys().map(|k| RantValue::String(k.as_str().into())).collect()
   }
+
+  #[inline]
+  pub(crate) fn raw_pairs_internal(&self) -> impl Iterator<Item = (&'_ str, &'_ RantValue)> {
+    self.map.iter().map(|(k, v)| (k.as_str(), v))
+  }
 }
 
 impl Default for RantMap {

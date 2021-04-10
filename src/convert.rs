@@ -248,6 +248,18 @@ impl IntoRant for RantString {
   }
 }
 
+impl IntoRant for RantMap {
+  fn into_rant(self) -> Result<RantValue, ValueError> {
+    Ok(RantValue::Map(RantMapRef::new(RefCell::new(self))))
+  }
+}
+
+impl IntoRant for RantList {
+  fn into_rant(self) -> Result<RantValue, ValueError> {
+    Ok(RantValue::List(RantListRef::new(RefCell::new(self))))
+  }
+}
+
 impl IntoRant for InternalString {
   fn into_rant(self) -> Result<RantValue, ValueError> {
     RantString::from(self.as_str()).into_rant()

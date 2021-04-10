@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.0.0-alpha.20 (unreleased)
+## 4.0.0-alpha.20
 
 ### New
 * Added number formatter
@@ -13,7 +13,7 @@
     * Octal
     * Binary
 * Added stdlib functions:
-  * `[num-fmt: options?; depth?]` (?)
+  * `[num-fmt: options?; depth?]`
   * `[num-fmt-system: system?; depth?]`
   * `[num-fmt-padding: padding?; depth]`
   * `[num-fmt-precision: precision?; depth?]`
@@ -30,8 +30,6 @@
 * Removed unnecessary `unsafe` usage from string formatter for `function` type
 * Renamed module `rant::random` to `rant::rng`
 * E notation is now accepted on float literals
-
-### Fixes
 
 ## 4.0.0-alpha.19
 
