@@ -33,20 +33,21 @@ pub(crate) fn whitespace_fmt(vm: &mut VM, (mode, custom): (Option<String>, Optio
 }
 
 pub(crate) fn num_fmt_system(vm: &mut VM, (system, depth): (Option<NumeralSystem>, Option<usize>)) -> RantStdResult {
+  let actual_depth = depth.unwrap_or(0).saturating_add(1);
+
   if let Some(system) = system {
-    if let Some(frame) = vm.parent_frame_mut(depth.unwrap_or(0).saturating_add(1)) {
+    if let Some(frame) = vm.parent_frame_mut(actual_depth) {
       frame.use_output_mut(|o| {
         o.format_mut().num_format.system = system;
         o.update_number_format();
       });
     }
   } else {
-    let cur_system = vm
-      .cur_frame()
-      .output()
-      .map_or(Default::default(), |o| o.format().num_format.system)
-      .into_rant()
-      .into_runtime_result()?;
+    let cur_system = match vm.parent_frame_mut(actual_depth) {
+      Some(frame) => frame.output().map_or(Default::default(), |o| o.format().num_format.system),
+      None => Default::default(),
+    }.into_rant().into_runtime_result()?;
+      
     vm.cur_frame_mut().write_value(cur_system);
   }
   
