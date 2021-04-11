@@ -203,6 +203,8 @@ pub enum NumeralSystem {
   Octal,
   /// Binary (base 2)
   Binary,
+  /// Latin alphabetical numerals (a, b, c, ...)
+  Alpha,
 }
 
 impl NumeralSystem {
@@ -222,6 +224,8 @@ impl NumeralSystem {
   pub const ALIAS_OCTAL: &'static str = "octal";
   /// Alias for the `Binary` variant used by Rant.
   pub const ALIAS_BINARY: &'static str = "binary";
+  /// Alias for the `Alpha` variant used by Rant.
+  pub const ALIAS_ALPHA: &'static str = "alpha";
 }
 
 impl Default for NumeralSystem {
@@ -243,6 +247,7 @@ impl FromRant for NumeralSystem {
       Self::ALIAS_HEX => Self::Hex,
       Self::ALIAS_OCTAL => Self::Octal,
       Self::ALIAS_BINARY => Self::Binary,
+      Self::ALIAS_ALPHA => Self::Alpha,
       _ => return Err(ValueError::InvalidConversion {
         from: val.type_name(),
         to: "numeral system",
@@ -259,14 +264,15 @@ impl FromRant for NumeralSystem {
 impl IntoRant for NumeralSystem {
   fn into_rant(self) -> Result<RantValue, ValueError> {
     match self {
-      NumeralSystem::WestArabic => Self::ALIAS_WEST_ARABIC,
-      NumeralSystem::EastArabic => Self::ALIAS_EAST_ARABIC,
-      NumeralSystem::Persian => Self::ALIAS_PERSIAN,
-      NumeralSystem::Roman => Self::ALIAS_ROMAN,
-      NumeralSystem::Babylonian => Self::ALIAS_BABYLONIAN,
-      NumeralSystem::Hex => Self::ALIAS_HEX,
-      NumeralSystem::Octal => Self::ALIAS_OCTAL,
-      NumeralSystem::Binary => Self::ALIAS_BINARY,
+      Self::WestArabic => Self::ALIAS_WEST_ARABIC,
+      Self::EastArabic => Self::ALIAS_EAST_ARABIC,
+      Self::Persian => Self::ALIAS_PERSIAN,
+      Self::Roman => Self::ALIAS_ROMAN,
+      Self::Babylonian => Self::ALIAS_BABYLONIAN,
+      Self::Hex => Self::ALIAS_HEX,
+      Self::Octal => Self::ALIAS_OCTAL,
+      Self::Binary => Self::ALIAS_BINARY,
+      Self::Alpha => Self::ALIAS_ALPHA,
     }.into_rant()
   }
 }
@@ -381,6 +387,7 @@ impl NumberFormat {
       Hex => self.format_bitwise_float(n, 16),
       Octal => handle_specials!(self.format_bitwise_float(n, 8)),
       Binary => self.format_bitwise_float(n, 2),
+      Alpha => self.format_alpha_integer(n as i64),
     }
   }
 
@@ -394,6 +401,7 @@ impl NumberFormat {
       Hex => self.format_bitwise_integer(n, 16),
       Octal => self.format_bitwise_integer(n, 8),
       Binary => self.format_bitwise_integer(n, 2),
+      Alpha => self.format_alpha_integer(n),
     }
   }
 
@@ -444,6 +452,34 @@ impl NumberFormat {
     }
   }
 
+  fn format_alpha_integer(&self, input: i64) -> InternalString {
+    let mut buf = InternalString::new();
+    let mut n = input.abs();
+
+    if n == 0 { return " ".into() }
+
+    let mut digit_stack: Vec<char> = vec![];
+
+    buf.push_str(self.get_integer_sign(input));
+
+    while n > 0 {
+      let alpha_index = (n - 1) % 26;
+      let digit = (b'a' + alpha_index as u8) as char;
+      digit_stack.push(digit);
+      n = (n - alpha_index - 1) / 26;
+    }
+
+    for d in digit_stack.drain(..).rev() {
+      buf.push(d);
+    }
+
+    if self.uppercase {
+      buf.make_ascii_uppercase();
+    }
+
+    buf
+  }
+  
   fn format_bitwise_float(&self, input: f64, radix: usize) -> InternalString {
     let mut digit_stack: Vec<char> = vec![];
     let sign_padding_index = if input.is_sign_negative() { radix - 1 } else { 0 };
