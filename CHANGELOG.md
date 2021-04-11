@@ -1,5 +1,15 @@
 # Changelog
 
+## 4.0.0-alpha.21
+
+### New
+
+### Changes
+
+### Fixes
+
+* Fixed `[cat]` printing to the wrong scope level
+
 ## 4.0.0-alpha.20
 
 ### New
