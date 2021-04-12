@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) fn seg(vm: &mut VM, (s, seg_size): (String, usize)) -> RantStdResult {
+pub(crate) fn seg(vm: &mut VM, (s, seg_size): (RantString, usize)) -> RantStdResult {
   if seg_size > 0 {
     let mut segs = vec![];
     let len = s.len();
@@ -9,14 +9,14 @@ pub(crate) fn seg(vm: &mut VM, (s, seg_size): (String, usize)) -> RantStdResult 
     if last_seg_len > 0 {
       for i in 0..n {
         if i == n - 1 {
-          segs.push(s[i * seg_size .. i * seg_size + last_seg_len].to_owned());
+          segs.push(s.to_slice(Some(i * seg_size), Some(i * seg_size + last_seg_len)));
         } else {
-          segs.push(s[i * seg_size .. (i + 1) * seg_size].to_owned());
+          segs.push(s.to_slice(Some(i * seg_size), Some((i + 1) * seg_size)));
         }
       }
     } else {
       for i in 0..n {
-        segs.push(s[i * seg_size .. (i + 1) * seg_size].to_owned());
+        segs.push(s.to_slice(Some(i * seg_size), Some((i + 1) * seg_size)));
       }
     }
     vm.cur_frame_mut().write_value(segs.into_rant().into_runtime_result()?);

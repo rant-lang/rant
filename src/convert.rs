@@ -242,12 +242,6 @@ impl IntoRant for String {
   }
 }
 
-impl IntoRant for RantString {
-  fn into_rant(self) -> Result<RantValue, ValueError> {
-    Ok(RantValue::String(self))
-  }
-}
-
 impl IntoRant for RantMap {
   fn into_rant(self) -> Result<RantValue, ValueError> {
     Ok(RantValue::Map(RantMapRef::new(RefCell::new(self))))
@@ -401,7 +395,7 @@ pub trait FromRantArgs: Sized {
 impl<T: FromRant> FromRantArgs for T {
   fn from_rant_args(args: Vec<RantValue>) -> ValueResult<Self> {
     let mut args = args.into_iter();
-    Ok(T::from_rant(args.next().unwrap_or(RantValue::Empty))?)
+    T::from_rant(args.next().unwrap_or(RantValue::Empty))
   }
 
   fn as_rant_params() -> Vec<Parameter> {

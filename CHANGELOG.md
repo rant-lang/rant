@@ -6,6 +6,7 @@
 * Added new number format system: `alpha`
 
 ### Changes
+* `[seg]` now operates internally on grapheme boundaries instead of `char` boundaries
 
 ### Fixes
 * Fixed `[cat]` printing to the wrong scope level
