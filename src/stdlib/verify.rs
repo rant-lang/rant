@@ -63,7 +63,7 @@ pub(crate) fn is_empty(vm: &mut VM, value: RantValue) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn is_any(vm: &mut VM, value: RantValue) -> RantStdResult {
+pub(crate) fn is_some(vm: &mut VM, value: RantValue) -> RantStdResult {
   vm.cur_frame_mut().write_value(RantValue::Boolean(!value.is_empty()));
   Ok(())
 }

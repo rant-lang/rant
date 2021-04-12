@@ -7,9 +7,11 @@
 
 ### Changes
 * `[seg]` now operates internally on grapheme boundaries instead of `char` boundaries
+* Renamed `[is-any]` to `[is-some]`
 
 ### Fixes
 * Fixed `[cat]` printing to the wrong scope level
+* Fixed panic when setting number format with no output
 
 ## 4.0.0-alpha.20
 

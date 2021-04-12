@@ -110,7 +110,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     is_string as "is-string", is_int as "is-int", is_float as "is-float", 
     is_number as "is-number", is_bool as "is-bool", is_empty as "is-empty", is_nan as "is-nan",
     is_odd as "is-odd", is_even as "is-even", is_factor as "is-factor",
-    is_between as "is-between", is_any as "is-any", is,
+    is_between as "is-between", is_some as "is-some", is,
 
     // Math functions
     abs, add, sub, mul, div, mul_add as "mul-add", mod_ as "mod", neg, pow, recip, 

@@ -135,7 +135,7 @@ impl OutputWriter {
         match buffer {
           OutputBuffer::Fragment(s) | OutputBuffer::Whitespace(s) => RantValue::String(s.as_str().into()),
           OutputBuffer::Value(v) => v,
-          _ => todo!(),
+          _ => RantValue::Empty,
         }
       },
       _ => {
