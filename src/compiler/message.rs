@@ -167,6 +167,9 @@ pub enum Problem {
   WeightNotAllowed,
   FileNotFound(String),
   FileIOError(String),
+  DynamicDepth,
+  InvalidDepthUsage,
+  DepthAssignment,
 }
 
 impl Problem {
@@ -201,9 +204,10 @@ impl Problem {
       Problem::AccessPathStartsWithIndex =>                       "R-0020",
       Problem::AccessPathStartsWithSlice =>                       "R-0021",
       Problem::InvalidSliceBound(_) =>                            "R-0022",
-      
-      // Composition
       Problem::NothingToCompose =>                                "R-0023",
+      Problem::DynamicDepth =>                                    "R-0024",
+      Problem::DepthAssignment =>                                 "R-0025",
+      Problem::InvalidDepthUsage =>                               "R-0026",
       
       // Static analysis errors (0100 - 0199)
       Problem::ConstantReassignment(_) =>                         "R-0100",
@@ -271,6 +275,9 @@ impl Problem {
       Problem::ConstantRedefinition(cname) => format!("redefinition of known constant '{}'", cname),
       Problem::InvalidKeyword(kw) => format!("invalid keyword: '@{}'", kw),
       Problem::WeightNotAllowed => "@weight is not allowed in this context".to_owned(),
+      Problem::DynamicDepth => "depth operator cannot be used on dynamic variable names".to_owned(),
+      Problem::DepthAssignment => "variable depth cannot be assigned to".to_owned(),
+      Problem::InvalidDepthUsage => "depth operator is not valid in this context".to_owned(),
     }
   }
   

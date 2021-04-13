@@ -654,7 +654,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let accessors = self.parse_accessor()?;
           for accessor in accessors {
             match accessor {
-              Rst::VarGet(..) => {
+              Rst::VarGet(..) | Rst::VarDepth(..) => {
                 is_seq_printing = true;
                 whitespace!(allow);
               },
@@ -2044,20 +2044,42 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }
       } else {
         // Read the path to what we're accessing
+        let mut is_depth_op = false;
         let (var_path, var_path_span) = self.parse_access_path(true)?;
         
-        if let Some((token, _)) = self.reader.next_solid() {
+        self.reader.skip_ws();
+
+        // Check for depth operator
+        if let Some((_, depth_op_range)) = self.reader.take_where(|t| matches!(t, Some((RantToken::And, _)))) {
+          if var_path.is_variable() && var_path.var_name().is_some() {
+            is_depth_op = true;
+          } else if var_path.len() == 1 && matches!(var_path.first(), Some(AccessPathComponent::DynamicKey(..))) {
+            self.report_error(Problem::DynamicDepth, &depth_op_range);
+          } else {
+            self.report_error(Problem::InvalidDepthUsage, &depth_op_range);
+          }
+        }
+        
+        if let Some((token, cur_token_span)) = self.reader.next_solid() {
           match token {
             // If we hit a '>', it's a getter
             RantToken::RightAngle => {
               self.track_variable_access(&var_path, false, &var_path_span);
-              add_accessor!(Rst::VarGet(Rc::new(var_path), None));
+              add_accessor!(if is_depth_op {
+                Rst::VarDepth(var_path.var_name().unwrap(), var_path.kind(), None)
+              } else { 
+                Rst::VarGet(Rc::new(var_path), None)
+              });
               break 'read;
             },
             // If we hit a ';', it's a getter with another accessor chained after it
             RantToken::Semi => {
               self.track_variable_access(&var_path, false, &var_path_span);
-              add_accessor!(Rst::VarGet(Rc::new(var_path), None));
+              add_accessor!(if is_depth_op {
+                Rst::VarDepth(var_path.var_name().unwrap(), var_path.kind(), None)
+              } else { 
+                Rst::VarGet(Rc::new(var_path), None)
+              });
               continue 'read;
             },
             // If we hit a `?`, it's a getter with a fallback
@@ -2070,14 +2092,19 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               } = self.parse_sequence(SequenceParseMode::AccessorFallbackValue)?;
 
               self.track_variable_access(&var_path, false, &var_path_span);
-              add_accessor!(Rst::VarGet(Rc::new(var_path), Some(Rc::new(fallback_expr))));
+
+              add_accessor!(if is_depth_op {
+                Rst::VarDepth(var_path.var_name().unwrap(), var_path.kind(), Some(Rc::new(fallback_expr)))
+              } else { 
+                Rst::VarGet(Rc::new(var_path), Some(Rc::new(fallback_expr)))
+              });
 
               match fallback_end_type {
                 SequenceEndType::AccessorFallbackValueToDelim => continue 'read,
                 SequenceEndType::AccessorFallbackValueToEnd => break 'read,
                 // Error
                 SequenceEndType::ProgramEnd => {
-                  self.report_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+                  self.report_error(Problem::UnclosedVariableAccess, &cur_token_span);
                   return Err(())
                 },
                 _ => unreachable!()
@@ -2100,6 +2127,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
               self.track_variable_access(&var_path, true, &setter_span);
               add_accessor!(Rst::VarSet(Rc::new(var_path), Rc::new(setter_rhs_expr)));
+
+              // Assignment is not valid if we're using depth operator
+              if is_depth_op {
+                self.report_error(Problem::DepthAssignment, &(cur_token_span.start .. assign_end_span.start));
+              }
 
               match setter_rhs_end {
                 // Accessor was terminated

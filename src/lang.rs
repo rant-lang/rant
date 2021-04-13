@@ -246,7 +246,7 @@ impl AccessPath {
     matches!(self.first(), Some(AccessPathComponent::AnonymousValue(..)))
   }
 
-  /// Determines whether the root of the access path is a variable.
+  /// Determines whether the access path points to a variable.
   #[inline]
   pub fn is_variable(&self) -> bool {
     self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::Name(..)) | Some(AccessPathComponent::DynamicKey(..)))
@@ -723,6 +723,8 @@ pub enum Rst {
   ConstDef(Identifier, AccessPathKind, Option<Rc<Sequence>>),
   /// Value getter
   VarGet(Rc<AccessPath>, Option<Rc<Sequence>>),
+  /// Variable depth
+  VarDepth(Identifier, AccessPathKind, Option<Rc<Sequence>>),
   /// Value setter
   VarSet(Rc<AccessPath>, Rc<Sequence>),
   /// Compose value
@@ -769,6 +771,7 @@ impl Rst {
       Rst::Nop =>                             "no-op",
       Rst::VarDef(..) =>                      "variable definition",
       Rst::ConstDef(..) =>                    "constant definition",
+      Rst::VarDepth(..) =>                    "variable depth",
       Rst::VarGet(..) =>                      "getter",
       Rst::VarSet(..) =>                      "setter",
       Rst::BlockValue(_) =>                   "block value",

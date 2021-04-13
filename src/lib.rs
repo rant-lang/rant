@@ -328,7 +328,7 @@ impl Rant {
   }
 
   /// Attempts to load and compile a module with the specified name.
-  pub(crate) fn try_load_module(&mut self, module_path: &str, caller_origin: Rc<RantProgramInfo>) -> ModuleLoadResult {
+  pub(crate) fn try_read_module(&mut self, module_path: &str, caller_origin: Rc<RantProgramInfo>) -> ModuleLoadResult {
     if !self.options.enable_require {
       return Err(ModuleLoadError {
         name: module_path.to_owned(),

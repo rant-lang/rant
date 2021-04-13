@@ -153,11 +153,36 @@ impl CallStack {
     runtime_error!(RuntimeErrorType::InvalidAccess, "variable '{}' not found", id);
   }
 
+  #[inline]
+  pub fn get_var_depth(&self, context: &Rant, id: &str, access: AccessPathKind) -> RuntimeResult<usize> {
+    match access {
+      AccessPathKind::Local => {
+        if let Some(d) = self.locals.depth_of(id) {
+          return Ok(d)
+        }
+      },
+      AccessPathKind::Descope(n) => {
+        if let Some((_, d)) = self.locals.get_parent_depth(id, n) {
+          return Ok(d)
+        }
+      },
+      // Skip locals completely if it's a global accessor
+      AccessPathKind::ExplicitGlobal => {}
+    }
+
+    // Check globals
+    if context.has_global(id) {
+      return Ok(self.locals.depth() - 1)
+    }
+
+    runtime_error!(RuntimeErrorType::InvalidAccess, "variable '{}' not found", id);
+  }
+
   /// Gets a variable's value using the specified access type.
   #[inline]
   pub fn get_var_value(&self, context: &Rant, id: &str, access: AccessPathKind, prefer_function: bool) -> RuntimeResult<RantValue> {
 
-    macro_rules! trickle_down_func_lookup {
+    macro_rules! percolating_func_lookup {
       ($value_iter:expr) => {
         if let Some(mut vars) = $value_iter {
           if let Some(mut var) = vars.next() {
@@ -180,14 +205,14 @@ impl CallStack {
       AccessPathKind::Local => {
         // If the caller requested a function, perform function percolation
         if prefer_function {
-          trickle_down_func_lookup!(self.locals.get_all(id));
+          percolating_func_lookup!(self.locals.get_all(id));
         } else if let Some(var) = self.locals.get(id) {
           return Ok(var.value_cloned())
         }
       },
       AccessPathKind::Descope(n) => {
         if prefer_function {
-          trickle_down_func_lookup!(self.locals.get_parents(id, n));
+          percolating_func_lookup!(self.locals.get_parents(id, n));
         } else if let Some(var) = self.locals.get_parent(id, n) {
           return Ok(var.value_cloned())
         }

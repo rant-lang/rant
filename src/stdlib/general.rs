@@ -166,7 +166,7 @@ pub(crate) fn require(vm: &mut VM, module_path: String) -> RantStdResult {
 
     // If not cached, attempt to load it from file and run its root sequence
     let caller_origin = Rc::clone(&vm.cur_frame().origin());
-    let module_pgm = vm.context_mut().try_load_module(&module_path, caller_origin).into_runtime_result()?;
+    let module_pgm = vm.context_mut().try_read_module(&module_path, caller_origin).into_runtime_result()?;
     vm.cur_frame_mut().push_intent_front(Intent::ImportLastAsModule { module_name, descope: 1 });
     vm.push_frame(Rc::clone(&module_pgm.root), true)?;
     Ok(())
