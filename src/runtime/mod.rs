@@ -1,20 +1,18 @@
-pub use stack::*;
+pub(crate) mod resolver;
+mod error;
+mod output;
+mod stack;
 
 use crate::*;
 use crate::lang::*;
 use crate::util::*;
 use self::resolver::*;
 
-use std::{cell::RefCell, error::Error, fmt::{Debug, Display}, ops::Deref, rc::Rc};
+pub use self::stack::*;
+pub use self::error::*;
+
+use std::{cell::RefCell, fmt::{Debug, Display}, ops::Deref, rc::Rc};
 use smallvec::{SmallVec, smallvec};
-
-
-pub(crate) mod resolver;
-mod output;
-mod stack;
-
-/// Type alias for `Result<T, RuntimeError>`
-pub type RuntimeResult<T> = Result<T, RuntimeError>;
 
 /// The largest possible stack size before a stack overflow error is raised by the runtime.
 pub const MAX_STACK_SIZE: usize = 20000;
@@ -1846,107 +1844,5 @@ impl<'rant> VM<'rant> {
     }
 
     state
-  }
-}
-
-pub(crate) trait IntoRuntimeResult<T> {
-  fn into_runtime_result(self) -> RuntimeResult<T>;
-}
-
-/// A runtime error raised by a Rant program.
-#[derive(Debug)]
-pub struct RuntimeError {
-  /// The type of runtime error.
-  pub error_type: RuntimeErrorType,
-  /// A description of what went wrong.
-  pub description: String,
-  /// A stack trace describing the location of the error.
-  pub stack_trace: Option<String>,
-}
-
-impl Error for RuntimeError {
-  fn source(&self) -> Option<&(dyn Error + 'static)> {
-    match &self.error_type {
-      RuntimeErrorType::IndexError(err) => Some(err),
-      RuntimeErrorType::KeyError(err) => Some(err),
-      RuntimeErrorType::ValueError(err) => Some(err),
-      _ => None,
-    }
-  }
-
-  fn cause(&self) -> Option<&dyn Error> {
-    self.source()
-  }
-}
-
-impl Display for RuntimeError {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "[{}] {}", self.error_type, self.description)
-  }
-}
-
-/// Provides general categories of runtime errors encountered in Rant.
-#[derive(Debug)]
-pub enum RuntimeErrorType {
-  /// Stack overflow
-  StackOverflow,
-  /// Stack underflow
-  StackUnderflow,
-  /// Variable access error, such as attempting to access a nonexistent variable or write to a constant
-  InvalidAccess,
-  /// Operation is not valid for the current program state
-  InvalidOperation,
-  /// Internal VM error, usually indicating a bug or corrupted data
-  InternalError,
-  /// Too few/many arguments were passed to a function
-  ArgumentMismatch,
-  /// Invalid argument passed to function
-  ArgumentError,
-  /// Tried to invoke a non-function
-  CannotInvokeValue,
-  /// Assertion failed
-  AssertError,
-  /// Error occurred due to unexpected value type
-  TypeError,
-  /// Error occurred when creating value
-  ValueError(ValueError),
-  /// Error occurred while indexing value
-  IndexError(IndexError),
-  /// Error occurred while keying value
-  KeyError(KeyError),
-  /// Error occurred while slicing value
-  SliceError(SliceError),
-  /// Error occurred while iterating selector
-  SelectorError(SelectorError),
-  /// Error occurred while trying to load a module
-  ModuleLoadError(ModuleLoadError),
-  /// Error manually triggered by program
-  UserError,
-  /// Error during control flow operation (e.g. return or break)
-  ControlFlowError,
-}
-
-impl Display for RuntimeErrorType {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", match self {
-      RuntimeErrorType::StackOverflow => "stack overflow",
-      RuntimeErrorType::StackUnderflow => "stack underflow",
-      RuntimeErrorType::InvalidAccess => "invalid access",
-      RuntimeErrorType::InvalidOperation => "invalid operation",
-      RuntimeErrorType::InternalError => "external error",
-      RuntimeErrorType::ArgumentMismatch => "argument mismatch",
-      RuntimeErrorType::ArgumentError => "argument error",
-      RuntimeErrorType::CannotInvokeValue => "cannot invoke value",
-      RuntimeErrorType::UserError => "user error",
-      RuntimeErrorType::AssertError => "assertion error",
-      RuntimeErrorType::TypeError => "type error",
-      RuntimeErrorType::ValueError(_) => "value error",
-      RuntimeErrorType::IndexError(_) => "index error",
-      RuntimeErrorType::KeyError(_) => "key error",
-      RuntimeErrorType::SliceError(_) => "slice error",
-      RuntimeErrorType::SelectorError(_) => "selector error",
-      RuntimeErrorType::ModuleLoadError(_) => "module load error",
-      RuntimeErrorType::ControlFlowError => "control flow error",
-    })
   }
 }
