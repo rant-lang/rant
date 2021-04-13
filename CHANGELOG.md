@@ -5,6 +5,7 @@
 ### New
 * Added new number format system: `alpha`
 * Added "depth operator" to determine originating scope of a variable
+* Trailing semicolons are now allowed in list initializers
 
 ### Changes
 * `[seg]` now operates internally on grapheme boundaries instead of `char` boundaries
