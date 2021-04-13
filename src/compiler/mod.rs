@@ -84,7 +84,7 @@ pub(crate) fn compile_file<P: AsRef<Path>, R: Reporter>(path: P, reporter: &mut 
       // Report file IO issue
       let problem = match err.kind() {
           IOErrorKind::NotFound => Problem::FileNotFound(source_name),
-          _ => Problem::FileIOError(err.to_string())
+          _ => Problem::FileSystemError(err.to_string())
       };
       reporter.report(CompilerMessage::new(problem, Severity::Error, None));
       Err(CompilerErrorKind::IOError(err.kind()))

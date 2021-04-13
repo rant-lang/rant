@@ -166,7 +166,7 @@ pub enum Problem {
   InvalidKeyword(String),
   WeightNotAllowed,
   FileNotFound(String),
-  FileIOError(String),
+  FileSystemError(String),
   DynamicDepth,
   InvalidDepthUsage,
   DepthAssignment,
@@ -174,63 +174,74 @@ pub enum Problem {
 
 impl Problem {
   fn code(&self) -> &'static str {
+    /// Formats Rant error code constants.
+    macro_rules! rcode {
+      ($code:literal) => {
+        concat!("R-", stringify!($code))
+      }
+    }
+
     match self {
-      // Syntax errors (0000 - 0099)
+      // Syntax errors (0000 - 0500)
       // Tokens
-      Problem::UnexpectedToken(_) =>                              "R-0000",
-      Problem::ExpectedToken(_) =>                                "R-0001",
+      Problem::UnexpectedToken(_) =>                              rcode!(0000),
+      Problem::ExpectedToken(_) =>                                rcode!(0001),
+
       // Unclosed
-      Problem::UnclosedBlock =>                                   "R-0002",
-      Problem::UnclosedFunctionCall =>                            "R-0003",
-      Problem::UnclosedFunctionSignature =>                       "R-0004",
-      Problem::UnclosedVariableAccess =>                          "R-0005",
-      Problem::UnclosedStringLiteral =>                           "R-0006",
-      Problem::UnclosedList =>                                    "R-0007",
-      Problem::UnclosedMap =>                                     "R-0008",
+      Problem::UnclosedBlock =>                                   rcode!(0002),
+      Problem::UnclosedFunctionCall =>                            rcode!(0003),
+      Problem::UnclosedFunctionSignature =>                       rcode!(0004),
+      Problem::UnclosedVariableAccess =>                          rcode!(0005),
+      Problem::UnclosedStringLiteral =>                           rcode!(0006),
+      Problem::UnclosedList =>                                    rcode!(0007),
+      Problem::UnclosedMap =>                                     rcode!(0008),
+
       // Functions
-      Problem::InvalidParamOrder(..) =>                           "R-0009",
-      Problem::MissingFunctionBody =>                             "R-0010",
-      Problem::UnclosedFunctionBody =>                            "R-0011",
-      Problem::InvalidParameter(_) =>                             "R-0012",
-      Problem::DuplicateParameter(_) =>                           "R-0013",
-      Problem::MultipleVariadicParams =>                          "R-0014",
+      Problem::InvalidParamOrder(..) =>                           rcode!(0009),
+      Problem::MissingFunctionBody =>                             rcode!(0010),
+      Problem::UnclosedFunctionBody =>                            rcode!(0011),
+      Problem::InvalidParameter(_) =>                             rcode!(0012),
+      Problem::DuplicateParameter(_) =>                           rcode!(0013),
+      Problem::MultipleVariadicParams =>                          rcode!(0014),
+
       // Blocks
-      Problem::DynamicKeyBlockMultiElement =>                     "R-0015",
-      Problem::FunctionBodyBlockMultiElement =>                   "R-0016",
+      Problem::DynamicKeyBlockMultiElement =>                     rcode!(0015),
+      Problem::FunctionBodyBlockMultiElement =>                   rcode!(0016),
+
       // Accessors
-      Problem::AnonValueAssignment =>                             "R-0017",
-      Problem::MissingIdentifier =>                               "R-0018",
-      Problem::InvalidIdentifier(_) =>                            "R-0019",
-      Problem::AccessPathStartsWithIndex =>                       "R-0020",
-      Problem::AccessPathStartsWithSlice =>                       "R-0021",
-      Problem::InvalidSliceBound(_) =>                            "R-0022",
-      Problem::NothingToCompose =>                                "R-0023",
-      Problem::DynamicDepth =>                                    "R-0024",
-      Problem::DepthAssignment =>                                 "R-0025",
-      Problem::InvalidDepthUsage =>                               "R-0026",
+      Problem::AnonValueAssignment =>                             rcode!(0017),
+      Problem::MissingIdentifier =>                               rcode!(0018),
+      Problem::InvalidIdentifier(_) =>                            rcode!(0019),
+      Problem::AccessPathStartsWithIndex =>                       rcode!(0020),
+      Problem::AccessPathStartsWithSlice =>                       rcode!(0021),
+      Problem::InvalidSliceBound(_) =>                            rcode!(0022),
+      Problem::NothingToCompose =>                                rcode!(0023),
+      Problem::DynamicDepth =>                                    rcode!(0024),
+      Problem::DepthAssignment =>                                 rcode!(0025),
+      Problem::InvalidDepthUsage =>                               rcode!(0026),
       
       // Static analysis errors (0100 - 0199)
-      Problem::ConstantReassignment(_) =>                         "R-0100",
-      Problem::ConstantRedefinition(_) =>                         "R-0101",
+      Problem::ConstantReassignment(_) =>                         rcode!(0100),
+      Problem::ConstantRedefinition(_) =>                         rcode!(0101),
 
       // Hint/sink errors (0130 - 0139)
-      Problem::InvalidSink | Problem::InvalidSinkOn(_) =>         "R-0130",
-      Problem::InvalidHint | Problem::InvalidHintOn(_) =>         "R-0131",
+      Problem::InvalidSink | Problem::InvalidSinkOn(_) =>         rcode!(0130),
+      Problem::InvalidHint | Problem::InvalidHintOn(_) =>         rcode!(0131),
 
-      // Charms (0200 - 0249)
-      Problem::InvalidKeyword(_) =>                               "R-0200",
-      Problem::WeightNotAllowed =>                                "R-0201",
+      // Keywords (0200 - 0249)
+      Problem::InvalidKeyword(_) =>                               rcode!(0200),
+      Problem::WeightNotAllowed =>                                rcode!(0201),
 
       // Common warnings (1000 - 1099)
-      Problem::UnusedVariable(_) =>                               "R-1000",
-      Problem::UnusedParameter(_) =>                              "R-1001",
-      Problem::UnusedFunction(_) =>                               "R-1002",
-      Problem::EmptyFunctionBody(_) =>                            "R-1003",
-      Problem::NestedFunctionDefMarkedConstant =>                 "R-1004",
+      Problem::UnusedVariable(_) =>                               rcode!(1000),
+      Problem::UnusedParameter(_) =>                              rcode!(1001),
+      Problem::UnusedFunction(_) =>                               rcode!(1002),
+      Problem::EmptyFunctionBody(_) =>                            rcode!(1003),
+      Problem::NestedFunctionDefMarkedConstant =>                 rcode!(1004),
 
       // File access errors (0100 - 0109)
-      Problem::FileNotFound(_) =>                                 "R-2100",
-      Problem::FileIOError(_) =>                                  "R-2101",
+      Problem::FileNotFound(_) =>                                 rcode!(2100),
+      Problem::FileSystemError(_) =>                              rcode!(2101),
     }
   }
   
@@ -263,7 +274,7 @@ impl Problem {
       Problem::EmptyFunctionBody(fname) => format!("function '{}' is empty", fname),
       Problem::NestedFunctionDefMarkedConstant => "nested function definition can't be made constant; function will be mutable".to_owned(),
       Problem::FileNotFound(file) => format!("file not found: '{}'", file),
-      Problem::FileIOError(err) => format!("filesystem error: {}", err),
+      Problem::FileSystemError(err) => format!("filesystem error: {}", err),
       Problem::UnclosedVariableAccess => "unclosed accessor; expected '>'".to_owned(),
       Problem::UnclosedList => "unclosed list initializer; expected ')'".to_owned(),
       Problem::UnclosedMap => "unclosed map initializer; expected ')'".to_owned(),
