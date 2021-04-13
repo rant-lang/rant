@@ -35,12 +35,12 @@ macro_rules! log_error {
 }
 
 fn main() {
-  let msg_about = format!("Rant 4 command-line interface {} ({})", BUILD_VERSION, embedded_triple::get());
+  let version_long = format!("{} [{}]", BUILD_VERSION, embedded_triple::get());
 
   let arg_matches = App::new("Rant CLI")
     .version(BUILD_VERSION)
-    .author(clap::crate_authors!())
-    .about(msg_about.as_str())
+    .about("Command-line interface for running Rant 4.x programs")
+    .long_version(version_long.as_str())
     .arg(Arg::with_name("seed")
       .help("Specifies the initial 64-bit hex seed")
       .short("s")
