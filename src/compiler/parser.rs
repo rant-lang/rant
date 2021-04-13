@@ -881,6 +881,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             _ => unreachable!()
           }
         }
+
+        // To allow trailing semicolons, remove the last element if its sequence is empty
+        if let Some(seq) = sequences.last() {
+          if seq.is_empty() {
+            sequences.pop();
+          }
+        }
+
         Ok(Rst::ListInit(Rc::new(sequences)))
       },
       CollectionInitKind::Map => {
