@@ -1,7 +1,7 @@
 use std::mem;
 
 use super::*;
-use crate::lang::PrintFlag;
+use crate::lang::{AccessPathKind, PrintFlag};
 
 /// `[$alt: a (any); b+ (any)]`
 ///
@@ -165,7 +165,8 @@ pub(crate) fn require(vm: &mut VM, module_path: String) -> RantStdResult {
   {
     // Check if module is cached; if so, don't do anything
     if let Some(RantValue::Map(module_cache_ref)) = vm.context().get_global(crate::MODULES_CACHE_KEY) {
-      if let Some(RantValue::Map(_cached_module)) = module_cache_ref.borrow().raw_get(&module_name) {
+      if let Some(module @ RantValue::Map(..)) = module_cache_ref.borrow().raw_get(&module_name) {
+        vm.def_var_value(module_name.as_str(), AccessPathKind::Descope(1), module.clone(), true)?;
         return Ok(())
       }
     }
@@ -174,7 +175,7 @@ pub(crate) fn require(vm: &mut VM, module_path: String) -> RantStdResult {
     let caller_origin = Rc::clone(&vm.cur_frame().origin());
     let module_pgm = vm.context_mut().try_read_module(&module_path, caller_origin).into_runtime_result()?;
     vm.cur_frame_mut().push_intent_front(Intent::ImportLastAsModule { module_name, descope: 1 });
-    vm.push_frame(Rc::clone(&module_pgm.root), true)?;
+    vm.push_frame_flavored(Rc::clone(&module_pgm.root), true, StackFrameFlavor::FunctionBody)?;
     Ok(())
   } else {
     runtime_error!(RuntimeErrorType::ArgumentError, "module name is missing from path");

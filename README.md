@@ -34,27 +34,26 @@ just as a regular expression compares inputs to a pattern, Rant generates matchi
 ## Why Rant?
 
 🧰 **Painless API** <br/> 
-Rant's API is designed to be as straightforward to use as possible. Integrating Rant into your project only takes a few lines of code.
+Rant's API is designed to be as straightforward as possible. Integrating Rant into your project only takes a few lines of code.
 
 💻 **Cross-Platform** <br/> 
 Write once, run anywhere-- Rant code is fully portable across all supported platforms.
 
 🎲 **Built with ♥ for RNG** <br/>
-Throw the dice with a wide array of powerful, built-in utilities for generating random numbers, strings, booleans, lists, list subsets, and much more. Synchronize RNG behavior in different parts of your program with a single function call.
-
-The built-in RNG can be externally seeded to produce deterministic program outputs.
+Enjoy a wide array of built-in utilities for generating random numbers, strings, booleans, lists, list subsets, and much more. The internal RNG can be seeded before execution to produce deterministic outputs.
 
 🔱 **Advanced Branching** <br/> 
 Fine-tune branching behavior with a multitude of configuration options and branch selection modes for iterative, random, and weighted selection.
 
 🎨 **Dynamic Variable System** <br/> 
-Inspired by popular scripting languages, Rant's dynamic variable system lets you work with common primitives, collection types, callbacks, and more without any fuss.
+Inspired by other popular scripting languages, Rant's dynamic variable system ergonomically supports common primitives, collection types, closures, and more.
 
 🖨 **Print Semantics** <br/> 
-Rant is all about "printing": each lexical scope has an output that can be printed to, which then prints itself to the parent output, and so on. This lets you easily build strings and collections from multiple parts with minimal code bloat.
+Rant is all about "printing": each lexical scope has an output to add values ("print") to, which then prints itself to the parent output, and so on. 
+This lets you easily build strings and collections from multiple parts with minimal code.
 
 🧬 **Delightful Combinatorics** <br/> 
-Effortlessly perform nested mappings, filters, zips, combinations, and more with Rant's intuitive function call syntax.
+Perform nested mappings, filters, zips, combinations, and more with Rant's intuitive function composition syntax.
 
 🎛 **Automatic Formatting** <br/> 
 Passively format text output with automatic capitalization, whitespace normalization, and number formatting.
@@ -63,7 +62,7 @@ Passively format text output with automatic capitalization, whitespace normaliza
 Create libraries of Rant functions and share them between your programs using Rant's simple module system.
 
 📚 **Rant Standard Library** <br/> 
-Rant's comprehensive standard library lets you get more done and iterate rapidly with far less boilerplate than other languages.
+A comprehensive standard library provides the tools needed to rapidly iterate on your ideas.
 
 ## Getting started
 

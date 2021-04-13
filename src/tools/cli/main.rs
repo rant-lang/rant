@@ -1,6 +1,6 @@
 #![allow(clippy::single_component_path_imports)]
 
-use argh::FromArgs;
+use clap::{App, Arg};
 use codemap_diagnostic::{ColorConfig, Emitter, SpanLabel, SpanStyle, Diagnostic, Level};
 use codemap::CodeMap;
 use colored::*;
@@ -15,36 +15,11 @@ use std::io::{self, Write};
 use std::process;
 use std::sync::mpsc;
 
-/// Run Rant code from your terminal.
-#[derive(FromArgs)]
-struct CliArgs {
-  /// display build version and exit
-  #[argh(switch, short = 'v')]
-  version: bool,
-  
-  /// optional seed to run programs with (defaults to random seed)
-  #[argh(option, short = 's')]
-  seed: Option<u64>,
-  
-  /// run this code and exit (overrides -i)
-  #[argh(option, short = 'r', long = "run")]
-  run_code: Option<String>,
-  
-  /// run this file and exit
-  #[argh(option, short = 'i')]
-  in_file: Option<String>,
-
-  /// enable benchmarking of compile and run times
-  #[argh(switch, short = 'b')]
-  bench_mode: bool,
-
-  /// don't emit debug symbols
-  #[argh(switch, short = 'n')]
+struct RantCliOptions {
   no_debug: bool,
-
-  /// don't emit compiler warnings
-  #[argh(switch, short = 'W')]
-  no_warnings: bool,
+  no_warn: bool,
+  bench_mode: bool,
+  seed: Option<u64>,
 }
 
 enum ProgramSource {
@@ -60,12 +35,49 @@ macro_rules! log_error {
 }
 
 fn main() {
+  let msg_about = format!("Rant 4 command-line interface {} ({})", BUILD_VERSION, embedded_triple::get());
+
+  let arg_matches = App::new("Rant CLI")
+    .version(BUILD_VERSION)
+    .author(clap::crate_authors!())
+    .about(msg_about.as_str())
+    .arg(Arg::with_name("seed")
+      .help("Specifies the initial 64-bit hex seed")
+      .short("s")
+      .value_name("SEED")
+    )
+    .arg(Arg::with_name("eval")
+      .help("Specifies a string to run if no file is specified")
+      .short("e")
+      .long("eval")
+      .value_name("PROGRAM_STRING")
+    )
+    .arg(Arg::with_name("bench-mode")
+      .help("Enables benchmarking")
+      .short("b")
+      .long("bench-mode")
+    )
+    .arg(Arg::with_name("no-warnings")
+      .help("Disables compiler warnings")
+      .short("W")
+      .long("no-warnings")
+    )
+    .arg(Arg::with_name("no-debug")
+      .help("Disable emitting debug synbols (may improve performance)")
+      .short("D")
+      .long("no-debug")
+    )
+    .arg(Arg::with_name("FILE")
+      .help("Specifies a Rant file to run")
+      .index(1)
+    )
+    .get_matches();
+
   // Signal handling
   let (sig_tx, sig_rx) = mpsc::channel::<()>();
   ctrlc::set_handler(move || {
     sig_tx.send(()).unwrap();
   }).expect("failed to create signal handler");
-
 
   std::thread::spawn(move || {
     if sig_rx.recv().is_ok() {
@@ -73,42 +85,43 @@ fn main() {
     }
   });
 
-  // Read cmdline args
-  let args: CliArgs = argh::from_env();
+  let opts = RantCliOptions {
+    bench_mode: arg_matches.is_present("bench-mode"),
+    no_debug: arg_matches.is_present("no-debug"),
+    no_warn: arg_matches.is_present("no-warnings"),
+    seed: arg_matches.value_of("seed").map(|seed_str| u64::from_str_radix(seed_str, 16).ok()).flatten(),
+  };
   
-  if args.version {
-    println!("{}", BUILD_VERSION);
-    return
-  }
+  let in_str = arg_matches.value_of("eval");
+  let in_file = arg_matches.value_of("FILE");
   
-  if args.run_code.is_none() && args.in_file.is_none() {
-    println!("Rant {} ({})", BUILD_VERSION, embedded_triple::get());
-    println!("Run this tool with --help for available options.");
-  }
-  
-  let seed = args.seed.unwrap_or_else(|| rand::thread_rng().gen());
   let mut rant = Rant::with_options(RantOptions {
     use_stdlib: true,
-    debug_mode: !args.no_debug,
-    seed,
+    debug_mode: !opts.no_debug,
+    seed: opts.seed.unwrap_or_else(|| rand::thread_rng().gen()),
     .. Default::default()
   });
   
-  // Run inline code from cmdline args
-  if let Some(code) = &args.run_code {
-    let code = run_rant(&mut rant, ProgramSource::Inline(code.to_owned()), &args);
+  // Check if the user supplied a source to run
+  if let Some(code) = in_str {
+    // Run inline code from cmdline args
+    let code = run_rant(&mut rant, ProgramSource::Inline(code.to_owned()), &opts);
     process::exit(code);
+    
+  } else if let Some(path) = in_file {
     // Run input file from cmdline args
-  } else if let Some(path) = &args.in_file {
-    // Make sure it exists
     if !Path::new(path).exists() {
       log_error!("file not found: {}", path);
       process::exit(exitcode::NOINPUT);
     }
-    let code = run_rant(&mut rant, ProgramSource::FilePath(path.clone()), &args);
+    let code = run_rant(&mut rant, ProgramSource::FilePath(path.to_owned()), &opts);
     process::exit(code);
   }
-  
+
+  repl(&mut rant, &opts);
+}
+
+fn repl(rant: &mut Rant, opts: &RantCliOptions) {
   loop {
     print!("{} ", ">>".cyan());
     io::stdout().flush().unwrap();
@@ -116,15 +129,15 @@ fn main() {
     
     match io::stdin().read_line(&mut input) {
       Ok(_) => {
-        run_rant(&mut rant, ProgramSource::Stdin(input.trim_end().to_owned()), &args);
+        run_rant(rant, ProgramSource::Stdin(input.trim_end().to_owned()), &opts);
       },
       Err(_) => log_error!("failed to read input")
     }
   }
 }
 
-fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) -> ExitCode {
-  let show_stats = args.bench_mode;
+fn run_rant(ctx: &mut Rant, source: ProgramSource, opts: &RantCliOptions) -> ExitCode {
+  let show_stats = opts.bench_mode;
   let start_time = Instant::now();
   let mut problems: Vec<CompilerMessage> = vec![];
 
@@ -154,9 +167,7 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) -> ExitCode {
   
   // Print errors/warnings
   for msg in problems.iter() {
-    if args.no_warnings && msg.is_warning() {
-      continue
-    }
+    if opts.no_warn && msg.is_warning() { continue }
     
     let d = Diagnostic {
       level: match msg.severity() {
@@ -197,7 +208,7 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, args: &CliArgs) -> ExitCode {
   
   // Run it
   let program = compile_result.unwrap();
-  let seed = args.seed.unwrap_or_else(|| rand::thread_rng().gen());
+  let seed = opts.seed.unwrap_or_else(|| rand::thread_rng().gen());
   ctx.set_seed(seed);
   let start_time = Instant::now();
   let run_result = ctx.run_into_string(&program);

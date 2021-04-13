@@ -10,10 +10,13 @@
 ### Changes
 * `[seg]` now operates internally on grapheme boundaries instead of `char` boundaries
 * Renamed `[is-any]` to `[is-some]`
+* CLI now uses `clap` instead of `argh` to parse cmdline options
 
 ### Fixes
 * Fixed `[cat]` printing to the wrong scope level
 * Fixed panic when setting number format with no output
+* Fixed bug where `@return`-ing from a module scope would unwind the call stack too far
+* Fixed `[require]` not assigning module constants when retrieving from cache
 
 ## 4.0.0-alpha.20
 
