@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.0.0-alpha.21 (unreleased)
+## 4.0.0-alpha.21
 
 ### New
 * Added new number format system: `alpha`
