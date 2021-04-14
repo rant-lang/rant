@@ -46,12 +46,6 @@ pub fn bf64(val: bool) -> f64 {
   if val { 1.0 } else { 0.0 }
 }
 
-/// Converts a boolean value to its string equivalent (i.e. `"true"` or `"false"`).
-#[inline(always)]
-pub fn bstr(val: bool) -> &'static str {
-  if val { "true" } else { "false" }
-}
-
 #[inline]
 pub fn max_rant_value<'a>(mut iter: impl Iterator<Item = &'a RantValue>) -> Option<&'a RantValue> {
   if let Some(mut max) = iter.next() {

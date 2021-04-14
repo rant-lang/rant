@@ -661,7 +661,7 @@ impl Debug for RantValue {
       RantValue::String(s) => write!(f, "{}", s),
       RantValue::Float(n) => write!(f, "{}", n),
       RantValue::Int(n) => write!(f, "{}", n),
-      RantValue::Boolean(b) => write!(f, "{}", bstr(*b)),
+      RantValue::Boolean(b) => write!(f, "{}", if *b { "@true" }  else { "@false" }),
       RantValue::Function(func) => write!(f, "[function({:?})]", func.body),
       RantValue::Block(block) => write!(f, "[block({})]", block.elements.len()),
       RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
@@ -678,7 +678,7 @@ fn get_display_string(value: &RantValue, max_depth: usize) -> String {
     RantValue::String(s) => s.to_string(),
     RantValue::Float(f) => format!("{}", f),
     RantValue::Int(i) => format!("{}", i),
-    RantValue::Boolean(b) => (if *b { "true" } else { "false" }).to_string(),
+    RantValue::Boolean(b) => (if *b { "@true" } else { "@false" }).to_string(),
     RantValue::Function(f) => format!("[function({:?})]", f.body),
     RantValue::Block(b) => format!("[block({})]", b.elements.len()),
     RantValue::List(list) => {
