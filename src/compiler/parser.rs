@@ -12,6 +12,13 @@ type ParseResult<T> = Result<T, ()>;
 
 const MAIN_PROGRAM_SCOPE_NAME: &str = "main scope";
 
+const KW_RETURN: &str = "return";
+const KW_BREAK: &str = "break";
+const KW_CONTINUE: &str = "continue";
+const KW_WEIGHT: &str = "weight";
+const KW_TRUE: &str = "true";
+const KW_FALSE: &str = "false";
+
 /// Provides context to the sequence parser; determines valid terminating tokens among other context-sensitive features.
 #[derive(Copy, Clone, PartialEq)]
 enum SequenceParseMode {
@@ -258,9 +265,18 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
     
     while let Some((token, span)) = self.reader.next() {
+      let _debug_inject_toggle = true;
+
+      macro_rules! no_debug {
+        ($e:expr) => {{
+          let _debug_inject_toggle = false;
+          $e
+        }}
+      }
+
       macro_rules! inject_debug_info {
         () => {
-          if debug {
+          if debug && _debug_inject_toggle {
             let (line, col) = self.lookup.get(span.start);
             sequence.push(Rc::new(Rst::DebugCursor(DebugInfo::Location { line, col })));
           }
@@ -381,44 +397,60 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           continue
         }),
 
-        RantToken::Charm(kwd) => {
-          whitespace!(ignore both);
-          let ParsedSequence {
-            sequence: charm_sequence,
-            end_type: charm_end_type,
-            is_printing: is_charm_printing,
-            extras: mut charm_extras
-          } = self.parse_sequence(mode)?;
-          let charm_sequence_name = charm_sequence.name.clone();
-          let charm_sequence = (!charm_sequence.is_empty()).then(|| Rc::new(charm_sequence));
-          match kwd.as_str() {
-            "return" => emit!(Rst::Return(charm_sequence)),
-            "continue" => emit!(Rst::Continue(charm_sequence)),
-            "break" => emit!(Rst::Break(charm_sequence)),
-            "weight" => {
-              if mode == SequenceParseMode::BlockElement {
-                charm_extras = Some(ParsedSequenceExtras::WeightedBlockElement {
-                  weight_expr: charm_sequence.unwrap_or_else(|| Rc::new(Sequence::empty(&self.info)))
-                });
-              } else {
-                self.report_error(Problem::WeightNotAllowed, &span);
-              }
+        RantToken::Keyword(kw) => {
+          let kwstr = kw.as_str();
+          match kwstr {
+            // Boolean constants
+            KW_TRUE => no_debug!(no_flags!(on {
+              whitespace!(ignore both);
+              is_seq_printing = true;
+              Rst::Boolean(true)
+            })),
+            KW_FALSE => no_debug!(no_flags!(on {
+              whitespace!(ignore both);
+              is_seq_printing = true;
+              Rst::Boolean(false)
+            })),
+            // Charms
+            KW_RETURN | KW_CONTINUE | KW_BREAK | KW_WEIGHT => {
+              whitespace!(ignore both);
+              let ParsedSequence {
+                sequence: charm_sequence,
+                end_type: charm_end_type,
+                is_printing: is_charm_printing,
+                extras: mut charm_extras
+              } = self.parse_sequence(mode)?;
+              let charm_sequence_name = charm_sequence.name.clone();
+              let charm_sequence = (!charm_sequence.is_empty()).then(|| Rc::new(charm_sequence));
+              match kw.as_str() {
+                KW_RETURN => emit!(Rst::Return(charm_sequence)),
+                KW_CONTINUE => emit!(Rst::Continue(charm_sequence)),
+                KW_BREAK => emit!(Rst::Break(charm_sequence)),
+                KW_WEIGHT => {
+                  if mode == SequenceParseMode::BlockElement {
+                    charm_extras = Some(ParsedSequenceExtras::WeightedBlockElement {
+                      weight_expr: charm_sequence.unwrap_or_else(|| Rc::new(Sequence::empty(&self.info)))
+                    });
+                  } else {
+                    self.report_error(Problem::WeightNotAllowed, &span);
+                  }
+                },
+                _ => unreachable!()
+              };
+              check_dangling_printflags!();
+              return Ok(ParsedSequence {
+                sequence: if let Some(charm_sequence_name) = charm_sequence_name {
+                  sequence.with_name(charm_sequence_name)
+                } else {
+                  sequence
+                },
+                end_type: charm_end_type,
+                is_printing: is_charm_printing || is_seq_printing,
+                extras: charm_extras,
+              })
             },
-            other => {
-              self.report_error(Problem::InvalidKeyword(other.to_string()), &span);
-            }
-          };
-          check_dangling_printflags!();
-          return Ok(ParsedSequence {
-            sequence: if let Some(charm_sequence_name) = charm_sequence_name {
-              sequence.with_name(charm_sequence_name)
-            } else {
-              sequence
-            },
-            end_type: charm_end_type,
-            is_printing: is_charm_printing || is_seq_printing,
-            extras: charm_extras,
-          })
+            other => self.report_error(Problem::InvalidKeyword(other.to_string()), &span),
+          }          
         },
         
         // Defer operator
@@ -735,20 +767,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           whitespace!(allow);
           is_seq_printing = true;
           Rst::Float(n)
-        }),
-        
-        // True
-        RantToken::True => no_flags!(on {
-          whitespace!(allow);
-          is_seq_printing = true;
-          Rst::Boolean(true)
-        }),
-        
-        // False
-        RantToken::False => no_flags!(on {
-          whitespace!(allow);
-          is_seq_printing = true;
-          Rst::Boolean(false)
         }),
         
         // Empty

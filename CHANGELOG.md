@@ -3,9 +3,11 @@
 ## 4.0.0-aplha.22
 
 ### New
-* Added inline lambdas-- (you no longer need braces for lambdas with a single expression in them!)
+* Added inline lambdas (you no longer need braces for lambdas with a single expression in them!)
 
 ### Changes
+* Boolean literals are now keywords; this means that `true` and `false` are now `@true` and `@false`. The original reserved fragments are now treated like strings.
+  * In addition, boolean keywords now ignore surrounding whitespace.
 
 ### Fixes
 

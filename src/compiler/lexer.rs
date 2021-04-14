@@ -114,7 +114,7 @@ pub enum RantToken {
 
   /// Some charm keyword, e.g. `@return`
   #[regex(r"@[\w\d_-]+", parse_keyword, priority = 2, ignore(case))]
-  Charm(InternalString),
+  Keyword(InternalString),
   
   /// `/`
   #[token("/")]
@@ -139,14 +139,6 @@ pub enum RantToken {
   /// `_`
   #[token("_")]
   Sink,
-  
-  /// `true`
-  #[token("true")]
-  True,
-  
-  /// `false`
-  #[token("false")]
-  False,
   
   /// Integer literal
   #[regex(r"\-?[0-9]+", parse_integer, priority = 2)]
