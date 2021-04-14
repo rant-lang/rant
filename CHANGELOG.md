@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.0.0-aplha.22
+
+### New
+* Added inline lambdas-- (you no longer need braces for lambdas with a single expression in them!)
+
+### Changes
+
+### Fixes
+
 ## 4.0.0-alpha.21
 
 ### New

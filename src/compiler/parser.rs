@@ -30,7 +30,7 @@ enum SequenceParseMode {
   /// Parse a sequence like a function body.
   ///
   /// Breaks on `RightBrace`.
-  FunctionBody,
+  FunctionBodyBlock,
   /// Parse a sequence like a dynamic key expression.
   ///
   /// Breaks on `RightBrace`.
@@ -530,7 +530,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             SequenceParseMode::DynamicKey => {
               self.report_error(Problem::DynamicKeyBlockMultiElement, &span);
             },
-            SequenceParseMode::FunctionBody => {
+            SequenceParseMode::FunctionBodyBlock => {
               self.report_error(Problem::FunctionBodyBlockMultiElement, &span);
             },
             _ => unexpected_token_error!()
@@ -550,7 +550,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 extras: None,
               })
             },
-            SequenceParseMode::FunctionBody => {
+            SequenceParseMode::FunctionBodyBlock => {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("function body"),
                 end_type: SequenceEndType::FunctionBodyEnd,
@@ -1112,7 +1112,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let end_func_sig_span = self.reader.last_token_span();
           // Read function body
           self.reader.skip_ws();          
-          let (body, captures) = self.parse_func_body(&params)?;
+          let (body, captures) = self.parse_func_body(&params, false)?;
 
           // Track variable
           if func_path.is_variable() {
@@ -1136,7 +1136,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let params = self.parse_func_params(&start_span)?;
           self.reader.skip_ws();
           // Read function body
-          let (body, captures) = self.parse_func_body(&params)?;
+          let (body, captures) = self.parse_func_body(&params, true)?;
           
           Ok(Rst::Closure(ClosureExpr {
             capture_vars: Rc::new(captures),
@@ -1664,22 +1664,38 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
 
   /// Parses a function body and captures variables.
-  fn parse_func_body(&mut self, params: &Vec<(Parameter, Range<usize>)>) -> ParseResult<(Sequence, Vec<Identifier>)> {
-    if !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
-      self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
-      return Err(())
-    }
-    
-    let start_span = self.reader.last_token_span();
+  fn parse_func_body(&mut self, params: &Vec<(Parameter, Range<usize>)>, allow_inline: bool) -> ParseResult<(Sequence, Vec<Identifier>)> {
+    self.reader.skip_ws();
 
     // Since we're about to push another var_stack frame, we can use the current depth of var_stack as the index
     let capture_height = self.var_stack.depth();
+    
+    let is_block_body = if allow_inline {
+      // Push a new capture frame
+      self.capture_stack.push((capture_height, Default::default()));
 
-    // Push a new capture frame
-    self.capture_stack.push((capture_height, Default::default()));
+      // Push a new variable frame
+      self.var_stack.push_layer();
 
-    // Push a new variable frame
-    self.var_stack.push_layer();
+      // Determine if the body is a block and eat the opening brace if available
+      self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _))))
+
+    } else {
+      if !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
+        self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
+        return Err(())
+      }
+
+      // Push a new capture frame
+      self.capture_stack.push((capture_height, Default::default()));
+
+      // Push a new variable frame
+      self.var_stack.push_layer();
+
+      true
+    };
+    
+    let start_span = self.reader.last_token_span();
 
     // Define each parameter as a variable in the current var_stack frame so they are not accidentally captured
     for (param, span) in params {
@@ -1693,7 +1709,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
 
     // parse_sequence_inner() is used here so that the new stack frame can be customized before use
-    let parse_result = self.parse_sequence_inner(SequenceParseMode::FunctionBody);
+    let parse_result = self.parse_sequence_inner(if is_block_body {
+      SequenceParseMode::FunctionBodyBlock
+    } else {
+      SequenceParseMode::SingleItem
+    });
 
     // Run static analysis on variable/param usage
     self.analyze_top_vars();
@@ -1706,11 +1726,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     match parse_result {
       Ok(ParsedSequence { sequence, end_type, .. }) => {
         match end_type {
-          SequenceEndType::FunctionBodyEnd => {},
+          SequenceEndType::FunctionBodyEnd | SequenceEndType::SingleItemEnd => {},
           SequenceEndType::ProgramEnd => {
-            // Hard error if block isn't closed
             let err_span = start_span.start .. self.source.len();
-            self.report_error(Problem::UnclosedBlock, &err_span);
+            self.report_error(if is_block_body { 
+              Problem::UnclosedFunctionBody 
+            } else { 
+              Problem::MissingFunctionBody 
+            }, &err_span);
             return Err(())
           },
           _ => unreachable!()
