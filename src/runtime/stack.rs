@@ -4,24 +4,24 @@ use fnv::{FnvBuildHasher};
 use quickscope::ScopeMap;
 use crate::{lang::{Sequence, Rst}, RantValue, Rant};
 use crate::runtime::*;
-use super::{output::OutputWriter, Intent};
+use super::{output::OutputWriter};
 
-type CallStackVector = SmallVec<[StackFrame; super::CALL_STACK_INLINE_COUNT]>;
+type CallStackVector<I> = SmallVec<[StackFrame<I>; super::CALL_STACK_INLINE_COUNT]>;
 
 /// Represents a call stack and its associated locals.
-pub struct CallStack {
-  frames: CallStackVector,
+pub struct CallStack<I> {
+  frames: CallStackVector<I>,
   locals: ScopeMap<InternalString, RantVar, FnvBuildHasher>,
 }
 
-impl Default for CallStack {
+impl<I> Default for CallStack<I> {
   #[inline]
   fn default() -> Self {
     Self::new()
   }
 }
 
-impl CallStack {
+impl<I> CallStack<I> {
   #[inline]
   pub(crate) fn new() -> Self {
     Self {
@@ -44,7 +44,7 @@ impl CallStack {
 
   /// Removes the topmost frame from the stack and returns it.
   #[inline]
-  pub fn pop_frame(&mut self) -> Option<StackFrame> {
+  pub fn pop_frame(&mut self) -> Option<StackFrame<I>> {
     if let Some(frame) = self.frames.pop() {
       self.locals.pop_layer();
       return Some(frame)
@@ -54,33 +54,33 @@ impl CallStack {
 
   /// Adds a frame to the top of the stack.
   #[inline]
-  pub fn push_frame(&mut self, frame: StackFrame) {
+  pub fn push_frame(&mut self, frame: StackFrame<I>) {
     self.locals.push_layer();
     self.frames.push(frame);
   }
 
   /// Returns a mutable reference to the topmost frame in the stack.
   #[inline]
-  pub fn top_mut(&mut self) -> Option<&mut StackFrame> {
+  pub fn top_mut(&mut self) -> Option<&mut StackFrame<I>> {
     self.frames.last_mut()
   }
 
 
   /// Returns a mutable reference to the frame `depth` frames below the top of the stack.
   #[inline]
-  pub fn parent_mut(&mut self, depth: usize) -> Option<&mut StackFrame> {
+  pub fn parent_mut(&mut self, depth: usize) -> Option<&mut StackFrame<I>> {
     self.frames.iter_mut().rev().nth(depth)
   }
 
   /// Returns a reference to the frame `depth` frames below the top of the stack.
   #[inline]
-  pub fn parent(&self, depth: usize) -> Option<&StackFrame> {
+  pub fn parent(&self, depth: usize) -> Option<&StackFrame<I>> {
     self.frames.iter().rev().nth(depth)
   }
 
   /// Returna reference to the topmost frame in the stack.
   #[inline]
-  pub fn top(&self) -> Option<&StackFrame> {
+  pub fn top(&self) -> Option<&StackFrame<I>> {
     self.frames.last()
   }
 
@@ -341,7 +341,7 @@ impl CallStack {
 }
 
 /// Represents a call stack frame.
-pub struct StackFrame {
+pub struct StackFrame<I> {
   /// Node sequence being executed by the frame
   sequence: Option<Rc<Sequence>>,
   /// Program Counter (as index in sequence) for the current frame
@@ -351,7 +351,7 @@ pub struct StackFrame {
   /// Output for the frame
   output: Option<OutputWriter>,
   /// Intent queue for the frame
-  intents: VecDeque<Intent>,
+  intents: VecDeque<I>,
   /// Line/col for debug info
   debug_pos: (usize, usize),
   /// Origin of sequence
@@ -360,7 +360,7 @@ pub struct StackFrame {
   flavor: StackFrameFlavor,
 }
 
-impl StackFrame {
+impl<I> StackFrame<I> {
   #[inline]
   pub(crate) fn new(sequence: Rc<Sequence>, has_output: bool, prev_output: Option<&OutputWriter>) -> Self {
     Self {
@@ -376,8 +376,8 @@ impl StackFrame {
   }
 
   #[inline]
-  pub(crate) fn new_native_call(
-    function: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, 
+  pub(crate) fn with_extended_config(
+    sequence: Option<Rc<Sequence>>,
     has_output: bool, 
     prev_output: Option<&OutputWriter>, 
     origin: Rc<RantProgramInfo>, 
@@ -385,19 +385,13 @@ impl StackFrame {
     flavor: StackFrameFlavor
   ) -> Self 
   {
-    let mut intents: VecDeque<Intent> = Default::default();
-    intents.push_front(Intent::RuntimeCall {
-      function,
-      interrupt: true,
-    });
-
     Self {
       origin,
-      sequence: None,
+      sequence,
       output: if has_output { Some(OutputWriter::new(prev_output)) } else { None },
       started: false,
       pc: 0,
-      intents,
+      intents: Default::default(),
       debug_pos,
       flavor,
     }
@@ -411,7 +405,7 @@ impl StackFrame {
   }
 }
 
-impl StackFrame {
+impl<I> StackFrame<I> {
   #[inline]
   pub(crate) fn seq_next(&mut self) -> Option<Rc<Rst>> {
     if self.is_done() {
@@ -429,28 +423,28 @@ impl StackFrame {
   }
   
   /// Gets the Program Counter (PC) for the frame.
-  #[inline]
+  #[inline(always)]
   pub fn pc(&self) -> usize {
     self.pc
   }
 
   /// Gets the flavor of the frame.
-  #[inline]
+  #[inline(always)]
   pub fn flavor(&self) -> StackFrameFlavor {
     self.flavor
   }
 
-  #[inline]
+  #[inline(always)]
   pub fn output(&self) -> Option<&OutputWriter> {
     self.output.as_ref()
   }
 
-  #[inline]
+  #[inline(always)]
   pub fn origin(&self) -> &Rc<RantProgramInfo> {
     &self.origin
   }
 
-  #[inline]
+  #[inline(always)]
   pub fn debug_pos(&self) -> (usize, usize) {
     self.debug_pos
   }
@@ -467,20 +461,20 @@ impl StackFrame {
   }
 
   /// Takes the next intent to be handled.
-  #[inline]
-  pub(crate) fn take_intent(&mut self) -> Option<Intent> {
+  #[inline(always)]
+  pub(crate) fn take_intent(&mut self) -> Option<I> {
     self.intents.pop_front()
   }
 
   /// Pushes an intent to the front of the queue so that it is handled next.
-  #[inline]
-  pub fn push_intent_front(&mut self, intent: Intent) {
+  #[inline(always)]
+  pub fn push_intent_front(&mut self, intent: I) {
     self.intents.push_front(intent);
   }
 
   /// Pushes an intent to the back of the queue so that it is handled last.
-  #[inline]
-  pub fn push_intent_back(&mut self, intent: Intent) {
+  #[inline(always)]
+  pub fn push_intent_back(&mut self, intent: I) {
     self.intents.push_back(intent);
   }
 
@@ -507,7 +501,7 @@ impl StackFrame {
   }
 }
 
-impl StackFrame {
+impl<I> StackFrame<I> {
   #[inline(always)]
   fn is_done(&self) -> bool {
     self.sequence.is_none() || self.pc >= self.sequence.as_ref().unwrap().len()
@@ -539,12 +533,12 @@ impl StackFrame {
 
   /// Consumes the frame's output and returns the final value generated by it.
   #[inline]
-  pub fn render_output_value(&mut self) -> Option<RantValue> {
+  pub fn into_output(mut self) -> Option<RantValue> {
     self.output.take().map(|o| o.render_value())
   }
 }
 
-impl Display for StackFrame {
+impl<I> Display for StackFrame<I> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "[{}:{}:{}] in {}", 
       self.origin_name(), 

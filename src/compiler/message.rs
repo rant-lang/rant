@@ -170,6 +170,7 @@ pub enum Problem {
   DynamicDepth,
   InvalidDepthUsage,
   DepthAssignment,
+  DefaultParamValueNotConstant,
 }
 
 macro_rules! rmsg {
@@ -186,7 +187,7 @@ impl Problem {
     /// Formats Rant error code constants.
     macro_rules! rcode {
       ($code:literal) => {
-        concat!("R-", stringify!($code))
+        concat!("R", stringify!($code))
       }
     }
 
@@ -212,22 +213,23 @@ impl Problem {
       Self::InvalidParameter(_) =>                              rcode!(0012),
       Self::DuplicateParameter(_) =>                            rcode!(0013),
       Self::MultipleVariadicParams =>                           rcode!(0014),
+      Self::DefaultParamValueNotConstant =>                     rcode!(0015),
 
       // Blocks
-      Self::DynamicKeyBlockMultiElement =>                      rcode!(0015),
-      Self::FunctionBodyBlockMultiElement =>                    rcode!(0016),
+      Self::DynamicKeyBlockMultiElement =>                      rcode!(0016),
+      Self::FunctionBodyBlockMultiElement =>                    rcode!(0017),
 
       // Accessors
-      Self::AnonValueAssignment =>                              rcode!(0017),
-      Self::MissingIdentifier =>                                rcode!(0018),
-      Self::InvalidIdentifier(_) =>                             rcode!(0019),
-      Self::AccessPathStartsWithIndex =>                        rcode!(0020),
-      Self::AccessPathStartsWithSlice =>                        rcode!(0021),
-      Self::InvalidSliceBound(_) =>                             rcode!(0022),
-      Self::NothingToCompose =>                                 rcode!(0023),
-      Self::DynamicDepth =>                                     rcode!(0024),
-      Self::DepthAssignment =>                                  rcode!(0025),
-      Self::InvalidDepthUsage =>                                rcode!(0026),
+      Self::AnonValueAssignment =>                              rcode!(0018),
+      Self::MissingIdentifier =>                                rcode!(0019),
+      Self::InvalidIdentifier(_) =>                             rcode!(0020),
+      Self::AccessPathStartsWithIndex =>                        rcode!(0021),
+      Self::AccessPathStartsWithSlice =>                        rcode!(0022),
+      Self::InvalidSliceBound(_) =>                             rcode!(0023),
+      Self::NothingToCompose =>                                 rcode!(0024),
+      Self::DynamicDepth =>                                     rcode!(0025),
+      Self::DepthAssignment =>                                  rcode!(0026),
+      Self::InvalidDepthUsage =>                                rcode!(0027),
       
       // Static analysis errors (0100 - 0199)
       Self::ConstantReassignment(_) =>                          rcode!(0100),
@@ -298,6 +300,7 @@ impl Problem {
       Self::DynamicDepth => rmsg!("depth operator cannot be used on dynamic variable names"),
       Self::DepthAssignment => rmsg!("variable depth cannot be assigned to"),
       Self::InvalidDepthUsage => rmsg!("depth operator is not valid in this context"),
+      Self::DefaultParamValueNotConstant => rmsg!("default parameter value is not a valid constant"),
     }
   }
   

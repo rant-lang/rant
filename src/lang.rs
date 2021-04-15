@@ -500,24 +500,6 @@ impl Display for Varity {
   }
 }
 
-/// Describes a function parameter.
-#[derive(Debug)]
-pub struct Parameter {
-  /// The name of the parameter
-  pub name: Identifier,
-  /// The varity of the parameter
-  pub varity: Varity,
-}
-
-impl Parameter {
-  /// Returns true if the parameter is required.
-  #[inline]
-  pub fn is_required(&self) -> bool {
-    use Varity::*;
-    matches!(self.varity, Required | VariadicPlus)
-  }
-}
-
 /// Defines spread modes for function arguments.
 #[derive(Debug)]
 pub enum ArgumentSpreadMode {
@@ -660,14 +642,14 @@ impl TemporalSpreadState {
 }
 
 /// Describes a Rant function definition.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionDef {
   /// The path to the function to define.
   pub path: Rc<AccessPath>,
   /// Indicates whether the function will be constant.
   pub is_const: bool, // only used on variable definitions
   /// The parameters associated with the function being defined.
-  pub params: Rc<Vec<Parameter>>,
+  pub params: Rc<Vec<ParameterDef>>,
   /// The variables to capture into the function being defined.
   pub capture_vars: Rc<Vec<Identifier>>,
   /// The body of the function being defined.
@@ -675,14 +657,45 @@ pub struct FunctionDef {
 }
 
 /// Describes a Rant closure.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ClosureExpr {
   /// The body of the closure. 
   pub body: Rc<Sequence>,
   /// The parameters associated with the closure.
-  pub params: Rc<Vec<Parameter>>,
+  pub params: Rc<Vec<ParameterDef>>,
   /// The variables to capture into the closure.
   pub capture_vars: Rc<Vec<Identifier>>,
+}
+
+/// Contains information needed to build a function parameter.
+#[derive(Debug)]
+pub struct ParameterDef {
+  /// The name to assign to the parameter.
+  pub name: Identifier,
+  /// The varity to assign to the parameter.
+  pub varity: Varity,
+  /// An expression to produce the default value of the parameter.
+  pub default_value_expr: Option<Rc<Sequence>>,
+}
+
+/// Describes a function parameter.
+#[derive(Debug)]
+pub struct Parameter {
+  /// The name of the parameter
+  pub name: Identifier,
+  /// The varity of the parameter
+  pub varity: Varity,
+  /// The default value of the parameter.
+  pub default_value: RantValue,
+}
+
+impl Parameter {
+  /// Returns true if the parameter is required.
+  #[inline]
+  pub fn is_required(&self) -> bool {
+    use Varity::*;
+    matches!(self.varity, Required | VariadicPlus)
+  }
 }
 
 /// Key creation methods for map initializer entries.

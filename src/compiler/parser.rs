@@ -2,7 +2,7 @@
 #![allow(clippy::ptr_arg)]
 
 use super::{reader::RantTokenReader, lexer::RantToken, message::*, Problem, Reporter};
-use crate::{RantProgramInfo, InternalString, lang::*};
+use crate::{InternalString, RantProgramInfo, lang::*};
 use fnv::FnvBuildHasher;
 use line_col::LineColLookup;
 use quickscope::ScopeMap;
@@ -54,6 +54,10 @@ enum SequenceParseMode {
   ///
   /// Breaks on `RightAngle` and `Semi`.
   AccessorFallbackValue,
+  /// Parses a sequence like a parameter default value.
+  ///
+  /// Breaks on `RightBracket` and `Semi`.
+  ParamDefaultValue,
   /// Parse a sequence like a collection initializer element.
   ///
   /// Breaks on `Semi` and `RightParen`.
@@ -112,8 +116,10 @@ enum SequenceEndType {
   CollectionInitDelim,
   /// A single item was parsed using `SingleItem` mode.
   SingleItemEnd,
-  /// A single module path was parsed using `RequirePath` mode.
-  RequirePathEnd,
+  /// Parameter default value was terminated by `Semi`, indicating another parameter follows.
+  ParamDefaultValueSeparator,
+  /// Parameter default value was terminated by `RightBracket`, indicating the end of the signature was reached..
+  ParamDefaultValueSignatureEnd,
 }
 
 /// Used to track variable usages during compilation.
@@ -677,6 +683,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               is_printing: true,
               extras: None,
             }),
+            SequenceParseMode::ParamDefaultValue => return Ok(ParsedSequence {
+              sequence: sequence.with_name_str("default value"),
+              end_type: SequenceEndType::ParamDefaultValueSignatureEnd,
+              is_printing: true,
+              extras: None,
+            }),
             _ => unexpected_token_error!()
           }
         }),
@@ -797,31 +809,33 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Semicolon can be a fragment, collection element separator, or argument separator.
         RantToken::Semi => no_flags!({
           match mode {
-            // If we're inside a function argument, terminate the sequence
             SequenceParseMode::FunctionArg => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("argument"),
               end_type: SequenceEndType::FunctionArgEndNext,
               is_printing: true,
               extras: None,
             }),
-            // Collection initializer
             SequenceParseMode::CollectionInit => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("collection item"),
               end_type: SequenceEndType::CollectionInitDelim,
               is_printing: true,
               extras: None,
             }),
-            // Variable assignment expression
             SequenceParseMode::VariableAssignment => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("variable assignment"),
               end_type: SequenceEndType::VariableAssignDelim,
               is_printing: true,
               extras: None,
             }),
-            // Accessor fallback value
             SequenceParseMode::AccessorFallbackValue => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("fallback"),
               end_type: SequenceEndType::AccessorFallbackValueToDelim,
+              is_printing: true,
+              extras: None,
+            }),
+            SequenceParseMode::ParamDefaultValue => return Ok(ParsedSequence {
+              sequence: sequence.with_name_str("default value"),
+              end_type: SequenceEndType::ParamDefaultValueSeparator,
               is_printing: true,
               extras: None,
             }),
@@ -978,7 +992,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     
   }
   
-  fn parse_func_params(&mut self, start_span: &Range<usize>) -> ParseResult<Vec<(Parameter, Range<usize>)>> {
+  fn parse_func_params(&mut self, start_span: &Range<usize>) -> ParseResult<Vec<(ParameterDef, Range<usize>)>> {
     // List of parameter names for function
     let mut params = vec![];
     // Separate set of all parameter names to check for duplicates
@@ -1041,16 +1055,54 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 self.report_error(Problem::InvalidParamOrder(last_varity.to_string(), varity.to_string()), &full_param_span);
               }
 
-              let param = Parameter {
+              last_varity = varity;
+              is_sig_variadic |= is_param_variadic;
+
+              // Read default value expr on optional params
+              if matches!(varity, Varity::Optional) {
+                let ParsedSequence {
+                  sequence: default_value_seq,
+                  end_type: default_value_end_type,
+                  ..
+                } = self.parse_sequence(SequenceParseMode::ParamDefaultValue)?;
+
+                let should_continue = match default_value_end_type {
+                  SequenceEndType::ParamDefaultValueSeparator => true,
+                  SequenceEndType::ParamDefaultValueSignatureEnd => false,
+                  SequenceEndType::ProgramEnd => {
+                    self.report_error(Problem::UnclosedFunctionSignature, &start_span);
+                    return Err(())
+                  }
+                  _ => unreachable!(),
+                };
+
+                let opt_param = ParameterDef {
+                  name: param_name,
+                  varity: Varity::Optional,
+                  default_value_expr: (!default_value_seq.is_empty()).then(|| Rc::new(default_value_seq))
+                };
+
+                // Add parameter to list
+                params.push((opt_param, full_param_span.end .. self.reader.last_token_span().start));
+
+                // Keep reading other params if needed
+                if should_continue {
+                  continue 'read_params
+                } else {
+                  break 'read_params
+                }
+              }
+
+              // Handle other varities here...
+
+              let param = ParameterDef {
                 name: param_name,
-                varity
+                varity,
+                default_value_expr: None,
               };
               
               // Add parameter to list
               params.push((param, full_param_span));
-              
-              last_varity = varity;
-              is_sig_variadic |= is_param_variadic;
                 
               // Check if there are more params or if the signature is done
               match self.reader.next_solid() {
@@ -1682,7 +1734,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
 
   /// Parses a function body and captures variables.
-  fn parse_func_body(&mut self, params: &Vec<(Parameter, Range<usize>)>, allow_inline: bool) -> ParseResult<(Sequence, Vec<Identifier>)> {
+  fn parse_func_body(&mut self, params: &Vec<(ParameterDef, Range<usize>)>, allow_inline: bool) -> ParseResult<(Sequence, Vec<Identifier>)> {
     self.reader.skip_ws();
 
     // Since we're about to push another var_stack frame, we can use the current depth of var_stack as the index

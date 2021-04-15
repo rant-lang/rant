@@ -407,7 +407,8 @@ impl<T: FromRant> FromRantArgs for T {
 
     let param = Parameter {
       name: Identifier::new(InternalString::from("arg0")),
-      varity
+      varity,
+      default_value: RantValue::Empty,
     };
 
     vec![param]
@@ -472,6 +473,7 @@ macro_rules! impl_from_rant_args {
         vec![$(Parameter { 
           name: Identifier::new(InternalString::from(format!("arg{}", inc(&mut i)))),
           varity: as_varity::<$generic_types>(),
+          default_value: RantValue::Empty,
         },)*]
       }
     }
@@ -494,10 +496,12 @@ macro_rules! impl_from_rant_args {
         vec![$(Parameter { 
           name: Identifier::new(InternalString::from(format!("arg{}", inc(&mut i)))),
           varity: as_varity::<$generic_types>(),
+          default_value: RantValue::Empty,
         },)*
         Parameter {
           name: Identifier::new(InternalString::from(format!("arg{}", inc(&mut i)))),
           varity: Varity::VariadicStar,
+          default_value: RantValue::Empty,
         }]
       }
     }
@@ -520,10 +524,12 @@ macro_rules! impl_from_rant_args {
         vec![$(Parameter { 
           name: Identifier::new(InternalString::from(format!("arg{}", inc(&mut i)))),
           varity: as_varity::<$generic_types>(),
+          default_value: RantValue::Empty,
         },)*
         Parameter {
           name: Identifier::new(InternalString::from(format!("arg{}", inc(&mut i)))),
           varity: Varity::VariadicPlus,
+          default_value: RantValue::Empty,
         }]
       }
     }

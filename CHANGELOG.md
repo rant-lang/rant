@@ -4,6 +4,7 @@
 
 ### New
 * Added inline lambdas (you no longer need braces for lambdas with a single expression in them!)
+* Optional function parameters can now have user-specified default values
 
 ### Changes
 * Boolean literals are now keywords; this means that `true` and `false` are now `@true` and `@false`. The original reserved fragments are now treated like strings.
