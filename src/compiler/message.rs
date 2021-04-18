@@ -170,7 +170,7 @@ pub enum Problem {
   DynamicDepth,
   InvalidDepthUsage,
   DepthAssignment,
-  DefaultParamValueNotConstant,
+  FallibleOptionalArgAccess(String),
 }
 
 macro_rules! rmsg {
@@ -213,8 +213,7 @@ impl Problem {
       Self::InvalidParameter(_) =>                              rcode!(0012),
       Self::DuplicateParameter(_) =>                            rcode!(0013),
       Self::MultipleVariadicParams =>                           rcode!(0014),
-      Self::DefaultParamValueNotConstant =>                     rcode!(0015),
-
+      
       // Blocks
       Self::DynamicKeyBlockMultiElement =>                      rcode!(0016),
       Self::FunctionBodyBlockMultiElement =>                    rcode!(0017),
@@ -242,14 +241,15 @@ impl Problem {
       // Keywords (0200 - 0249)
       Self::InvalidKeyword(_) =>                                rcode!(0200),
       Self::WeightNotAllowed =>                                 rcode!(0201),
-
+      
       // Common warnings (1000 - 1099)
       Self::UnusedVariable(_) =>                                rcode!(1000),
       Self::UnusedParameter(_) =>                               rcode!(1001),
       Self::UnusedFunction(_) =>                                rcode!(1002),
       Self::EmptyFunctionBody(_) =>                             rcode!(1003),
       Self::NestedFunctionDefMarkedConstant =>                  rcode!(1004),
-
+      Self::FallibleOptionalArgAccess(_) =>                     rcode!(1005),
+      
       // File access errors (0100 - 0109)
       Self::FileNotFound(_) =>                                  rcode!(2100),
       Self::FileSystemError(_) =>                               rcode!(2101),
@@ -300,7 +300,7 @@ impl Problem {
       Self::DynamicDepth => rmsg!("depth operator cannot be used on dynamic variable names"),
       Self::DepthAssignment => rmsg!("variable depth cannot be assigned to"),
       Self::InvalidDepthUsage => rmsg!("depth operator is not valid in this context"),
-      Self::DefaultParamValueNotConstant => rmsg!("default parameter value is not a valid constant"),
+      Self::FallibleOptionalArgAccess(argname) => rmsg!("access to optional argument '{}' can fail; consider adding a fallback to the accessor or specifying a default argument", argname),
     }
   }
   

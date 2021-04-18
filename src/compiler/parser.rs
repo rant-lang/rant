@@ -127,15 +127,32 @@ struct VarStats {
   def_span: Range<usize>,
   writes: usize,
   reads: usize,
+  has_fallible_read: bool,
   is_const: bool,
   role: VarRole,
+}
+
+impl VarStats {
+  #[inline]
+  fn add_write(&mut self) {
+    self.writes += 1;
+  }
+
+  #[inline]
+  fn add_read(&mut self, is_fallible_read: bool) {
+    if matches!(self.role, VarRole::FallibleOptionalArgument) && is_fallible_read {
+      self.has_fallible_read = true;
+    }
+    self.reads += 1;
+  }
 }
 
 #[derive(Copy, Clone, PartialEq)]
 enum VarRole {
   Normal,
   Function,
-  Parameter,
+  Argument,
+  FallibleOptionalArgument,
   ComposeValue,
 }
 
@@ -546,7 +563,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         RantToken::ComposeValue => no_flags!({
           if let Some(compval) = self.var_stack.get_mut(COMPOSE_VALUE_NAME) {
             emit!(Rst::ComposeValue);
-            compval.reads += 1;
+            compval.add_read(false);
           } else {
             self.report_error(Problem::NothingToCompose, &span);
           }
@@ -1304,6 +1321,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   reads: 0,
                   def_span: Default::default(), // we'll never need this anyway
                   is_const: true,
+                  has_fallible_read: false,
                   role: VarRole::ComposeValue,
                 };
                 self.var_stack.define(Identifier::from(COMPOSE_VALUE_NAME), compval_stats);
@@ -1367,6 +1385,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             reads: 0,
             def_span: Default::default(), // we'll never need this anyway
             is_const: true,
+            has_fallible_read: false,
             role: VarRole::ComposeValue,
           };
           self.var_stack.define(Identifier::from(COMPOSE_VALUE_NAME), compval_stats);
@@ -1429,7 +1448,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             fallback_compose!();
             
             // Record access to function
-            self.track_variable_access(&func_path, false, &func_path_span);
+            self.track_variable_access(&func_path, false, false, &func_path_span);
             
             // Create final node for function call
             let fcall = FunctionCall {
@@ -1764,7 +1783,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         writes: 1,
         def_span: span.clone(),
         is_const: true,
-        role: VarRole::Parameter,
+        has_fallible_read: false,
+        role: if param.is_optional() && param.default_value_expr.is_none() {
+          VarRole::FallibleOptionalArgument
+        } else { 
+          VarRole::Argument 
+        }
       });
     }
 
@@ -1941,6 +1965,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       writes: 0,
       reads: 0,
       def_span: def_span.clone(),
+      has_fallible_read: false,
       is_const,
       role,
     };
@@ -1960,7 +1985,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
 
   #[inline]
-  fn track_variable_access(&mut self, path: &AccessPath, is_write: bool, span: &Range<usize>) {
+  fn track_variable_access(&mut self, path: &AccessPath, is_write: bool, fallback_hint: bool, span: &Range<usize>) {
     // Handle access stats
     if let Some(id) = &path.var_name() {
       let tracker = match path.kind() {
@@ -1984,7 +2009,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             self.report_error(Problem::ConstantReassignment(id.to_string()), span);
           }
         } else {
-          tracker.reads += 1;
+          tracker.add_read(!fallback_hint);
+
+          // Warn the user if they're accessing a fallible optional argument without a fallback
+          if tracker.has_fallible_read && tracker.role == VarRole::FallibleOptionalArgument {
+            self.report_warning(Problem::FallibleOptionalArgAccess(id.to_string()), span);
+          }
         }
       }
     }
@@ -2021,7 +2051,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     for (name, role, span) in unused_vars {
       match role {
         VarRole::Normal => self.report_warning(Problem::UnusedVariable(name), &span),
-        VarRole::Parameter => self.report_warning(Problem::UnusedParameter(name), &span),
+        VarRole::Argument => self.report_warning(Problem::UnusedParameter(name), &span),
         VarRole::Function => self.report_warning(Problem::UnusedFunction(name), &span),
         // Ignore any other roles
         _ => {},
@@ -2164,7 +2194,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           match token {
             // If we hit a '>', it's a getter
             RantToken::RightAngle => {
-              self.track_variable_access(&var_path, false, &var_path_span);
+              self.track_variable_access(&var_path, false, false, &var_path_span);
               add_accessor!(if is_depth_op {
                 Rst::VarDepth(var_path.var_name().unwrap(), var_path.kind(), None)
               } else { 
@@ -2174,7 +2204,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             },
             // If we hit a ';', it's a getter with another accessor chained after it
             RantToken::Semi => {
-              self.track_variable_access(&var_path, false, &var_path_span);
+              self.track_variable_access(&var_path, false, false, &var_path_span);
               add_accessor!(if is_depth_op {
                 Rst::VarDepth(var_path.var_name().unwrap(), var_path.kind(), None)
               } else { 
@@ -2191,7 +2221,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 ..
               } = self.parse_sequence(SequenceParseMode::AccessorFallbackValue)?;
 
-              self.track_variable_access(&var_path, false, &var_path_span);
+              self.track_variable_access(&var_path, false, true, &var_path_span);
 
               add_accessor!(if is_depth_op {
                 Rst::VarDepth(var_path.var_name().unwrap(), var_path.kind(), Some(Rc::new(fallback_expr)))
@@ -2225,7 +2255,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 self.report_error(Problem::AnonValueAssignment, &setter_span);
               }
 
-              self.track_variable_access(&var_path, true, &setter_span);
+              self.track_variable_access(&var_path, true, false, &setter_span);
               add_accessor!(Rst::VarSet(Rc::new(var_path), Rc::new(setter_rhs_expr)));
 
               // Assignment is not valid if we're using depth operator

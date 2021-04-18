@@ -1242,8 +1242,8 @@ impl<'rant> VM<'rant> {
               if let Some(default_arg_expr) = &p.default_value_expr {
                 default_arg_exprs.push((Rc::clone(&default_arg_expr), i));
                 needs_default_args = true;
-                continue
               }
+              continue
             }
             user_arg
           };

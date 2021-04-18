@@ -1,5 +1,5 @@
 [$arg-or-foo:arg?] {
-  [alt:<arg>;foo]
+  [alt:<arg?>;foo]
 }
 
 [arg-or-foo]\n
