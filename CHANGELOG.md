@@ -11,6 +11,7 @@
   * In addition, boolean keywords now ignore surrounding whitespace.
 
 ### Fixes
+* Fixed panic that occurred with some variadic function calls
 
 ## 4.0.0-alpha.21
 

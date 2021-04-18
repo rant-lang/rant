@@ -1180,32 +1180,18 @@ impl<'rant> VM<'rant> {
     let argc = args.len();
     let is_printing = !flag.is_sink();
 
-    // Verify the args fit the signature
-    let mut args = if func.is_variadic() {
-      if argc < func.min_arg_count {
-        runtime_error!(RuntimeErrorType::ArgumentMismatch, format!("arguments don't match; expected at least {}, found {}", func.min_arg_count, argc))
-      }
-
-      // Condense args to turn variadic args into one arg
-      // Only do this for user functions, since native functions take care of variadic condensation already
-      if !func.is_native() {
-        let mut condensed_args = args.drain(0..func.vararg_start_index).collect::<Vec<RantValue>>();
-        let vararg = RantValue::List(Rc::new(RefCell::new(args.into_iter().collect::<RantList>())));
-        condensed_args.push(vararg);
-        condensed_args
-      } else {
-        args
-      }
-    } else {
-      if argc < func.min_arg_count || argc > func.params.len() {
-        runtime_error!(RuntimeErrorType::ArgumentMismatch, format!("arguments don't match; expected {}, found {}", func.min_arg_count, argc))
-      }
-      args
-    };
-
     // Tell frame to print output if it's available
     if is_printing && !override_print {
       self.cur_frame_mut().push_intent_front(Intent::PrintLast);
+    }
+
+    // Verify the args fit the signature
+    if func.is_variadic() {
+      if argc < func.min_arg_count {
+        runtime_error!(RuntimeErrorType::ArgumentMismatch, format!("arguments don't match; expected at least {}, found {}", func.min_arg_count, argc))
+      }
+    } else if argc < func.min_arg_count || argc > func.params.len() {
+      runtime_error!(RuntimeErrorType::ArgumentMismatch, format!("arguments don't match; expected {}, found {}", func.min_arg_count, argc))
     }
 
     // Call the function
@@ -1215,6 +1201,21 @@ impl<'rant> VM<'rant> {
         self.push_native_call_frame(Box::new(move |vm| foreign_func(vm, args)), is_printing, StackFrameFlavor::NativeCall)?;
       },
       RantFunctionInterface::User(user_func) => {
+        // Split args at vararg
+        let mut args_iter = args.drain(..);
+        let mut args_nonvariadic = vec![];
+        
+        for _ in 0..func.vararg_start_index {
+          if let Some(arg) = args_iter.next() {
+            args_nonvariadic.push(arg);
+            continue
+          }
+          break
+        }
+
+        // This won't be added to args because we need to check default arguments
+        let mut vararg = func.is_variadic().then(|| RantValue::List(Rc::new(RefCell::new(args_iter.collect::<RantList>()))));
+
         // Push the function onto the call stack
         self.push_frame_flavored(Rc::clone(user_func), is_printing, func.flavor.unwrap_or(StackFrameFlavor::FunctionBody))?;
 
@@ -1228,19 +1229,24 @@ impl<'rant> VM<'rant> {
 
         // Pass the args to the function scope
         let mut needs_default_args = false;
-        let mut args = args.drain(..);
+        let mut args_nonvariadic = args_nonvariadic.drain(..);
         let mut default_arg_exprs = vec![];
         for (i, p) in func.params.iter().enumerate() {
           let pname_str = p.name.as_str();
-          let user_arg = args.next();
-
-          if p.is_optional() && user_arg.is_none() {
-            if let Some(default_arg_expr) = &p.default_value_expr {
-              default_arg_exprs.push((Rc::clone(&default_arg_expr), i));
-              needs_default_args = true;
-              continue
+          
+          let user_arg = if p.varity.is_variadic() {
+            vararg.take()
+          } else {
+            let user_arg = args_nonvariadic.next();
+            if p.is_optional() && user_arg.is_none() {
+              if let Some(default_arg_expr) = &p.default_value_expr {
+                default_arg_exprs.push((Rc::clone(&default_arg_expr), i));
+                needs_default_args = true;
+                continue
+              }
             }
-          }
+            user_arg
+          };
           
           self.call_stack.def_var_value(
             self.engine, 
