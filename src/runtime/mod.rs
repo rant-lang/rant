@@ -46,6 +46,9 @@ impl<'rant> VM<'rant> {
   }
 }
 
+/// Feature-gated stderr print function for providing diagnostic information on the Rant VM state.
+///
+/// Enable the `vm-trace` feature to use.
 macro_rules! runtime_trace {
   ($fmt:literal) => {#[cfg(all(feature = "vm-trace", debug_assertions))]{
     eprintln!("[vm-trace] {}", $fmt)
@@ -109,7 +112,12 @@ pub enum Intent {
   /// Pop `expr_count` values off the stack and use them for expression fields in a setter.
   SetValue { path: Rc<AccessPath>, write_mode: VarWriteMode, expr_count: usize },
   /// Evaluate `arg_exprs` in order, then pop the argument values off the stack, pop a function off the stack, and pass the arguments to the function.
-  Invoke { arg_exprs: Rc<Vec<ArgumentExpr>>, eval_count: usize, flag: PrintFlag, is_temporal: bool, },
+  Invoke { 
+    arg_exprs: Rc<Vec<ArgumentExpr>>, 
+    arg_eval_count: usize,
+    flag: PrintFlag, 
+    is_temporal: bool, 
+  },
   /// Invoke a single function in a composed function call chain.
   InvokeComposedStep { 
     /// All steps in the entire composed function call
@@ -123,6 +131,8 @@ pub enum Intent {
     /// The print flag to use.
     flag: PrintFlag,
   },
+  /// Evaluates each sequence in `default_arg_exprs` in order and assigns their results to local constants with their associated `Identifier`.
+  CreateDefaultArgs { context: RantFunctionRef, default_arg_exprs: Vec<(Rc<Sequence>, usize)>, eval_index: usize, },
   /// Pop `argc` args off the stack, then pop a function off the stack and call it with the args.
   Call { argc: usize, flag: PrintFlag, override_print: bool },
   /// Call a function for every variant of a temporal argument set and increment the provided temporal state.
@@ -137,10 +147,6 @@ pub enum Intent {
   RuntimeCall { function: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, interrupt: bool },
   /// Drops all unwind states that are no longer within the call stack.
   DropStaleUnwinds,
-  /// Evaluates all default parameter values for the specified function definition, store the results in a vec, and then defines the function.
-  BuildFunctionDef { funcdef: FunctionDef, param_eval_count: usize, default_values: Vec<RantValue> },
-  /// Evaluates all default parameter values for the specified lambda/closure, stores the results in a vec, and then evaluates the lambda.
-  BuildLambda { lambda: ClosureExpr, param_eval_count: usize, default_values: Vec<RantValue> },
 }
 
 impl Intent {
@@ -167,8 +173,7 @@ impl Intent {
       Intent::ContinueLast => "continue_last",
       Intent::BreakLast => "break_last",
       Intent::BuildWeightedBlock { .. } => "build_weighted_block",
-      Intent::BuildFunctionDef { .. } => "build_funcdef_with_default_params",
-      Intent::BuildLambda { .. } => "build_lambda_with_default_params",
+      Intent::CreateDefaultArgs { .. } => "create_default_args",
     }
   }
 }
@@ -431,12 +436,62 @@ impl<'rant> VM<'rant> {
             }
           }
         },
-        Intent::Invoke { arg_exprs, eval_count, flag, is_temporal } => {
+        Intent::CreateDefaultArgs { 
+          context, 
+          default_arg_exprs, 
+          mut eval_index 
+        } => {
+          // Check if there's a default arg ready to pop
+          if eval_index > 0 {
+            // Pop it off the value stack
+            let default_arg = self.pop_val()?;
+            // Store it as a local
+            let (_, var_name_index) = default_arg_exprs[eval_index - 1];
+            let var_name = &context.params[var_name_index].name;
+            self.def_var_value(var_name.as_str(), AccessPathKind::Local, default_arg, true)?;
+          }
+
+          // Check if there's another arg expression to evaluate
+          if let Some(cur_expr) = default_arg_exprs.get(eval_index).map(|(e, _)| Rc::clone(e)) {            
+            // Continuation intent (if needed)  
+            eval_index += 1;
+            if eval_index <= default_arg_exprs.len() {
+              self.cur_frame_mut().push_intent_front(Intent::CreateDefaultArgs {
+                context,
+                default_arg_exprs,
+                eval_index,
+              });
+            }
+
+            // Evaluate
+            self.push_frame_flavored(cur_expr, true, StackFrameFlavor::ArgumentExpression)?;
+
+            // Interrupt
+            return Ok(true)
+          }
+
+          // When finished, just fall through so the underlying function runs right away
+        },
+        Intent::Invoke { 
+          arg_exprs, 
+          arg_eval_count, 
+          flag, 
+          is_temporal, 
+        } => {
           // First, evaluate all arguments
-          if eval_count < arg_exprs.len() {
-            let arg_expr = arg_exprs.get(arg_exprs.len() - eval_count - 1).unwrap();
+          if arg_eval_count < arg_exprs.len() {
+            let arg_expr = arg_exprs.get(arg_exprs.len() - arg_eval_count - 1).unwrap();
             let arg_seq = Rc::clone(&arg_expr.expr);
-            self.cur_frame_mut().push_intent_front(Intent::Invoke { arg_exprs, eval_count: eval_count + 1, flag, is_temporal, });
+
+            // Continuation intent
+            self.cur_frame_mut().push_intent_front(Intent::Invoke { 
+              arg_exprs, 
+              arg_eval_count: arg_eval_count + 1, 
+              flag, 
+              is_temporal, 
+            });
+
+            // Evaluate arg
             self.push_frame_flavored(arg_seq, true, StackFrameFlavor::ArgumentExpression)?;
             return Ok(true)
           } else {
@@ -838,141 +893,6 @@ impl<'rant> VM<'rant> {
             self.unwinds.pop();
           }
         }
-        Intent::BuildFunctionDef { funcdef, mut param_eval_count, mut default_values } => {
-          // Check if we need to pop a value off the stack
-          if default_values.len() < param_eval_count {
-            default_values.push(self.pop_val()?);
-          }
-
-          // Keep reading default values until all params are checked
-          while param_eval_count < funcdef.params.len() {
-            let paramdef = &funcdef.params[param_eval_count];
-            // Default values are only allowed on optional params
-            if matches!(paramdef.varity, Varity::Optional) {
-              if let Some(default_value_expr) = paramdef.default_value_expr.as_ref().map(Rc::clone) {
-                // Push continuation intent on current frame
-                self.cur_frame_mut().push_intent_front(Intent::BuildFunctionDef {
-                  funcdef, param_eval_count: param_eval_count + 1, default_values,
-                });
-
-                // Push default value expression onto call stack
-                self.push_frame_flavored(default_value_expr, true, StackFrameFlavor::ArgumentExpression)?;
-
-                return Ok(true)
-              }
-            }
-            
-            // If this is reached, there's no default value expr, so set it to an empty
-            default_values.push(RantValue::Empty);
-            param_eval_count += 1;
-          }
-
-          // If this point is reached, all default values are evaluated and we define the function
-
-          // Capture variables
-          let mut captured_vars = vec![];
-          for capture_id in funcdef.capture_vars.iter() {
-            let var = self.call_stack.get_var_mut(&mut self.engine, capture_id, AccessPathKind::Local)?;
-            var.make_by_ref();
-            captured_vars.push((capture_id.clone(), var.clone()));
-          }
-
-          // Build parameters
-          let params = funcdef.params.iter().zip(default_values.drain(..)).map(|(paramdef, default_value)| {
-            Parameter {
-              name: paramdef.name.clone(),
-              varity: paramdef.varity,
-              default_value
-            }
-          }).collect::<Vec<Parameter>>();
-
-          // Build function
-          let func = RantValue::Function(Rc::new(RantFunction {
-            body: RantFunctionInterface::User(Rc::clone(&funcdef.body)),
-            captured_vars,
-            min_arg_count: params.iter().take_while(|p| p.is_required()).count(),
-            vararg_start_index: params.iter()
-            .enumerate()
-            .find_map(|(i, p)| if p.varity.is_variadic() { Some(i) } else { None })
-            .unwrap_or_else(|| params.len()),
-            params: Rc::new(params),
-            flavor: None,
-          }));
-
-          // Evaluate setter path
-          let dynamic_keys = funcdef.path.dynamic_exprs();
-          self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter {
-            expr_count: dynamic_keys.len(),
-            write_mode: if funcdef.is_const { VarWriteMode::DefineConst } else { VarWriteMode::Define },
-            pending_exprs: dynamic_keys,
-            path: Rc::clone(&funcdef.path),
-            val_source: SetterValueSource::FromValue(func)
-          });
-
-          return Ok(true)
-        },
-        Intent::BuildLambda { lambda, mut param_eval_count, mut default_values } => {
-          // Check if we need to pop a value off the stack
-          if default_values.len() < param_eval_count {
-            default_values.push(self.pop_val()?);
-          }
-
-          // Keep reading default values until all params are checked
-          while param_eval_count < lambda.params.len() {
-            let paramdef = &lambda.params[param_eval_count];
-            // Default values are only allowed on optional params
-            if matches!(paramdef.varity, Varity::Optional) {
-              if let Some(default_value_expr) = paramdef.default_value_expr.as_ref().map(Rc::clone) {
-                // Push continuation intent on current frame
-                self.cur_frame_mut().push_intent_front(Intent::BuildLambda {
-                  lambda, param_eval_count: param_eval_count + 1, default_values,
-                });
-
-                // Push default value expression onto call stack
-                self.push_frame_flavored(default_value_expr, true, StackFrameFlavor::ArgumentExpression)?;
-
-                return Ok(true)
-              }
-            }
-            
-            // If this is reached, there's no default value expr, so set it to an empty
-            default_values.push(RantValue::Empty);
-            param_eval_count += 1;
-          }
-          
-          // All parameters are evaluated at this point, so evaluate the lambda
-
-          // Capture variables
-          let mut captured_vars = vec![];
-          for capture_id in lambda.capture_vars.iter() {
-            let var = self.call_stack.get_var_mut(&mut self.engine, capture_id, AccessPathKind::Local)?;
-            var.make_by_ref();
-            captured_vars.push((capture_id.clone(), var.clone()));
-          }
-
-          // Build parameters
-          let params = lambda.params.iter().zip(default_values.drain(..)).map(|(paramdef, default_value)| {
-            Parameter {
-              name: paramdef.name.clone(),
-              varity: paramdef.varity,
-              default_value
-            }
-          }).collect::<Vec<Parameter>>();
-
-          let func = RantValue::Function(Rc::new(RantFunction {
-            body: RantFunctionInterface::User(Rc::clone(&lambda.body)),
-            captured_vars,
-            min_arg_count: params.iter().take_while(|p| p.is_required()).count(),
-            vararg_start_index: params.iter()
-            .enumerate()
-            .find_map(|(i, p)| if p.varity.is_variadic() { Some(i) } else { None })
-            .unwrap_or_else(|| params.len()),
-            params: Rc::new(params),
-            flavor: None,
-          }));
-
-          self.cur_frame_mut().write_value(func);
-        }
       }
     }
 
@@ -1050,21 +970,72 @@ impl<'rant> VM<'rant> {
           }
           return Ok(true)
         },
-        Rst::FuncDef(funcdef) => {
-          self.cur_frame_mut().push_intent_front(Intent::BuildFunctionDef {
-            funcdef: funcdef.clone(), // I'd ideally pass a reference here, but I got tired of dealing with borrow checker errors. Gotta choose your battles...
-            param_eval_count: 0, 
-            default_values: vec![]
+        Rst::FuncDef(FunctionDef {
+          body,
+          capture_vars: to_capture,
+          is_const,
+          params,
+          path,
+        }) => {
+          // Capture variables
+          let mut captured_vars = vec![];
+          for capture_id in to_capture.iter() {
+            let var = self.call_stack.get_var_mut(&mut self.engine, capture_id, AccessPathKind::Local)?;
+            var.make_by_ref();
+            captured_vars.push((capture_id.clone(), var.clone()));
+          }
+
+          // Build function
+          let func = RantValue::Function(Rc::new(RantFunction {
+            body: RantFunctionInterface::User(Rc::clone(body)),
+            captured_vars,
+            min_arg_count: params.iter().take_while(|p| p.is_required()).count(),
+            vararg_start_index: params.iter()
+            .enumerate()
+            .find_map(|(i, p)| if p.varity.is_variadic() { Some(i) } else { None })
+            .unwrap_or_else(|| params.len()),
+            params: Rc::clone(params),
+            flavor: None,
+          }));
+
+          // Evaluate setter path
+          let dynamic_keys = path.dynamic_exprs();
+          self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter {
+            expr_count: dynamic_keys.len(),
+            write_mode: if *is_const { VarWriteMode::DefineConst } else { VarWriteMode::Define },
+            pending_exprs: dynamic_keys,
+            path: Rc::clone(path),
+            val_source: SetterValueSource::FromValue(func)
           });
+
           return Ok(true)
         },
-        Rst::Closure(lambda) => {
-          self.cur_frame_mut().push_intent_front(Intent::BuildLambda {
-            lambda: lambda.clone(),
-            param_eval_count: 0,
-            default_values: vec![],
-          });
-          return Ok(true)
+        Rst::Closure(ClosureExpr { 
+          params, 
+          body, 
+          capture_vars: to_capture 
+        }) => {
+          // Capture variables
+          let mut captured_vars = vec![];
+          for capture_id in to_capture.iter() {
+            let var = self.call_stack.get_var_mut(&mut self.engine, capture_id, AccessPathKind::Local)?;
+            var.make_by_ref();
+            captured_vars.push((capture_id.clone(), var.clone()));
+          }
+
+          let func = RantValue::Function(Rc::new(RantFunction {
+            body: RantFunctionInterface::User(Rc::clone(body)),
+            captured_vars,
+            min_arg_count: params.iter().take_while(|p| p.is_required()).count(),
+            vararg_start_index: params.iter()
+            .enumerate()
+            .find_map(|(i, p)| if p.varity.is_variadic() { Some(i) } else { None })
+            .unwrap_or_else(|| params.len()),
+            params: Rc::clone(params),
+            flavor: None,
+          }));
+
+          self.cur_frame_mut().write_value(func);
         },
         Rst::FuncCall(fcall) => {
           let FunctionCall {
@@ -1079,8 +1050,9 @@ impl<'rant> VM<'rant> {
             FunctionCallTarget::Path(path) => {
               // Queue up the function call behind the dynamic keys
               self.cur_frame_mut().push_intent_front(Intent::Invoke {
-                eval_count: 0,
+                arg_eval_count: 0,
                 arg_exprs: Rc::clone(arguments),
+                
                 flag: *flag,
                 is_temporal: *is_temporal,
               });
@@ -1092,7 +1064,7 @@ impl<'rant> VM<'rant> {
               // Evaluate arguments after function is evaluated
               self.cur_frame_mut().push_intent_front(Intent::Invoke {
                 arg_exprs: Rc::clone(arguments),
-                eval_count: 0,
+                arg_eval_count: 0,
                 flag: *flag,
                 is_temporal: *is_temporal,
               });
@@ -1246,24 +1218,46 @@ impl<'rant> VM<'rant> {
         // Push the function onto the call stack
         self.push_frame_flavored(Rc::clone(user_func), is_printing, func.flavor.unwrap_or(StackFrameFlavor::FunctionBody))?;
 
-        // Pass the args to the function scope
-        let mut args = args.drain(..);
-        for param in func.params.iter() {
-          self.call_stack.def_var_value(
-            self.engine, 
-            param.name.as_str(), 
-            AccessPathKind::Local, 
-            args.next().unwrap_or_else(|| param.default_value.shallow_copy()),
-            true,
-          )?;
-        }
-
         // Pass captured vars to the function scope
         for (capture_name, capture_var) in func.captured_vars.iter() {
           self.call_stack.def_local_var(
             capture_name.as_str(),
             RantVar::clone(capture_var)
           )?;
+        }
+
+        // Pass the args to the function scope
+        let mut needs_default_args = false;
+        let mut args = args.drain(..);
+        let mut default_arg_exprs = vec![];
+        for (i, p) in func.params.iter().enumerate() {
+          let pname_str = p.name.as_str();
+          let user_arg = args.next();
+
+          if p.is_optional() && user_arg.is_none() {
+            if let Some(default_arg_expr) = &p.default_value_expr {
+              default_arg_exprs.push((Rc::clone(&default_arg_expr), i));
+              needs_default_args = true;
+              continue
+            }
+          }
+          
+          self.call_stack.def_var_value(
+            self.engine, 
+            pname_str, 
+            AccessPathKind::Local, 
+            user_arg.unwrap_or_default(),
+            true,
+          )?;
+        }
+
+        // Evaluate default args if needed
+        if needs_default_args {
+          self.cur_frame_mut().push_intent_front(Intent::CreateDefaultArgs {
+            context: Rc::clone(&func),
+            default_arg_exprs,
+            eval_index: 0,
+          });
         }
       },
     }
@@ -1631,7 +1625,7 @@ impl<'rant> VM<'rant> {
     }
   }
 
-  /// Removes the topmost value from the value stack and returns it.
+  /// Removes and returns the topmost value from the value stack.
   #[inline(always)]
   pub fn pop_val(&mut self) -> RuntimeResult<RantValue> {
     if let Some(val) = self.val_stack.pop() {
@@ -1641,7 +1635,7 @@ impl<'rant> VM<'rant> {
     }
   }
 
-  /// Removes the topmost frame from the call stack and returns it.
+  /// Removes and returns the topmost frame from the call stack.
   #[inline(always)]
   pub fn pop_frame(&mut self) -> RuntimeResult<StackFrame<Intent>> {
     runtime_trace!("pop_frame: {} -> {}", self.call_stack.len(), self.call_stack.len() - 1);
@@ -1712,7 +1706,7 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
-  /// Pushes a flavored frame onto the call stak.
+  /// Pushes a flavored frame onto the call stack.
   #[inline(always)]
   pub fn push_frame_flavored(&mut self, callee: Rc<Sequence>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
     runtime_trace!("push_frame_flavored");

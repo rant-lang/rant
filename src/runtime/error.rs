@@ -86,7 +86,7 @@ impl Display for RuntimeErrorType {
       RuntimeErrorType::StackUnderflow => "STACK_UNDERFLOW_ERROR",
       RuntimeErrorType::InvalidAccess => "INVALID_ACCESS_ERROR",
       RuntimeErrorType::InvalidOperation => "INVALID_OP_ERROR",
-      RuntimeErrorType::InternalError => "EXTERNAL_ERROR",
+      RuntimeErrorType::InternalError => "INTERNAL_ERROR",
       RuntimeErrorType::ArgumentMismatch => "ARG_MISMATCH_ERROR",
       RuntimeErrorType::ArgumentError => "ARG_ERROR",
       RuntimeErrorType::CannotInvokeValue => "INVOKE_ERROR",
@@ -97,8 +97,8 @@ impl Display for RuntimeErrorType {
       RuntimeErrorType::IndexError(_) => "INDEX_ERROR",
       RuntimeErrorType::KeyError(_) => "KEY_ERROR",
       RuntimeErrorType::SliceError(_) => "SLICE_ERROR",
-      RuntimeErrorType::SelectorError(_) => "ERR_SELECTOR_ERROR",
-      RuntimeErrorType::ModuleLoadError(_) => "ERR_MODULE_ERROR",
+      RuntimeErrorType::SelectorError(_) => "SELECTOR_ERROR",
+      RuntimeErrorType::ModuleLoadError(_) => "MODULE_ERROR",
       RuntimeErrorType::ControlFlowError => "CONTROL_FLOW_ERROR",
     })
   }

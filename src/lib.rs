@@ -22,12 +22,20 @@
 //! [`Vec<CompilerMessage>`]: compiler/struct.CompilerMessage.html
 
 
+// Some branches are incorrectly detected as dead
 #![allow(dead_code)]
+
+// Some macro usages aren't detected, causing false warnings
 #![allow(unused_macros)]
 
+// Disable clippy's silly whining about "VM", "IO", etc. in type names
+#![allow(clippy::upper_case_acronyms)]
+
+// Public modules
 pub mod compiler;
 pub mod runtime;
 
+// Internal modules
 mod collections;
 mod convert;
 mod format;
@@ -40,6 +48,7 @@ mod value;
 mod func;
 mod var;
 
+// Re-exports
 pub use crate::collections::*;
 pub use crate::convert::*;
 pub use crate::string::*;

@@ -649,7 +649,7 @@ pub struct FunctionDef {
   /// Indicates whether the function will be constant.
   pub is_const: bool, // only used on variable definitions
   /// The parameters associated with the function being defined.
-  pub params: Rc<Vec<ParameterDef>>,
+  pub params: Rc<Vec<Parameter>>,
   /// The variables to capture into the function being defined.
   pub capture_vars: Rc<Vec<Identifier>>,
   /// The body of the function being defined.
@@ -662,20 +662,9 @@ pub struct ClosureExpr {
   /// The body of the closure. 
   pub body: Rc<Sequence>,
   /// The parameters associated with the closure.
-  pub params: Rc<Vec<ParameterDef>>,
+  pub params: Rc<Vec<Parameter>>,
   /// The variables to capture into the closure.
   pub capture_vars: Rc<Vec<Identifier>>,
-}
-
-/// Contains information needed to build a function parameter.
-#[derive(Debug)]
-pub struct ParameterDef {
-  /// The name to assign to the parameter.
-  pub name: Identifier,
-  /// The varity to assign to the parameter.
-  pub varity: Varity,
-  /// An expression to produce the default value of the parameter.
-  pub default_value_expr: Option<Rc<Sequence>>,
 }
 
 /// Describes a function parameter.
@@ -686,7 +675,7 @@ pub struct Parameter {
   /// The varity of the parameter
   pub varity: Varity,
   /// The default value of the parameter.
-  pub default_value: RantValue,
+  pub default_value_expr: Option<Rc<Sequence>>,
 }
 
 impl Parameter {
@@ -695,6 +684,12 @@ impl Parameter {
   pub fn is_required(&self) -> bool {
     use Varity::*;
     matches!(self.varity, Required | VariadicPlus)
+  }
+
+  #[inline]
+  pub fn is_optional(&self) -> bool {
+    use Varity::*;
+    matches!(self.varity, Optional)
   }
 }
 

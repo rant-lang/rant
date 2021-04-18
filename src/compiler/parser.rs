@@ -992,7 +992,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     
   }
   
-  fn parse_func_params(&mut self, start_span: &Range<usize>) -> ParseResult<Vec<(ParameterDef, Range<usize>)>> {
+  fn parse_func_params(&mut self, start_span: &Range<usize>) -> ParseResult<Vec<(Parameter, Range<usize>)>> {
     // List of parameter names for function
     let mut params = vec![];
     // Separate set of all parameter names to check for duplicates
@@ -1076,7 +1076,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   _ => unreachable!(),
                 };
 
-                let opt_param = ParameterDef {
+                let opt_param = Parameter {
                   name: param_name,
                   varity: Varity::Optional,
                   default_value_expr: (!default_value_seq.is_empty()).then(|| Rc::new(default_value_seq))
@@ -1095,7 +1095,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
               // Handle other varities here...
 
-              let param = ParameterDef {
+              let param = Parameter {
                 name: param_name,
                 varity,
                 default_value_expr: None,
@@ -1169,6 +1169,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Function definition
         tt @ RantToken::Dollar | tt @ RantToken::Percent => {
           let is_const = matches!(tt, RantToken::Percent);
+
           // Name of variable function will be stored in
           let (func_path, _func_path_span) = self.parse_access_path(false)?;
 
@@ -1176,13 +1177,19 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           if is_const && !func_path.is_variable() {
             self.report_warning(Problem::NestedFunctionDefMarkedConstant, &func_access_type_span);
           }
+          
+          self.reader.skip_ws();
 
-          // Function params
-          let params = self.parse_func_params(&start_span)?;
-          let end_func_sig_span = self.reader.last_token_span();
-          // Read function body
-          self.reader.skip_ws();          
-          let (body, captures) = self.parse_func_body(&params, false)?;
+          let ((body, params, end_func_sig_span), captures) = self.capture_pass(|self_| {
+            // Function params
+            let params = self_.parse_func_params(&start_span)?;
+            let end_func_sig_span = self_.reader.last_token_span();
+            
+            // Read function body
+            let body = self_.parse_func_body(&params, false)?;
+            
+            Ok((body, params, end_func_sig_span))
+          })?;
 
           // Track variable
           if func_path.is_variable() {
@@ -1206,7 +1213,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let params = self.parse_func_params(&start_span)?;
           self.reader.skip_ws();
           // Read function body
-          let (body, captures) = self.parse_func_body(&params, true)?;
+          let (body, captures) = self.capture_pass(|self_| self_.parse_func_body(&params, true))?;
           
           Ok(Rst::Closure(ClosureExpr {
             capture_vars: Rc::new(captures),
@@ -1733,38 +1740,21 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     Ok(sequence)
   }
 
-  /// Parses a function body and captures variables.
-  fn parse_func_body(&mut self, params: &Vec<(ParameterDef, Range<usize>)>, allow_inline: bool) -> ParseResult<(Sequence, Vec<Identifier>)> {
+  /// Parses a function body and DOES NOT capture variables.
+  fn parse_func_body(&mut self, params: &Vec<(Parameter, Range<usize>)>, allow_inline: bool) -> ParseResult<Sequence> {
     self.reader.skip_ws();
 
-    // Since we're about to push another var_stack frame, we can use the current depth of var_stack as the index
-    let capture_height = self.var_stack.depth();
-    
     let is_block_body = if allow_inline {
-      // Push a new capture frame
-      self.capture_stack.push((capture_height, Default::default()));
-
-      // Push a new variable frame
-      self.var_stack.push_layer();
-
       // Determine if the body is a block and eat the opening brace if available
       self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _))))
-
     } else {
       if !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
         self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
         return Err(())
       }
-
-      // Push a new capture frame
-      self.capture_stack.push((capture_height, Default::default()));
-
-      // Push a new variable frame
-      self.var_stack.push_layer();
-
       true
     };
-    
+
     let start_span = self.reader.last_token_span();
 
     // Define each parameter as a variable in the current var_stack frame so they are not accidentally captured
@@ -1779,11 +1769,41 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
 
     // parse_sequence_inner() is used here so that the new stack frame can be customized before use
-    let parse_result = self.parse_sequence_inner(if is_block_body {
+    let ParsedSequence { sequence, end_type, .. } = self.parse_sequence_inner(if is_block_body {
       SequenceParseMode::FunctionBodyBlock
     } else {
       SequenceParseMode::SingleItem
-    });
+    })?;
+
+    match end_type {
+      SequenceEndType::FunctionBodyEnd | SequenceEndType::SingleItemEnd => {},
+      SequenceEndType::ProgramEnd => {
+        let err_span = start_span.start .. self.source.len();
+        self.report_error(if is_block_body { 
+          Problem::UnclosedFunctionBody 
+        } else { 
+          Problem::MissingFunctionBody 
+        }, &err_span);
+        return Err(())
+      },
+      _ => unreachable!()
+    }
+
+    Ok(sequence)
+  }
+  
+  fn capture_pass<T>(&mut self, parse_func: impl FnOnce(&mut Self) -> ParseResult<T>) -> ParseResult<(T, Vec<Identifier>)> {
+    // Since we're about to push another var_stack frame, we can use the current depth of var_stack as the index
+    let capture_height = self.var_stack.depth();
+
+    // Push a new capture frame
+    self.capture_stack.push((capture_height, Default::default()));
+
+    // Push a new variable frame
+    self.var_stack.push_layer();
+
+    // Call parse_func
+    let parse_out = parse_func(self)?;
 
     // Run static analysis on variable/param usage
     self.analyze_top_vars();
@@ -1793,28 +1813,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     // Pop the topmost capture frame and grab the set of captures
     let (_, mut capture_set) = self.capture_stack.pop().unwrap();
 
-    match parse_result {
-      Ok(ParsedSequence { sequence, end_type, .. }) => {
-        match end_type {
-          SequenceEndType::FunctionBodyEnd | SequenceEndType::SingleItemEnd => {},
-          SequenceEndType::ProgramEnd => {
-            let err_span = start_span.start .. self.source.len();
-            self.report_error(if is_block_body { 
-              Problem::UnclosedFunctionBody 
-            } else { 
-              Problem::MissingFunctionBody 
-            }, &err_span);
-            return Err(())
-          },
-          _ => unreachable!()
-        }
-  
-        Ok((sequence, capture_set.drain().collect()))
-      },
-      Err(()) => {
-        Err(())
-      }
-    }
+    Ok((parse_out, capture_set.drain().collect()))
   }
     
   /// Parses a block.

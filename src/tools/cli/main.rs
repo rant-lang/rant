@@ -39,7 +39,7 @@ fn main() {
 
   let arg_matches = App::new("Rant CLI")
     .version(BUILD_VERSION)
-    .about("Command-line interface for running Rant 4.x programs")
+    .about("Command-line interface for Rant 4.x")
     .long_version(version_long.as_str())
     .arg(Arg::with_name("seed")
       .help("Specifies the initial 64-bit hex seed")
