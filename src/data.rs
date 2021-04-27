@@ -12,7 +12,18 @@ pub type DataSourceResult<T> = Result<T, DataSourceError>;
 /// Please take care to ensure that such access is adequately sandboxed, has granular permissions,
 /// and that failed access to such resources is handled gracefully.
 pub trait DataSource: Debug {
+  /// Returns a string identifying the type of data source this is;
+  /// ideally, this should be something short and human-readable.
+  /// Refer to implementor documentation for the specific string returned.
+  ///
+  /// ## Security
+  /// Because implementors can make this method return any string at all,
+  /// usage should be limited to diagnostic and filtering purposes only.
+  fn type_id(&self) -> &str;
+
   /// Requests some data from the data source.
+  ///
+  /// This method is called by Rant's `[data]` funtion to interact with data sources.
   fn request_data(&self, args: Vec<RantValue>) -> DataSourceResult<RantValue>;
 }
 

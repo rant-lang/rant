@@ -19,7 +19,7 @@
 * Made runtime error messages more consistent
 
 ### Removed
-* Removed `Rant.debug_mode` in favor of using `Rant::options()` to get the value instead
+* Removed `Rant.debug_mode` in favor of using `Rant.options()` to get the value instead
 * Removed `Rant.run_into_string()` and `Rant.run_into_string_with()` because they're kind of pointless
 
 ### Fixes
