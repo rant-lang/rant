@@ -1,5 +1,7 @@
 use std::mem;
 
+use data::DataSourceError;
+
 use super::*;
 use crate::lang::{AccessPathKind, PrintFlag};
 
@@ -193,6 +195,19 @@ pub(crate) fn try_(vm: &mut VM, (context, handler): (RantValue, Option<RantFunct
       vm.pre_push_block(&block, PrintFlag::Sink)?;
     }
     other => runtime_error!(RuntimeErrorType::ArgumentError, "try: cannot protect '{}' value; only functions and blocks can be protected", other.get_type())
+  }
+  Ok(())
+}
+
+pub(crate) fn data(vm: &mut VM, (data_source_name, data_source_args): (InternalString, VarArgs<RantValue>)) -> RantStdResult {
+  match vm.context().data_source(data_source_name.as_str()) {
+    Some(ds) => {
+      let result = ds.request_data(data_source_args.into_vec()).into_runtime_result()?;
+      vm.cur_frame_mut().write_value(result);
+    },
+    None => {
+      runtime_error!(RuntimeErrorType::DataSourceError(DataSourceError::User(format!("data source '{}' not found", &data_source_name))))
+    }
   }
   Ok(())
 }

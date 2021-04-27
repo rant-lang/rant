@@ -1,15 +1,21 @@
 # Changelog
 
-## 4.0.0-aplha.22
+## 4.0.0-aplha.22 (unreleased)
 
 ### New
+* Added data sources (access through the `rant::data::DataSource` trait)
 * Added inline lambdas (you no longer need braces for lambdas with a single expression in them!)
 * Optional function parameters can now have user-specified default values
+* Exposed `Rant.options` through the `Rant.options()` method
 
 ### Changes
 * Boolean literals are now keywords; this means that `true` and `false` are now `@true` and `@false`. The original reserved fragments are now treated like strings.
   * In addition, boolean keywords now ignore surrounding whitespace.
 * Optional parameters without default arguments now no longer define variables in the function body when the user doesn't pass a value to them; as a result, access to these arguments is now fallible.
+
+### Removed
+* Removed `Rant.debug_mode` in favor of using `Rant::options()` to get the value instead
+* Removed `Rant.run_into_string()` and `Rant.run_into_string_with()` because they're kind of pointless
 
 ### Fixes
 * Fixed panic that occurred with some variadic function calls

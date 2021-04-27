@@ -1,4 +1,4 @@
-use std::{cell::RefCell, cmp::Ordering, fmt::Display, iter::FromIterator, ops::{DerefMut, Deref}, rc::Rc};
+use std::{borrow::Cow, cell::RefCell, cmp::Ordering, fmt::Display, iter::FromIterator, ops::{DerefMut, Deref}, rc::Rc};
 use crate::{InternalString, RantValue, util};
 use fnv::FnvHashMap;
 
@@ -147,10 +147,19 @@ impl RantMap {
   }
 
   #[inline]
-  pub fn raw_get<'a>(&'a self, key: &str) -> Option<&'a RantValue> {
+  pub fn raw_get(&self, key: &str) -> Option<&RantValue> {
     self.map.get(key)
   }
 
+  #[inline]
+  pub fn get(&self, key: &str) -> Option<Cow<RantValue>> {
+    // Check if the member is in the map itself
+    if let Some(member) = self.raw_get(key) {
+      return Some(Cow::Borrowed(member))
+    }
+    let mut next_proto = self.proto.as_ref().map(Rc::clone);
+    while let Some(cur_proto) = next_proto {
+      let cur_proto_ref = cur_proto.borrow();
   #[inline]
   pub fn raw_has_key(&self, key: &str) -> bool {
     self.map.contains_key(key)

@@ -437,6 +437,13 @@ impl<T: FromRant> DerefMut for VarArgs<T> {
   }
 }
 
+impl<T: FromRant> VarArgs<T> {
+  #[inline]
+  pub fn into_vec(self) -> Vec<T> {
+    self.0
+  }
+}
+
 /// Semantic wrapper around a Vec<T> for use in required variadic argument lists.
 pub(crate) struct RequiredVarArgs<T: FromRant>(Vec<T>);
 

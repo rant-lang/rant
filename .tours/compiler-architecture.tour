@@ -1,0 +1,101 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "Compiler Architecture",
+  "steps": [
+    {
+      "directory": "src/compiler",
+      "description": "# The Compiler\r\n\r\nThis tour provides an overview of the compiler and how it works.\r\n\r\nRather than using bytecode, a Rant program compiles to an in-memory Abstract Syntax Tree (AST), which is then directly interpreted. This simplifies the compiler a lot!\r\n\r\nCompilation happens in three steps:\r\n1. The lexer (via `RantTokenReader`) splits, or \"tokenizes,\" the code into lexical units called \"tokens.\"\r\n2. The parser (via `RantParser`) reads the token stream and produces AST nodes representing the program behavior.\r\n3. The compiler (via `RantCompiler`) retrieves the final parsing result and either produces a final `RantProgram` or returns an error.",
+      "title": "Introduction"
+    },
+    {
+      "file": "src/compiler/lexer.rs",
+      "description": "Token types are defined by the `RantToken` enum. Rant uses the excellent [`logos`](https://crates.io/crates/logos) crate for token generation, so very little code is needed for the tokenization step.",
+      "line": 5
+    },
+    {
+      "file": "src/compiler/reader.rs",
+      "description": "The `RantTokenReader` struct is the parser's interface to the lexer. It contains some helpful functions for skipping, peeking, matching, and more.",
+      "line": 6
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "The `RantParser` struct is the heart of the compiler. It uses `RantTokenReader` to tokenize Rant code and parses the token sequence to produce a `RantProgram`. \r\nIt handles all parsing, error reporting, and static analysis.",
+      "line": 151
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "When the parser is created, it needs a few pieces of information: the original source code, a `Reporter` to report errors and warnings through, a boolean flag to indicate whether debug info is needed, and some information about where the code came from (provided by `RantProgramInfo`).",
+      "line": 173
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "The `parse` method is the entry point to the parser. It starts by parsing a top-level sequence, then checks for errors to determine whether to return `Ok` or `Err`.",
+      "line": 190
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "Sequence parsing starts with the `parse_sequence` method. Since a sequence defines a variable scope, the parser creates a variable stack frame for the sequence being parsed, then performs some basic analysis (e.g. unused variable checks) on any variables added to the frame after the sequence finishes parsing. \r\n\r\nThe actual sequence parsing itself is performed by `parse_sequence_inner`, which is called by this method.",
+      "line": 223
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "The meat of the sequence parser is in `parse_sequence_inner`. This handles reading all valid program element types (e.g. blocks, accessors, function calls...) and calls out to the corresponding parsing function for each one.",
+      "line": 233
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "Inside `parse_sequence_inner`, the parser consumes one token at a time and matches it with this `match` statement. Context of the sequence being parsed is provided by the current sequence parsing mode (specified by the `mode` parameter), which tells us what the sequence is being used for (e.g. setter value, block element, etc.) The mode affects how the sequence parser reacts to certain token types.",
+      "line": 364
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "Let's look at an example of how one type of program element is parsed: **blocks**.\r\n\r\nThis match case fires on the `LeftBrace` token (`{`), which tells us that we've hit the start of a block (`{ ... }`).\r\nNext, we need to parse the rest of the block...",
+      "line": 454
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "Block parsing is handled by the `parse_block` function. It reads the rest of the tokens belonging to the current block and returns a completed `Block` instance.",
+      "line": 456
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "Inside of `parse_block`, we need to do a few things: check whether the opening brace was already consumed (some callers don't consume it), then read the block elements and produce the final `Block`.",
+      "line": 1720
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "The main loop of the block parser reads all the element sequences of the block. \r\n\r\nYou'll notice a recursive call back into `parse_sequence` with the `BlockElement` parse mode, which tells the sequence parser to stop on the first `RightBrace` or `Pipe` token; in the default parse mode, encountering these tokens would normally cause a compiler error, but this mode allows them.",
+      "line": 1735
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "The parsed block element sequence is turned into a `BlockElement` and added to the list of elements for the block.\r\n\r\nThe sequence parser has the ability to return additional data via the `ParsedSequence.extras` field, which in this case could contain a weight for the block element. This is extracted and added to the element's `weight` field.",
+      "line": 1745
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "The return value of `parse_sequence` also provides a `SequenceEndType` that indicates what ended the sequence. This value is checked here to determine whether to continue parsing elements, or if we've prematurely reached EOF (indicating an unclosed block).",
+      "line": 1760
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "The final `Block` instance is produced and returned here. It additionally determines the final print behavior for the block.",
+      "line": 1779
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "After the block is parsed, the sequence parser uses the printflag of the block to determine whether to include surrounding whitespace. ",
+      "line": 459
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "The final AST node is emitted here, and the sequence parser moves on to the next item in the sequence.",
+      "line": 479
+    },
+    {
+      "file": "src/compiler/parser.rs",
+      "description": "After the entire program has been parsed into a single sequence, the `parse` method checks for errors. If there are none, the final sequence is returned with a success result.",
+      "line": 196
+    }
+  ]
+}

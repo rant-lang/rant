@@ -19,7 +19,7 @@ macro_rules! test_rant_file {
       .. Default::default()
     });
     let pgm = r.compile_quiet(include_str!($src_path)).expect("failed to compile program");
-    assert_matches!(r.run_into_string(&pgm).as_ref().map(|o| o.as_str()), Err(RuntimeError { error_type: $runtime_err_variant, ..}));
+    assert_matches!(r.run(&pgm).map(|output| output.to_string()).as_ref().map(|o| o.as_str()), Err(RuntimeError { error_type: $runtime_err_variant, ..}));
   }};
   ($src_path:literal) => {{
     let mut r = Rant::with_options(RantOptions {
@@ -27,7 +27,7 @@ macro_rules! test_rant_file {
       .. Default::default()
     });
     let pgm = r.compile_quiet(include_str!($src_path)).expect("failed to compile program");
-    assert_matches!(r.run_into_string(&pgm).as_ref().map(|o| o.as_str()), Ok(_));
+    assert_matches!(r.run(&pgm).map(|output| output.to_string()).as_ref().map(|o| o.as_str()), Ok(_));
   }};
   ($src_path:literal, $expected:literal) => {{
     let mut r = Rant::with_options(RantOptions {
@@ -35,7 +35,7 @@ macro_rules! test_rant_file {
       .. Default::default()
     });
     let pgm = r.compile_quiet(include_str!($src_path)).expect("failed to compile program");
-    assert_matches!(r.run_into_string(&pgm).as_ref().map(|o| o.as_str()), Ok($expected));
+    assert_matches!(r.run(&pgm).map(|output| output.to_string()).as_ref().map(|o| o.as_str()), Ok($expected));
   }};
 }
 
@@ -43,7 +43,7 @@ macro_rules! test_rant {
   ($src:literal, $expected:literal) => {{
     let mut r = Rant::new();
     let pgm = r.compile_quiet($src).expect("failed to compile program");
-    assert_matches!(r.run_into_string(&pgm).as_ref().map(|o| o.as_str()), Ok($expected));
+    assert_matches!(r.run(&pgm).map(|output| output.to_string()).as_ref().map(|o| o.as_str()), Ok($expected));
   }}
 }
 

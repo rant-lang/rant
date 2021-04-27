@@ -211,7 +211,7 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, opts: &RantCliOptions) -> Exi
   let seed = opts.seed.unwrap_or_else(|| rand::thread_rng().gen());
   ctx.set_seed(seed);
   let start_time = Instant::now();
-  let run_result = ctx.run_into_string(&program);
+  let run_result = ctx.run(&program).map(|output| output.to_string());
   let run_time = start_time.elapsed();
   
   // Display results

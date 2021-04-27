@@ -32,6 +32,7 @@
 #![allow(clippy::upper_case_acronyms)]
 
 // Public modules
+pub mod data;
 pub mod compiler;
 pub mod runtime;
 
@@ -63,6 +64,7 @@ use crate::runtime::{RuntimeResult, IntoRuntimeResult, RuntimeError, RuntimeErro
 
 use std::{path::Path, rc::Rc, cell::RefCell, fmt::Display, path::PathBuf, io::ErrorKind, collections::HashMap};
 use std::env;
+use data::DataSource;
 use fnv::FnvBuildHasher;
 use rand::Rng;
 
@@ -94,10 +96,10 @@ pub(crate) type ModuleLoadResult = Result<RantProgram, ModuleLoadError>;
 /// A Rant execution context.
 #[derive(Debug)]
 pub struct Rant {
-  rng: Rc<RantRng>,
-  debug_mode: bool,
-  globals: HashMap<InternalString, RantVar, FnvBuildHasher>,
   options: RantOptions,
+  rng: Rc<RantRng>,
+  data_sources: HashMap<InternalString, Box<dyn DataSource>, FnvBuildHasher>,
+  globals: HashMap<InternalString, RantVar, FnvBuildHasher>,
 }
 
 impl Rant {
@@ -125,8 +127,8 @@ impl Rant {
   /// Creates a new Rant context with the specified options.
   pub fn with_options(options: RantOptions) -> Self {
     let mut rant = Self {
-      debug_mode: options.debug_mode,
       globals: Default::default(),
+      data_sources: Default::default(),
       rng: Rc::new(RantRng::new(options.seed)),
       options,
     };
@@ -151,7 +153,7 @@ impl Rant {
   /// Compiles a source string using the specified reporter.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile<R: Reporter>(&self, source: &str, reporter: &mut R) -> Result<RantProgram, CompilerErrorKind> {
-    compiler::compile_string(source, reporter, self.debug_mode, RantProgramInfo {
+    compiler::compile_string(source, reporter, self.options.debug_mode, RantProgramInfo {
       name: None,
       path: None,
     })
@@ -160,7 +162,7 @@ impl Rant {
   /// Compiles a source string using the specified reporter and source name.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_named<R: Reporter>(&self, source: &str, reporter: &mut R, name: &str) -> Result<RantProgram, CompilerErrorKind> {
-    compiler::compile_string(source, reporter, self.debug_mode, RantProgramInfo {
+    compiler::compile_string(source, reporter, self.options.debug_mode, RantProgramInfo {
       name: Some(name.to_owned()),
       path: None,
     })
@@ -175,7 +177,7 @@ impl Rant {
   /// If you require this information, use the `compile()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_quiet(&self, source: &str) -> Result<RantProgram, CompilerErrorKind> {
-    compiler::compile_string(source, &mut (), self.debug_mode, RantProgramInfo {
+    compiler::compile_string(source, &mut (), self.options.debug_mode, RantProgramInfo {
       name: None,
       path: None,
     })
@@ -190,7 +192,7 @@ impl Rant {
   /// If you require this information, use the `compile()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_quiet_named(&self, source: &str, name: &str) -> Result<RantProgram, CompilerErrorKind> {
-    compiler::compile_string(source, &mut (), self.debug_mode, RantProgramInfo {
+    compiler::compile_string(source, &mut (), self.options.debug_mode, RantProgramInfo {
       name: Some(name.to_owned()),
       path: None,
     })
@@ -199,7 +201,7 @@ impl Rant {
   /// Compiles a source file using the specified reporter.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_file<P: AsRef<Path>, R: Reporter>(&self, path: P, reporter: &mut R) -> Result<RantProgram, CompilerErrorKind> {
-    compiler::compile_file(path, reporter, self.debug_mode)
+    compiler::compile_file(path, reporter, self.options.debug_mode)
   }
 
   /// Compiles a source file without reporting problems.
@@ -211,7 +213,7 @@ impl Rant {
   /// If you require this information, use the `compile_file()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
   pub fn compile_file_quiet<P: AsRef<Path>>(&self, path: P) -> Result<RantProgram, CompilerErrorKind> {
-    compiler::compile_file(path, &mut (), self.debug_mode)
+    compiler::compile_file(path, &mut (), self.options.debug_mode)
   }
 
   /// Sets a global variable. This will auto-define the global if it doesn't exist. 
@@ -293,6 +295,11 @@ impl Rant {
   pub fn global_names(&self) -> impl Iterator<Item = &str> {
     self.globals.keys().map(|k| k.as_str())
   }
+
+  /// Gets the options used to initialize the context.
+  pub fn options(&self) -> &RantOptions {
+    &self.options
+  }
   
   /// Gets the current RNG seed.
   pub fn seed(&self) -> u64 {
@@ -309,6 +316,36 @@ impl Rant {
     let seed = self.rng.seed();
     self.rng = Rc::new(RantRng::new(seed));
   }
+
+  /// Adds a data source to the context, making it available to scripts.
+  pub fn add_data_source(&mut self, name: &str, data_source: impl DataSource + 'static) -> Option<Box<dyn DataSource + 'static>> {
+    self.data_sources.insert(name.into(), Box::new(data_source))
+  }
+
+  /// Removes the data source with the specified name from the context, making it no longer available to scripts.
+  pub fn remove_data_source(&mut self, name: &str) -> Option<Box<dyn DataSource>> {
+    self.data_sources.remove(name)
+  }
+
+  /// Returns a `bool` indicating whether a data source with the specified name is present in the context.
+  pub fn has_data_source(&self, name: &str) -> bool {
+    self.data_sources.contains_key(name)
+  }
+
+  /// Removes all data sources from the context.
+  pub fn clear_data_sources(&mut self) {
+    self.data_sources.clear();
+  }
+
+  /// Returns a reference to the data source associated with the specified name.
+  pub fn data_source(&self, name: &str) -> Option<&dyn DataSource> {
+    self.data_sources.get(name).map(Box::as_ref)
+  }
+
+  /// Iterates over all data sources (and their names) in the context.
+  pub fn iter_data_sources(&self) -> impl Iterator<Item = (&'_ str, &'_ Box<dyn DataSource + 'static>)> {
+    self.data_sources.iter().map(|(k, v)| (k.as_str(), v))
+  }
   
   /// Runs a program and returns the output value.
   pub fn run(&mut self, program: &RantProgram) -> RuntimeResult<RantValue> {
@@ -320,20 +357,6 @@ impl Rant {
   where A: Into<Option<HashMap<String, RantValue>>>
   {
     VM::new(self.rng.clone(), self, program).run_with(args)
-  }
-
-  /// Runs a Rant program and returns the generated output as a string.
-  pub fn run_into_string(&mut self, program: &RantProgram) -> RuntimeResult<String> {
-    let mut vm = VM::new(self.rng.clone(), self, program);
-    Ok(vm.run()?.to_string())
-  }
-
-  /// Runs a Rant program with the specified arguments and returns the generated output as a string.
-  pub fn run_into_string_with<A>(&mut self, program: &RantProgram, args: A) -> RuntimeResult<String> 
-  where A: Into<Option<HashMap<String, RantValue>>>
-  {
-    let mut vm = VM::new(self.rng.clone(), self, program);
-    Ok(vm.run_with(args)?.to_string())
   }
 
   /// Attempts to load and compile a module with the specified name.

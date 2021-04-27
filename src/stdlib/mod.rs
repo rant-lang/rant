@@ -35,6 +35,14 @@ pub(crate) type RantStdResult = Result<(), RuntimeError>;
 
 #[macro_export]
 macro_rules! runtime_error {
+  ($err_type:expr) => {{
+    let errtype = $err_type;
+    return Err(RuntimeError {
+      description: errtype.to_string(),
+      error_type: errtype,
+      stack_trace: None,
+    })
+  }};
   ($err_type:expr, $msg:literal) => {
     return Err(RuntimeError {
       error_type: $err_type,
@@ -72,7 +80,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
 
   load_funcs!(
     // General functions
-    alt, call, cat, either, len, get_type as "type", seed, nop, range, irange, resolve, fork, unfork, try_ as "try",
+    alt, call, cat, data, either, len, get_type as "type", seed, nop, range, irange, resolve, fork, unfork, try_ as "try",
 
     // Assertion functions
     assert as "assert", assert_eq as "assert-eq", assert_neq as "assert-neq",

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "Project Structure",
+  "steps": [
+    {
+      "title": "Introduction",
+      "description": "This tour covers the structure of the Rant source code."
+    },
+    {
+      "directory": "src",
+      "description": "The primary Rant source can be found in the `src` folder."
+    },
+    {
+      "directory": "examples",
+      "description": "Rust code samples using the `rant` crate can be found in `examples`. \r\n\r\nRant code samples are stored in `examples/rant`."
+    },
+    {
+      "directory": "src/tools/cli",
+      "description": "Code for additional tools, like the CLI, can be found in the `src/tools` folder."
+    },
+    {
+      "directory": "tests",
+      "description": "Integration tests are stored in the `tests` folder. Run tests by running `cargo test` in your terminal."
+    },
+    {
+      "directory": "src/compiler",
+      "description": "Compiler code is stored in the `rant::compiler` module, found in `src/compiler`. This includes the Rant lexer, parser, compiler message types, and compiler helper functions."
+    },
+    {
+      "directory": "src/runtime",
+      "description": "The Rant runtime is stored in the `rant::runtime` module, found in `src/runtime`. This includes the VM, output manager, resolver, and call stack."
+    },
+    {
+      "directory": "src/stdlib",
+      "description": "The Rant Standard Library is defined in the `rant::stdlib` module, found in `src/stdlib`."
+    }
+  ],
+  "isPrimary": true
+}

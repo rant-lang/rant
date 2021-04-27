@@ -3,10 +3,7 @@ use crate::RantValue;
 /// Sorts `a` and `b` in ascending order and returns them as a `(min, max)` tuple.
 #[inline]
 pub fn minmax<T: PartialEq + PartialOrd>(a: T, b: T) -> (T, T) {
-  if a <= b {
-    return (a, b)
-  }
-  (b, a)
+  if a <= b { (a, b) } else { (b, a) }
 }
 
 /// Clamps `val` between `a` and `b`.

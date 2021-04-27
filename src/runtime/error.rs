@@ -1,6 +1,6 @@
 use std::{error::Error, fmt::Display};
 
-use crate::{IndexError, KeyError, ModuleLoadError, SliceError, ValueError};
+use crate::{IndexError, KeyError, ModuleLoadError, SliceError, ValueError, data::DataSourceError};
 
 use super::{resolver::SelectorError};
 
@@ -41,65 +41,106 @@ impl Display for RuntimeError {
 /// Provides general categories of runtime errors encountered in Rant.
 #[derive(Debug)]
 pub enum RuntimeErrorType {
-  /// Stack overflow
+  /// Stack has overflowed.
+  ///
+  /// Rant error ID: `STACK_OVERFLOW_ERROR`
   StackOverflow,
-  /// Stack underflow
+  /// Stack has underflowed.
+  ///
+  /// Rant error ID: `STACK_UNDERFLOW_ERROR`
   StackUnderflow,
   /// Variable access error, such as attempting to access a nonexistent variable or write to a constant
+  ///
+  /// Rant error ID: `INVALID_ACCESS_ERROR`
   InvalidAccess,
   /// Operation is not valid for the current program state
+  ///
+  /// Rant error ID: `INVALID_OP_ERROR`
   InvalidOperation,
   /// Internal VM error, usually indicating a bug or corrupted data
+  ///
+  /// Rant error ID: `INTERNAL_ERROR`
   InternalError,
   /// Too few/many arguments were passed to a function
+  ///
+  /// Rant error ID: `ARG_MISMATCH_ERROR`
   ArgumentMismatch,
   /// Invalid argument passed to function
+  ///
+  /// Rant error ID: `ARG_ERROR`
   ArgumentError,
   /// Tried to invoke a non-function
+  ///
+  /// Rant error ID: `INVOKE_ERROR`
   CannotInvokeValue,
   /// Assertion failed
+  ///
+  /// Rant error ID: `ASSERT_ERROR`
   AssertError,
   /// Error occurred due to unexpected value type
+  ///
+  /// Rant error ID: `TYPE_ERROR`
   TypeError,
   /// Error occurred when creating value
+  ///
+  /// Rant error ID: `VALUE_ERROR`
   ValueError(ValueError),
   /// Error occurred while indexing value
+  ///
+  /// Rant error ID: `INDEX_ERROR`
   IndexError(IndexError),
   /// Error occurred while keying value
+  ///
+  /// Rant error ID: `KEY_ERROR`
   KeyError(KeyError),
   /// Error occurred while slicing value
+  ///
+  /// Rant error ID: `SLICE_ERROR`
   SliceError(SliceError),
   /// Error occurred while iterating selector
+  ///
+  /// Rant error ID: `SELECTOR_ERROR`
   SelectorError(SelectorError),
   /// Error occurred while trying to load a module
+  ///
+  /// Rant error ID: `MODULE_ERROR`
   ModuleLoadError(ModuleLoadError),
   /// Error manually triggered by program
+  ///
+  /// Rant error ID: `USER_ERROR`
   UserError,
   /// Error during control flow operation (e.g. return or break)
+  ///
+  /// Rant error ID: `CONTROL_FLOW_ERROR`
   ControlFlowError,
+  /// Error occurred during data source operation.
+  ///
+  /// Rant error ID: `DATA_SOURCE_ERROR`
+  DataSourceError(DataSourceError),
 }
 
 impl Display for RuntimeErrorType {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}", match self {
-      RuntimeErrorType::StackOverflow => "STACK_OVERFLOW_ERROR",
-      RuntimeErrorType::StackUnderflow => "STACK_UNDERFLOW_ERROR",
-      RuntimeErrorType::InvalidAccess => "INVALID_ACCESS_ERROR",
-      RuntimeErrorType::InvalidOperation => "INVALID_OP_ERROR",
-      RuntimeErrorType::InternalError => "INTERNAL_ERROR",
-      RuntimeErrorType::ArgumentMismatch => "ARG_MISMATCH_ERROR",
-      RuntimeErrorType::ArgumentError => "ARG_ERROR",
-      RuntimeErrorType::CannotInvokeValue => "INVOKE_ERROR",
-      RuntimeErrorType::UserError => "USER_ERROR",
-      RuntimeErrorType::AssertError => "ASSERT_ERROR",
-      RuntimeErrorType::TypeError => "TYPE_ERROR",
-      RuntimeErrorType::ValueError(_) => "VALUE_ERROR",
-      RuntimeErrorType::IndexError(_) => "INDEX_ERROR",
-      RuntimeErrorType::KeyError(_) => "KEY_ERROR",
-      RuntimeErrorType::SliceError(_) => "SLICE_ERROR",
-      RuntimeErrorType::SelectorError(_) => "SELECTOR_ERROR",
-      RuntimeErrorType::ModuleLoadError(_) => "MODULE_ERROR",
-      RuntimeErrorType::ControlFlowError => "CONTROL_FLOW_ERROR",
+      Self::StackOverflow => "STACK_OVERFLOW_ERROR",
+      Self::StackUnderflow => "STACK_UNDERFLOW_ERROR",
+      Self::InvalidAccess => "INVALID_ACCESS_ERROR",
+      Self::InvalidOperation => "INVALID_OP_ERROR",
+      Self::InternalError => "INTERNAL_ERROR",
+      Self::ArgumentMismatch => "ARG_MISMATCH_ERROR",
+      Self::ArgumentError => "ARG_ERROR",
+      Self::CannotInvokeValue => "INVOKE_ERROR",
+      Self::UserError => "USER_ERROR",
+      Self::AssertError => "ASSERT_ERROR",
+      Self::TypeError => "TYPE_ERROR",
+      Self::ValueError(_) => "VALUE_ERROR",
+      Self::IndexError(_) => "INDEX_ERROR",
+      Self::KeyError(_) => "KEY_ERROR",
+      Self::SliceError(_) => "SLICE_ERROR",
+      Self::SelectorError(_) => "SELECTOR_ERROR",
+      Self::ModuleLoadError(_) => "MODULE_ERROR",
+      Self::ControlFlowError => "CONTROL_FLOW_ERROR",
+      Self::DataSourceError(_) => "DATA_SOURCE_ERROR",
     })
   }
 }
