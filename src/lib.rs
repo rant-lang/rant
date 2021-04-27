@@ -607,8 +607,8 @@ impl Display for ModuleLoadError {
 impl IntoRuntimeResult<RantProgram> for ModuleLoadResult {
   fn into_runtime_result(self) -> RuntimeResult<RantProgram> {
     self.map_err(|err| RuntimeError {
-      description: err.to_string(),
       error_type: RuntimeErrorType::ModuleLoadError(err),
+      description: None,
       stack_trace: None,
     })
   }

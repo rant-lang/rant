@@ -12,7 +12,7 @@ pub struct RuntimeError {
   /// The type of runtime error.
   pub error_type: RuntimeErrorType,
   /// A description of what went wrong.
-  pub description: String,
+  pub description: Option<String>,
   /// A stack trace describing the location of the error.
   pub stack_trace: Option<String>,
 }
@@ -34,7 +34,13 @@ impl Error for RuntimeError {
 
 impl Display for RuntimeError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "[{}] {}", self.error_type, self.description)
+    write!(f, "[{}] ", self.error_type.id())?;
+    if let Some(desc) =& self.description {
+      write!(f, "{}", desc)?;
+    } else {
+      write!(f, "{}", self.error_type)?;
+    }
+    Ok(())
   }
 }
 
@@ -119,9 +125,9 @@ pub enum RuntimeErrorType {
   DataSourceError(DataSourceError),
 }
 
-impl Display for RuntimeErrorType {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", match self {
+impl RuntimeErrorType {
+  pub fn id(&self) -> &'static str {
+    match self {
       Self::StackOverflow => "STACK_OVERFLOW_ERROR",
       Self::StackUnderflow => "STACK_UNDERFLOW_ERROR",
       Self::InvalidAccess => "INVALID_ACCESS_ERROR",
@@ -141,7 +147,22 @@ impl Display for RuntimeErrorType {
       Self::ModuleLoadError(_) => "MODULE_ERROR",
       Self::ControlFlowError => "CONTROL_FLOW_ERROR",
       Self::DataSourceError(_) => "DATA_SOURCE_ERROR",
-    })
+    }
+  }
+}
+
+impl Display for RuntimeErrorType {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::ValueError(e) => write!(f, "{}", e),
+      Self::IndexError(e) => write!(f, "{}", e),
+      Self::KeyError(e) => write!(f, "{}", e),
+      Self::SliceError(e) => write!(f, "{}", e),
+      Self::SelectorError(e) => write!(f, "{}", e),
+      Self::ModuleLoadError(e) => write!(f, "{}", e),
+      Self::DataSourceError(e) => write!(f, "{}", e),
+      _ => write!(f, "{}", self.id()),
+    }
   }
 }
 

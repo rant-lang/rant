@@ -679,8 +679,8 @@ impl Display for SelectorError {
 impl<T> IntoRuntimeResult<T> for Result<T, SelectorError> {
   fn into_runtime_result(self) -> super::RuntimeResult<T> {
     self.map_err(|err| RuntimeError {
-      description: err.to_string(),
       error_type: super::RuntimeErrorType::SelectorError(err),
+      description: None,
       stack_trace: None,
     })
   }

@@ -12,6 +12,7 @@
 * Boolean literals are now keywords; this means that `true` and `false` are now `@true` and `@false`. The original reserved fragments are now treated like strings.
   * In addition, boolean keywords now ignore surrounding whitespace.
 * Optional parameters without default arguments now no longer define variables in the function body when the user doesn't pass a value to them; as a result, access to these arguments is now fallible.
+* Made runtime error messages more consistent
 
 ### Removed
 * Removed `Rant.debug_mode` in favor of using `Rant::options()` to get the value instead

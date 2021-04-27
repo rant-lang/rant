@@ -157,9 +157,19 @@ impl RantMap {
     if let Some(member) = self.raw_get(key) {
       return Some(Cow::Borrowed(member))
     }
+
+    // Climb the prototype chain to see if the member is in one of them
     let mut next_proto = self.proto.as_ref().map(Rc::clone);
     while let Some(cur_proto) = next_proto {
       let cur_proto_ref = cur_proto.borrow();
+      if let Some(proto_member) = cur_proto_ref.raw_get(key) {
+        return Some(Cow::Owned(proto_member.clone()));
+      }
+      next_proto = cur_proto_ref.proto.as_ref().map(Rc::clone);
+    }
+    None
+  }
+
   #[inline]
   pub fn raw_has_key(&self, key: &str) -> bool {
     self.map.contains_key(key)

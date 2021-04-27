@@ -227,7 +227,7 @@ impl<I> CallStack<I> {
 
     Err(RuntimeError {
       error_type: RuntimeErrorType::InvalidAccess,
-      description: format!("{} '{}' not found", if prefer_function { "function" } else { "variable" }, id),
+      description: Some(format!("{} '{}' not found", if prefer_function { "function" } else { "variable" }, id)),
       stack_trace: None,
     })
   }
@@ -255,7 +255,7 @@ impl<I> CallStack<I> {
 
     Err(RuntimeError {
       error_type: RuntimeErrorType::InvalidAccess,
-      description: format!("variable '{}' not found", id),
+      description: Some(format!("variable '{}' not found", id)),
       stack_trace: None,
     })
   }
@@ -546,10 +546,7 @@ impl<I> Display for StackFrame<I> {
       self.debug_pos.1,
       self.sequence.as_ref()
         .and_then(|seq| seq.name().map(|name| name.as_str()))
-        .unwrap_or_else(|| match self.flavor {
-          StackFrameFlavor::NativeCall => "native call",
-          _ => "?"
-        }), 
+        .unwrap_or_else(|| self.flavor.name()), 
     )
   }
 }
@@ -578,5 +575,19 @@ pub enum StackFrameFlavor {
 impl Default for StackFrameFlavor {
   fn default() -> Self {
     Self::Original
+  }
+}
+
+impl StackFrameFlavor {
+  fn name(&self) -> &'static str {
+    match self {
+      Self::Original => "sequence",
+      Self::NativeCall => "native call",
+      Self::BlockElement => "block element",
+      Self::RepeaterElement => "repeater element",
+      Self::FunctionBody => "function body",
+      Self::DynamicKeyExpression => "dynamic key",
+      Self::ArgumentExpression => "argument",
+    }
   }
 }

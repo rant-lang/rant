@@ -124,7 +124,7 @@ pub(crate) fn error(vm: &mut VM, msg: Option<String>) -> RantStdResult {
   const DEFAULT_ERROR_MESSAGE: &str = "user error";
   Err(RuntimeError {
     error_type: RuntimeErrorType::UserError,
-    description: msg.unwrap_or_else(|| DEFAULT_ERROR_MESSAGE.to_owned()),
+    description: msg,
     stack_trace: None,
   })
 }

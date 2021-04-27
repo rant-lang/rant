@@ -36,24 +36,23 @@ pub(crate) type RantStdResult = Result<(), RuntimeError>;
 #[macro_export]
 macro_rules! runtime_error {
   ($err_type:expr) => {{
-    let errtype = $err_type;
     return Err(RuntimeError {
-      description: errtype.to_string(),
-      error_type: errtype,
+      error_type: $err_type,
+      description: None,
       stack_trace: None,
     })
   }};
   ($err_type:expr, $msg:literal) => {
     return Err(RuntimeError {
       error_type: $err_type,
-      description: $msg.to_owned(),
+      description: Some($msg.to_owned()),
       stack_trace: None,
     })
   };
   ($err_type:expr, $msg_fmt:literal, $($msg_fmt_args:expr),+) => {
     return Err(RuntimeError {
       error_type: $err_type,
-      description: format!($msg_fmt, $($msg_fmt_args),+),
+      description: Some(format!($msg_fmt, $($msg_fmt_args),+)),
       stack_trace: None,
     })
   };

@@ -32,8 +32,8 @@ macro_rules! impl_into_runtime_result {
       #[inline]
       fn into_runtime_result(self) -> RuntimeResult<$ok_type> {
         self.map_err(|err| RuntimeError {
-          description: err.to_string(),
           error_type: RuntimeErrorType::$err_type_variant(err),
+          description: None,
           stack_trace: None,
         })
       }
@@ -548,8 +548,8 @@ impl<T> IntoRuntimeResult<T> for Result<T, ValueError> {
   #[inline]
   fn into_runtime_result(self) -> RuntimeResult<T> {
     self.map_err(|err| RuntimeError {
-      description: err.to_string(),
       error_type: RuntimeErrorType::ValueError(err),
+      description: None,
       stack_trace: None,
     })
   }

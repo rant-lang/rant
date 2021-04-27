@@ -88,7 +88,7 @@ pub(crate) fn shred(vm: &mut VM, (value, n, variance): (RantValue, i64, Option<f
   if n <= 0 {
     return Err(RuntimeError {
       error_type: RuntimeErrorType::ArgumentError,
-      description: "shred count must be greater than zero".to_owned(),
+      description: Some("shred count must be greater than zero".to_owned()),
       stack_trace: None,
     })
   }
@@ -148,7 +148,7 @@ pub(crate) fn shred(vm: &mut VM, (value, n, variance): (RantValue, i64, Option<f
     other => {
       return Err(RuntimeError {
         error_type: RuntimeErrorType::ArgumentError,
-        description: format!("cannot shred '{}' value", other.type_name()),
+        description: Some(format!("cannot shred '{}' value", other.type_name())),
         stack_trace: None,
       })
     }

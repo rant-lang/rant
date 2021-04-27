@@ -29,7 +29,7 @@ impl Display for DataSourceError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       Self::User(msg) => write!(f, "user error: {}", msg),
-      Self::Internal(msg) => write!(f, "internal error: {}", msg),
+      Self::Internal(msg) => write!(f, "internal: {}", msg),
     }
   }
 }
@@ -47,8 +47,8 @@ impl Error for DataSourceError {
 impl<T> IntoRuntimeResult<T> for DataSourceResult<T> {
   fn into_runtime_result(self) -> RuntimeResult<T> {
     self.map_err(|err| RuntimeError {
-      description: err.to_string(),
       error_type: RuntimeErrorType::DataSourceError(err),
+      description: None,
       stack_trace: None,
     })
   }

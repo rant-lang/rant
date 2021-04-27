@@ -63,15 +63,15 @@ macro_rules! runtime_error {
   ($err_type:expr) => {{
     let e = $err_type;
     return Err(RuntimeError {
-      description: e.to_string(),
       error_type: e,
+      description: None,
       stack_trace: None,
     })
   }};
   ($err_type:expr, $desc:expr) => {
     return Err(RuntimeError {
       error_type: $err_type,
-      description: $desc.to_string(),
+      description: Some($desc.to_string()),
       stack_trace: None,
     })
   };

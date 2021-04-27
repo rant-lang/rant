@@ -14,7 +14,7 @@ pub(crate) fn resolve(vm: &mut VM, value: RantValue) -> RantStdResult {
           message: None,
         }
       ),
-      description: "value must be a block".to_owned(),
+      description: Some("value must be a block".to_owned()),
       stack_trace: None,
     })
   }
@@ -29,13 +29,13 @@ pub(crate) fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
       "forever" => Reps::RepeatForever,
       _ => return Err(RuntimeError {
         error_type: RuntimeErrorType::ArgumentError,
-        description: format!("unknown repetition mode: '{}'", s),
+        description: Some(format!("unknown repetition mode: '{}'", s)),
         stack_trace: None,
       })
     },
     _ => return Err(RuntimeError {
       error_type: RuntimeErrorType::ArgumentError,
-      description: format!("value of type '{}' cannot be used as repetition value", reps.type_name()),
+      description: Some(format!("value of type '{}' cannot be used as repetition value", reps.type_name())),
       stack_trace: None,
     })
   };
@@ -94,7 +94,7 @@ pub(crate) fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
           to: "selector",
           message: None,
         }),
-        description: "value is not a selector".to_owned(),
+        description: Some("value is not a selector".to_owned()),
         stack_trace: None,
       })
     },
