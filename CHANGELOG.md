@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.0.0-aplha.22 (unreleased)
+## 4.0.0-aplha.22
 
 ### New
 * Added data sources (access through the `rant::data::DataSource` trait)
