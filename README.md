@@ -1,5 +1,5 @@
 <p align="center">
-<img src="https://i.imgur.com/5IV9vwx.png" alt="Rant Logo" height="225px" width="225px"></img>
+<img src="https://i.imgur.com/s9jMDhI.png" alt="Rant Logo" ></img>
 </p>
 
 [![Crates.io](https://img.shields.io/crates/v/rant)](https://crates.io/crates/rant)
