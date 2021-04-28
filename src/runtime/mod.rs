@@ -118,16 +118,16 @@ pub enum Intent {
     flag: PrintFlag, 
     is_temporal: bool, 
   },
-  /// Invoke a single function in a composed function call chain.
-  InvokeComposedStep { 
-    /// All steps in the entire composed function call
+  /// Invoke a single function in a piped function call chain.
+  InvokePipeStep { 
+    /// All steps in the entire piped function call
     steps: Rc<Vec<FunctionCall>>,
     /// The current step being executed
     step_index: usize, 
     /// Current state of the intent.
-    state: InvokeComposedStepState,
-    /// The composition value from the last step
-    compval: Option<RantValue>,
+    state: InvokePipeStepState,
+    /// The pipe value from the last step
+    pipeval: Option<RantValue>,
     /// The print flag to use.
     flag: PrintFlag,
   },
@@ -161,7 +161,7 @@ impl Intent {
       Intent::BuildDynamicSetter { .. } => "build_dyn_setter",
       Intent::SetValue { .. } => "set_value",
       Intent::Invoke { .. } => "invoke",
-      Intent::InvokeComposedStep { .. } => "invoke_composed_step",
+      Intent::InvokePipeStep { .. } => "invoke_pipe_step",
       Intent::Call { .. } => "call",
       Intent::CallTemporal { .. } => "call_temporal",
       Intent::BuildList { .. } => "build_list",
@@ -178,9 +178,9 @@ impl Intent {
   }
 }
 
-/// States for the `InvokeComposedStep` intent.
+/// States for the `InvokePipeStep` intent.
 #[derive(Debug)]
-pub enum InvokeComposedStepState {
+pub enum InvokePipeStepState {
   /// Evaluate step function and leave it on the value stack.
   ///
   /// Transitions to `EvaluatingArgs`.
@@ -539,29 +539,29 @@ impl<'rant> VM<'rant> {
             return Ok(true)
           }
         },
-        Intent::InvokeComposedStep { 
+        Intent::InvokePipeStep { 
           steps, 
           step_index, 
           state,
-          compval, 
+          pipeval: compval, 
           flag 
         } => {          
           match state {
-            InvokeComposedStepState::EvaluatingFunc => {
+            InvokePipeStepState::EvaluatingFunc => {
               let step = &steps[step_index];
               let compval_copy = compval.clone();
 
-              self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+              self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
                 steps: Rc::clone(&steps),
                 step_index,
-                state: InvokeComposedStepState::EvaluatingArgs { num_evaluated: 0 },
-                compval,
+                state: InvokePipeStepState::EvaluatingArgs { num_evaluated: 0 },
+                pipeval: compval,
                 flag,
               });
 
               match &step.target {
                 FunctionCallTarget::Path(path) => {
-                  // TODO: expose compval to path-based function access in compositions
+                  // TODO: expose pipeval to path-based function access in piped calls
                   self.push_getter_intents(path, true, true, None);
                 },
                 FunctionCallTarget::Expression(expr) => {
@@ -573,7 +573,7 @@ impl<'rant> VM<'rant> {
               }
               return Ok(true)
             },
-            InvokeComposedStepState::EvaluatingArgs { num_evaluated } => {
+            InvokePipeStepState::EvaluatingArgs { num_evaluated } => {
               let step = &steps[step_index];
               let arg_exprs = &step.arguments;
               let argc = arg_exprs.len();
@@ -584,13 +584,13 @@ impl<'rant> VM<'rant> {
                 let compval_copy = compval.clone();
 
                 // Prepare next arg eval intent
-                self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep { 
+                self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep { 
                   steps: Rc::clone(&steps),
                   step_index,
-                  state: InvokeComposedStepState::EvaluatingArgs {
+                  state: InvokePipeStepState::EvaluatingArgs {
                     num_evaluated: num_evaluated + 1,
                   },
-                  compval,
+                  pipeval: compval,
                   flag,
                 });
 
@@ -626,31 +626,31 @@ impl<'rant> VM<'rant> {
                 };
                 
                 // Transition to pre-call for next step
-                self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+                self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
                   state: if step.is_temporal {  
-                    InvokeComposedStepState::PreTemporalCall {
+                    InvokePipeStepState::PreTemporalCall {
                       step_function,
                       temporal_state: TemporalSpreadState::new(arg_exprs.as_slice(), args.as_slice()),
                       args,
                     }
                   } else {
-                    InvokeComposedStepState::PreCall { step_function, args }
+                    InvokePipeStepState::PreCall { step_function, args }
                   },
                   steps,
                   step_index,
-                  compval,
+                  pipeval: compval,
                   flag,
                 });
               }
               return Ok(true)
             },
-            InvokeComposedStepState::PreCall { step_function, args } => {
+            InvokePipeStepState::PreCall { step_function, args } => {
               // Transition intent to PostCall after function returns
-              self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+              self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
                 steps,
                 step_index,
-                state: InvokeComposedStepState::PostCall,
-                compval,
+                state: InvokePipeStepState::PostCall,
+                pipeval: compval,
                 flag,
               });
 
@@ -658,17 +658,17 @@ impl<'rant> VM<'rant> {
               self.call_func(step_function, args, PrintFlag::None, true)?;
               return Ok(true)
             },
-            InvokeComposedStepState::PostCall => {
+            InvokePipeStepState::PostCall => {
               let next_compval = self.pop_val()?;
               let next_step_index = step_index + 1;
               // Check if there is a next step
               if next_step_index < steps.len() {
                 // Create intent for next step
-                self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+                self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
                   steps,
                   step_index: next_step_index,
-                  state: InvokeComposedStepState::EvaluatingFunc,
-                  compval: Some(next_compval),
+                  state: InvokePipeStepState::EvaluatingFunc,
+                  pipeval: Some(next_compval),
                   flag,
                 });
                 return Ok(true)
@@ -677,7 +677,7 @@ impl<'rant> VM<'rant> {
                 self.cur_frame_mut().write_value(next_compval);
               }
             },
-            InvokeComposedStepState::PreTemporalCall { step_function, args, temporal_state } => {
+            InvokePipeStepState::PreTemporalCall { step_function, args, temporal_state } => {
               let targs = args.iter().enumerate().map(|(arg_index, arg)| {
                 // Check if this is a temporally spread argument
                 if let Some(tindex) = temporal_state.get(arg_index) {
@@ -691,37 +691,37 @@ impl<'rant> VM<'rant> {
               }).collect::<Vec<RantValue>>();
 
               // Push continuation intent for temporal call
-              self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+              self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
                 steps,
                 step_index,
-                state: InvokeComposedStepState::PostTemporalCall {
+                state: InvokePipeStepState::PostTemporalCall {
                   step_function: Rc::clone(&step_function),
                   temporal_state,
                   args,
                 },
-                compval,
+                pipeval: compval,
                 flag,
               });
 
               self.call_func(step_function, targs, PrintFlag::None, true)?;
               return Ok(true)
             },
-            InvokeComposedStepState::PostTemporalCall { step_function, args, mut temporal_state } => {
+            InvokePipeStepState::PostTemporalCall { step_function, args, mut temporal_state } => {
               let next_compval = self.pop_val()?;
               let next_step_index = step_index + 1;
               let step_count = steps.len();
 
               // Queue next iteration if available
               if temporal_state.increment() {
-                self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+                self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
                   steps: Rc::clone(&steps),
                   step_index,
-                  state: InvokeComposedStepState::PreTemporalCall {
+                  state: InvokePipeStepState::PreTemporalCall {
                     step_function,
                     temporal_state,
                     args,
                   },
-                  compval,
+                  pipeval: compval,
                   flag,
                 })
               }
@@ -729,11 +729,11 @@ impl<'rant> VM<'rant> {
               // Call next function in chain
               if next_step_index < step_count {
                 // Create intent for next step
-                self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+                self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
                   steps,
                   step_index: next_step_index,
-                  state: InvokeComposedStepState::EvaluatingFunc,
-                  compval: Some(next_compval),
+                  state: InvokePipeStepState::EvaluatingFunc,
+                  pipeval: Some(next_compval),
                   flag,
                 });
                 return Ok(true)
@@ -1075,18 +1075,18 @@ impl<'rant> VM<'rant> {
           }
           return Ok(true)
         },
-        Rst::ComposedCall(compcall) => {     
-          self.cur_frame_mut().push_intent_front(Intent::InvokeComposedStep {
+        Rst::PipedCall(compcall) => {     
+          self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
             steps: Rc::clone(&compcall.steps),
             step_index: 0,
-            state: InvokeComposedStepState::EvaluatingFunc,
-            compval: None,
+            state: InvokePipeStepState::EvaluatingFunc,
+            pipeval: None,
             flag: compcall.flag,
           });
           return Ok(true)
         },
-        Rst::ComposeValue => {
-          let compval = self.get_var_value(COMPOSE_VALUE_NAME, AccessPathKind::Local, false)?;
+        Rst::PipeValue => {
+          let compval = self.get_var_value(PIPE_VALUE_NAME, AccessPathKind::Local, false)?;
           self.cur_frame_mut().write_value(compval);
         },
         Rst::DebugCursor(info) => {
@@ -1588,7 +1588,7 @@ impl<'rant> VM<'rant> {
 
   #[inline(always)]
   fn def_compval(&mut self, compval: RantValue) -> RuntimeResult<()> {
-    self.call_stack.def_var_value(self.engine, COMPOSE_VALUE_NAME, AccessPathKind::Local, compval, true)
+    self.call_stack.def_var_value(self.engine, PIPE_VALUE_NAME, AccessPathKind::Local, compval, true)
   }
 
   /// Sets the value of an existing variable.

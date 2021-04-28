@@ -32,7 +32,7 @@ enum SequenceParseMode {
   BlockElement,
   /// Parse a sequence like a function argument.
   ///
-  /// Breaks on `Semi`, `Compose`, and `RightBracket`.
+  /// Breaks on `Semi`, `PipeOp`, and `RightBracket`.
   FunctionArg,
   /// Parse a sequence like a function body.
   ///
@@ -90,8 +90,8 @@ enum SequenceEndType {
   FunctionArgEndNext,
   /// Function argument sequence was terminated by `RightBracket`.
   FunctionArgEndBreak,
-  /// Function argument sequence was terminated by `Compose`.
-  FunctionArgEndToCompose,
+  /// Function argument sequence was terminated by `PipeOp`.
+  FunctionArgEndToPipe,
   /// Function body sequence was terminated by `RightBrace`.
   FunctionBodyEnd,
   /// Dynamic key sequencce was terminated by `RightBrace`.
@@ -100,8 +100,8 @@ enum SequenceEndType {
   AnonFunctionExprToArgs,
   /// Anonymous function expression was terminated by `RightBracket` and does not expect arguments.
   AnonFunctionExprNoArgs,
-  /// Anonymous function expression was terminated by `Compose`.
-  AnonFunctionExprToCompose,
+  /// Anonymous function expression was terminated by `PipeOp`.
+  AnonFunctionExprToPipe,
   /// Variable accessor was terminated by `RightAngle`.
   VariableAccessEnd,
   /// Variable assignment expression was terminated by `Semi`. 
@@ -153,7 +153,7 @@ enum VarRole {
   Function,
   Argument,
   FallibleOptionalArgument,
-  ComposeValue,
+  PipeValue,
 }
 
 /// Returns a range that encompasses both input ranges.
@@ -534,15 +534,15 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           emit!(Rst::Block(Rc::new(block)));
         },
 
-        // Compose operator
-        RantToken::Compose => no_flags!({
+        // Pipe operator
+        RantToken::PipeOp => no_flags!({
           // Ignore pending whitespace
           whitespace!(ignore prev);
           match mode {
             SequenceParseMode::FunctionArg => {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("argument"),
-                end_type: SequenceEndType::FunctionArgEndToCompose,
+                end_type: SequenceEndType::FunctionArgEndToPipe,
                 is_printing: is_seq_printing,
                 extras: None,
               })
@@ -550,7 +550,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             SequenceParseMode::AnonFunctionExpr => {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("anonymous function expression"),
-                end_type: SequenceEndType::AnonFunctionExprToCompose,
+                end_type: SequenceEndType::AnonFunctionExprToPipe,
                 is_printing: is_seq_printing,
                 extras: None,
               })
@@ -559,18 +559,18 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }
         }),
 
-        // Compose value
-        RantToken::ComposeValue => no_flags!({
-          if let Some(compval) = self.var_stack.get_mut(COMPOSE_VALUE_NAME) {
-            emit!(Rst::ComposeValue);
+        // Pipe value
+        RantToken::PipeValue => no_flags!({
+          if let Some(compval) = self.var_stack.get_mut(PIPE_VALUE_NAME) {
+            emit!(Rst::PipeValue);
             compval.add_read(false);
           } else {
-            self.report_error(Problem::NothingToCompose, &span);
+            self.report_error(Problem::NothingToPipe, &span);
           }
         }),
         
         // Block element delimiter (when in block parsing mode)
-        RantToken::Pipe => no_flags!({
+        RantToken::VertBar => no_flags!({
           // Ignore pending whitespace
           whitespace!(ignore prev);
           match mode {
@@ -1241,12 +1241,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         _ => unreachable!()
       }
     } else {
-      // Function calls, both composed and otherwise
+      // Function calls, both piped and otherwise
       
-      // List of calls in chain. This will only contain one call if it's non-composed (chain of one).
+      // List of calls in chain. This will only contain one call if it's non-piped (chain of one).
       let mut calls: Vec<FunctionCall> = vec![];
-      // Flag indicating whether call is composed (has multiple chained function calls)
-      let mut is_composed = false;
+      // Flag indicating whether call is piped (has multiple chained function calls)
+      let mut is_piped = false;
       // Indicates whether the last call in the chain has been parsed
       let mut is_finished = false;
       // Indicates whether the chain has any temporal calls
@@ -1265,8 +1265,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         let is_anonymous = self.reader.eat_where(|t| matches!(t, Some((RantToken::Bang, ..))));
         // Temporal call flag
         let mut is_temporal = false;
-        // Do the user-supplied args use the compose value?
-        let mut is_compval_used = false;
+        // Do the user-supplied args use the pipe value?
+        let mut is_pipeval_used = false;
         
         /// Reads arguments until a terminating / delimiting token is reached.
         macro_rules! parse_args {
@@ -1313,20 +1313,20 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 sequence: arg_seq,
                 end_type: arg_end,
                 ..
-              } = if is_composed {
+              } = if is_piped {
                 self.var_stack.push_layer();
-                // Track compose value inside arguement scope
+                // Track pipe value inside arguement scope
                 let compval_stats = VarStats {
                   writes: 1,
                   reads: 0,
                   def_span: Default::default(), // we'll never need this anyway
                   is_const: true,
                   has_fallible_read: false,
-                  role: VarRole::ComposeValue,
+                  role: VarRole::PipeValue,
                 };
-                self.var_stack.define(Identifier::from(COMPOSE_VALUE_NAME), compval_stats);
+                self.var_stack.define(Identifier::from(PIPE_VALUE_NAME), compval_stats);
                 let parsed_arg_expr = self.parse_sequence_inner(SequenceParseMode::FunctionArg)?;
-                is_compval_used |= self.var_stack.get(COMPOSE_VALUE_NAME).unwrap().reads > 0;
+                is_pipeval_used |= self.var_stack.get(PIPE_VALUE_NAME).unwrap().reads > 0;
                 self.analyze_top_vars();
                 self.var_stack.pop_layer();
                 parsed_arg_expr
@@ -1345,8 +1345,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   is_finished = true;
                   break
                 },
-                SequenceEndType::FunctionArgEndToCompose => {
-                  is_composed = true;
+                SequenceEndType::FunctionArgEndToPipe => {
+                  is_piped = true;
                   break
                 },
                 SequenceEndType::ProgramEnd => {
@@ -1359,12 +1359,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }}
         }
 
-        /// If the composition value wasn't used, inserts it as the first argument.
-        macro_rules! fallback_compose {
+        /// If the pipe value wasn't used, inserts it as the first argument.
+        macro_rules! fallback_pipe {
           () => {
-            if calls.len() > 0 && !is_compval_used {
+            if calls.len() > 0 && !is_pipeval_used {
               let arg = ArgumentExpr {
-                expr: Rc::new(Sequence::one(Rst::ComposeValue, &self.info)),
+                expr: Rc::new(Sequence::one(Rst::PipeValue, &self.info)),
                 spread_mode: ArgumentSpreadMode::NoSpread,
               };
               func_args.insert(0, arg);
@@ -1379,22 +1379,22 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Anonymous function call
           
           self.var_stack.push_layer();
-          // Track compose value inside anonymous function access scope
+          // Track pipe value inside anonymous function access scope
           let compval_stats = VarStats {
             writes: 1,
             reads: 0,
             def_span: Default::default(), // we'll never need this anyway
             is_const: true,
             has_fallible_read: false,
-            role: VarRole::ComposeValue,
+            role: VarRole::PipeValue,
           };
-          self.var_stack.define(Identifier::from(COMPOSE_VALUE_NAME), compval_stats);
+          self.var_stack.define(Identifier::from(PIPE_VALUE_NAME), compval_stats);
           let ParsedSequence {
             sequence: func_expr,
             end_type: func_expr_end,
             ..
           } = self.parse_sequence_inner(SequenceParseMode::AnonFunctionExpr)?;
-          is_compval_used |= self.var_stack.get(COMPOSE_VALUE_NAME).unwrap().reads > 0;
+          is_pipeval_used |= self.var_stack.get(PIPE_VALUE_NAME).unwrap().reads > 0;
           self.analyze_top_vars();
           self.var_stack.pop_layer();
           
@@ -1406,14 +1406,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             },
             // Parse arguments
             SequenceEndType::AnonFunctionExprToArgs => parse_args!(),
-            // Compose without args
-            SequenceEndType::AnonFunctionExprToCompose => {
-              is_composed = true;
+            // Pipe without args
+            SequenceEndType::AnonFunctionExprToPipe => {
+              is_piped = true;
             }
             _ => unreachable!()
           }
 
-          fallback_compose!();
+          fallback_pipe!();
           
           // Create final node for anon function call
           let fcall = FunctionCall {
@@ -1435,9 +1435,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               },
               // Parse arguments
               RantToken::Colon => parse_args!(),
-              // Compose without args
-              RantToken::Compose => {
-                is_composed = true;
+              // Pipe without args
+              RantToken::PipeOp => {
+                is_piped = true;
               }
               _ => {
                 self.unexpected_last_token_error();
@@ -1445,7 +1445,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               }
             }
 
-            fallback_compose!();
+            fallback_pipe!();
             
             // Record access to function
             self.track_variable_access(&func_path, false, false, &func_path_span);
@@ -1470,8 +1470,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       }
 
       // Return the finished node
-      Ok(if is_composed {
-        Rst::ComposedCall(ComposedFunctionCall {
+      Ok(if is_piped {
+        Rst::PipedCall(PipedCall {
           flag,
           is_temporal: is_chain_temporal,
           steps: Rc::new(calls),

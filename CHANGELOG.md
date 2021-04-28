@@ -136,7 +136,7 @@
   * `[nlist]`: Create a list from a set of arguments and nest it inside another list
 
 ### Changes
-* Changed compose operator from `&` to `|>`
+* Changed pipe operator from `&` to `|>`
 * Changed spread operator from `+` to `*`
 * Changed defer operator from `*` to `<>`
 * Adjusted whitespace behavior around blocks to avoid ambiguities
@@ -255,7 +255,7 @@
 
 ### New
 * Getters can now accept an optional fallback value
-* Added function composition
+* Added function call piping
 * Added new stdlib functions:
   * `[clamp]`: clamp a value between two others
   * `[is-any]`: check if a value is not empty

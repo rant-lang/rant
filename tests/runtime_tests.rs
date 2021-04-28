@@ -344,17 +344,17 @@ fn inv_index_set() {
 }
 
 #[test]
-fn function_composition() {
+fn function_piping() {
   test_rant_file!(
-    "sources/func/function_composition.rant",
+    "sources/func/function_piping.rant",
     "the fox the dog"
   );
 }
 
 #[test]
-fn function_composition_callback() {
+fn function_piping_callback() {
   test_rant_file!(
-    "sources/func/function_composition_callback.rant",
+    "sources/func/function_piping_callback.rant",
     "foo bar"
   )
 }

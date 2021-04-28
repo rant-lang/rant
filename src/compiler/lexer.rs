@@ -22,7 +22,7 @@ pub enum RantToken {
   
   /// `|`
   #[token("|")]
-  Pipe,
+  VertBar,
   
   /// `}`
   #[token("}")]
@@ -30,11 +30,11 @@ pub enum RantToken {
 
   /// `|>`
   #[token("|>")]
-  Compose,
+  PipeOp,
 
   /// `[]`
   #[token("[]")]
-  ComposeValue,
+  PipeValue,
 
   /// `<>`
   #[token("<>")]

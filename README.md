@@ -53,7 +53,7 @@ Rant is all about "printing": each lexical scope has an output to add values ("p
 This lets you easily build strings and collections from multiple parts with minimal code.
 
 🧬 **Delightful Combinatorics** <br/> 
-Perform nested mappings, filters, zips, combinations, and more with Rant's intuitive function composition syntax.
+Perform nested mappings, filters, zips, combinations, and more with Rant's intuitive piping syntax.
 
 🎛 **Automatic Formatting** <br/> 
 Passively format text output with automatic capitalization, whitespace normalization, and number formatting.

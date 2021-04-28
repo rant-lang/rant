@@ -3,7 +3,7 @@
 use std::{collections::HashMap, fmt::Display, ops::{DerefMut, Deref}, rc::Rc};
 use crate::{RantProgramInfo, InternalString, RantValue, RantValueType};
 
-pub(crate) const COMPOSE_VALUE_NAME: &str = "~COMPOSE";
+pub(crate) const PIPE_VALUE_NAME: &str = "~PIPE";
 
 /// Printflags indicate to the compiler whether a given program element is likely to print something or not.
 #[repr(u8)]
@@ -548,9 +548,9 @@ pub struct FunctionCall {
   pub is_temporal: bool,
 }
 
-/// A composed function call.
+/// A piped function call.
 #[derive(Debug)]
-pub struct ComposedFunctionCall {
+pub struct PipedCall {
   /// The print flag associated with the call.
   pub flag: PrintFlag,
   /// The function calls in the chain.
@@ -721,8 +721,8 @@ pub enum Rst {
   Closure(ClosureExpr),
   /// Single function call
   FuncCall(FunctionCall),
-  /// Composed function call
-  ComposedCall(ComposedFunctionCall),
+  /// Piped function call
+  PipedCall(PipedCall),
   /// Function definition
   FuncDef(FunctionDef),
   /// Variable definition
@@ -735,8 +735,8 @@ pub enum Rst {
   VarDepth(Identifier, AccessPathKind, Option<Rc<Sequence>>),
   /// Value setter
   VarSet(Rc<AccessPath>, Rc<Sequence>),
-  /// Compose value
-  ComposeValue,
+  /// Pipe value
+  PipeValue,
   /// Fragment
   Fragment(InternalString),
   /// Whitespace
@@ -783,8 +783,8 @@ impl Rst {
       Rst::VarGet(..) =>                      "getter",
       Rst::VarSet(..) =>                      "setter",
       Rst::BlockValue(_) =>                   "block value",
-      Rst::ComposedCall(_) =>                 "composed call",
-      Rst::ComposeValue =>                    "compose value",
+      Rst::PipedCall(_) =>                    "piped call",
+      Rst::PipeValue =>                       "pipe value",
       Rst::Return(_) =>                       "return",
       Rst::Continue(_) =>                     "continue",
       Rst::Break(_) =>                        "break",
