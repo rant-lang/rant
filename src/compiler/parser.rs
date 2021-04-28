@@ -561,9 +561,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
         // Pipe value
         RantToken::PipeValue => no_flags!({
-          if let Some(compval) = self.var_stack.get_mut(PIPE_VALUE_NAME) {
+          if let Some(pipeval) = self.var_stack.get_mut(PIPE_VALUE_NAME) {
             emit!(Rst::PipeValue);
-            compval.add_read(false);
+            pipeval.add_read(false);
           } else {
             self.report_error(Problem::NothingToPipe, &span);
           }
@@ -1316,7 +1316,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               } = if is_piped {
                 self.var_stack.push_layer();
                 // Track pipe value inside arguement scope
-                let compval_stats = VarStats {
+                let pipeval_stats = VarStats {
                   writes: 1,
                   reads: 0,
                   def_span: Default::default(), // we'll never need this anyway
@@ -1324,7 +1324,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   has_fallible_read: false,
                   role: VarRole::PipeValue,
                 };
-                self.var_stack.define(Identifier::from(PIPE_VALUE_NAME), compval_stats);
+                self.var_stack.define(Identifier::from(PIPE_VALUE_NAME), pipeval_stats);
                 let parsed_arg_expr = self.parse_sequence_inner(SequenceParseMode::FunctionArg)?;
                 is_pipeval_used |= self.var_stack.get(PIPE_VALUE_NAME).unwrap().reads > 0;
                 self.analyze_top_vars();
@@ -1380,7 +1380,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           
           self.var_stack.push_layer();
           // Track pipe value inside anonymous function access scope
-          let compval_stats = VarStats {
+          let pipeval_stats = VarStats {
             writes: 1,
             reads: 0,
             def_span: Default::default(), // we'll never need this anyway
@@ -1388,7 +1388,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             has_fallible_read: false,
             role: VarRole::PipeValue,
           };
-          self.var_stack.define(Identifier::from(PIPE_VALUE_NAME), compval_stats);
+          self.var_stack.define(Identifier::from(PIPE_VALUE_NAME), pipeval_stats);
           let ParsedSequence {
             sequence: func_expr,
             end_type: func_expr_end,

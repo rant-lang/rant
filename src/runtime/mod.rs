@@ -543,19 +543,19 @@ impl<'rant> VM<'rant> {
           steps, 
           step_index, 
           state,
-          pipeval: compval, 
+          pipeval, 
           flag 
         } => {          
           match state {
             InvokePipeStepState::EvaluatingFunc => {
               let step = &steps[step_index];
-              let compval_copy = compval.clone();
+              let pipeval_copy = pipeval.clone();
 
               self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
                 steps: Rc::clone(&steps),
                 step_index,
                 state: InvokePipeStepState::EvaluatingArgs { num_evaluated: 0 },
-                pipeval: compval,
+                pipeval,
                 flag,
               });
 
@@ -566,8 +566,8 @@ impl<'rant> VM<'rant> {
                 },
                 FunctionCallTarget::Expression(expr) => {
                   self.push_frame(Rc::clone(expr), true)?;
-                  if let Some(compval) = compval_copy {
-                    self.def_compval(compval)?;
+                  if let Some(pipeval) = pipeval_copy {
+                    self.def_pipeval(pipeval)?;
                   }
                 },
               }
@@ -581,7 +581,7 @@ impl<'rant> VM<'rant> {
                 // Evaluate next argument
                 let arg_expr = arg_exprs.get(argc - num_evaluated - 1).unwrap();
                 let arg_seq = Rc::clone(&arg_expr.expr);
-                let compval_copy = compval.clone();
+                let pipeval_copy = pipeval.clone();
 
                 // Prepare next arg eval intent
                 self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep { 
@@ -590,14 +590,14 @@ impl<'rant> VM<'rant> {
                   state: InvokePipeStepState::EvaluatingArgs {
                     num_evaluated: num_evaluated + 1,
                   },
-                  pipeval: compval,
+                  pipeval,
                   flag,
                 });
 
                 // Push current argument expression to call stack
                 self.push_frame_flavored(arg_seq, true, StackFrameFlavor::ArgumentExpression)?;
-                if let Some(compval) = compval_copy {
-                  self.def_compval(compval)?;
+                if let Some(pipeval) = pipeval_copy {
+                  self.def_pipeval(pipeval)?;
                 }
               } else {
                 // If all args are evaluated, pop them off the stack
@@ -638,7 +638,7 @@ impl<'rant> VM<'rant> {
                   },
                   steps,
                   step_index,
-                  pipeval: compval,
+                  pipeval,
                   flag,
                 });
               }
@@ -650,7 +650,7 @@ impl<'rant> VM<'rant> {
                 steps,
                 step_index,
                 state: InvokePipeStepState::PostCall,
-                pipeval: compval,
+                pipeval,
                 flag,
               });
 
@@ -659,7 +659,7 @@ impl<'rant> VM<'rant> {
               return Ok(true)
             },
             InvokePipeStepState::PostCall => {
-              let next_compval = self.pop_val()?;
+              let next_pipeval = self.pop_val()?;
               let next_step_index = step_index + 1;
               // Check if there is a next step
               if next_step_index < steps.len() {
@@ -668,13 +668,13 @@ impl<'rant> VM<'rant> {
                   steps,
                   step_index: next_step_index,
                   state: InvokePipeStepState::EvaluatingFunc,
-                  pipeval: Some(next_compval),
+                  pipeval: Some(next_pipeval),
                   flag,
                 });
                 return Ok(true)
               } else {
-                // If there are no more steps in the chain, just print the compval and let this intent die
-                self.cur_frame_mut().write_value(next_compval);
+                // If there are no more steps in the chain, just print the pipeval and let this intent die
+                self.cur_frame_mut().write_value(next_pipeval);
               }
             },
             InvokePipeStepState::PreTemporalCall { step_function, args, temporal_state } => {
@@ -699,7 +699,7 @@ impl<'rant> VM<'rant> {
                   temporal_state,
                   args,
                 },
-                pipeval: compval,
+                pipeval,
                 flag,
               });
 
@@ -707,7 +707,7 @@ impl<'rant> VM<'rant> {
               return Ok(true)
             },
             InvokePipeStepState::PostTemporalCall { step_function, args, mut temporal_state } => {
-              let next_compval = self.pop_val()?;
+              let next_piprval = self.pop_val()?;
               let next_step_index = step_index + 1;
               let step_count = steps.len();
 
@@ -721,7 +721,7 @@ impl<'rant> VM<'rant> {
                     temporal_state,
                     args,
                   },
-                  pipeval: compval,
+                  pipeval,
                   flag,
                 })
               }
@@ -733,13 +733,13 @@ impl<'rant> VM<'rant> {
                   steps,
                   step_index: next_step_index,
                   state: InvokePipeStepState::EvaluatingFunc,
-                  pipeval: Some(next_compval),
+                  pipeval: Some(next_piprval),
                   flag,
                 });
                 return Ok(true)
               } else {
-                // If there are no more steps in the chain, just print the compval and let this intent die
-                self.cur_frame_mut().write_value(next_compval);
+                // If there are no more steps in the chain, just print the pipeval and let this intent die
+                self.cur_frame_mut().write_value(next_piprval);
               }
             },
           }
@@ -1086,8 +1086,8 @@ impl<'rant> VM<'rant> {
           return Ok(true)
         },
         Rst::PipeValue => {
-          let compval = self.get_var_value(PIPE_VALUE_NAME, AccessPathKind::Local, false)?;
-          self.cur_frame_mut().write_value(compval);
+          let pipeval = self.get_var_value(PIPE_VALUE_NAME, AccessPathKind::Local, false)?;
+          self.cur_frame_mut().write_value(pipeval);
         },
         Rst::DebugCursor(info) => {
           self.cur_frame_mut().set_debug_info(info);
@@ -1587,8 +1587,8 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline(always)]
-  fn def_compval(&mut self, compval: RantValue) -> RuntimeResult<()> {
-    self.call_stack.def_var_value(self.engine, PIPE_VALUE_NAME, AccessPathKind::Local, compval, true)
+  fn def_pipeval(&mut self, pipeval: RantValue) -> RuntimeResult<()> {
+    self.call_stack.def_var_value(self.engine, PIPE_VALUE_NAME, AccessPathKind::Local, pipeval, true)
   }
 
   /// Sets the value of an existing variable.
