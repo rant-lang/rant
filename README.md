@@ -10,15 +10,13 @@
 
 **Rant** is a high-level procedural templating language with a diverse toolset for easily creating dynamic code templates, game dialogue, stories, name generators, test data, and much more.
 
-***
-
-## NOTICE:
-
-**This project is in alpha. Expect to see broken/missing features.**
-
-**While I encourage you to try it out and give feedback, please don't use in production environments until a stable version is released.**
-
-**Features may appear or disappear at any time for any reason. Assume that every alpha release is breaking.**
+> ## Notice
+>
+> **This project is in alpha. Some functionality may be broken or missing.**
+>
+> **Please do try it out and give feedback, but do not use in production environments until a stable version is released.**
+>
+> **Features may appear/disappear at any time for any reason. Assume that every alpha release will have breaking changes.**
 
 ***
 
