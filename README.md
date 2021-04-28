@@ -10,17 +10,19 @@
 
 **Rant** is a high-level procedural templating language with a diverse toolset for easily creating dynamic code templates, game dialogue, stories, name generators, test data, and much more.
 
-> ## Notice
+***
+
+> ## **Prerelease notice**
 >
-> **This project is in alpha. Some functionality may be broken or missing.**
+> **This project is in alpha.**
+> **This means that the API is unstable, functionality may be broken/missing, and everything is subject to change.**
 >
-> **Please do try it out and give feedback, but do not use in production environments until a stable version is released.**
+> **Please do try it out and give feedback; however, _do not_ use in production environments until a stable version is released.**
 >
 > **Features may appear/disappear at any time for any reason. Assume that every alpha release will have breaking changes.**
 
-***
 
-## Introducing Rant 4
+## Introducing: Rant 4
 
 Rant 4 is a complete redesign and reimplementation of the Rant language, written in Rust. 
 It's designed with usability in mind for everyone-- programmers, writers, and everyone in-between!
