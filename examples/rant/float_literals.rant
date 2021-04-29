@@ -5,9 +5,9 @@
   # Sign
   ** (;-); 
   # Integral part
-  ** [irange: 1; 10 |> dig: **[] |> collect];
+  8;
   # Exponent + suffix
-  ** [cat: **(;.); **Ff |> collect] [cat: **(;.); **Ee; **(;+;-); **[irange: 1; 4 |> dig: **[] |> collect]; **(;F;f) |> collect];
+  ** [cat: **(;.); **FfLl |> collect] [cat: **(;.); **Ee; **(;+;-); 8; **(;F;f;L;l) |> collect];
   # Newline
   \n
 ]
@@ -17,13 +17,13 @@
   # Sign
   ** (;-); 
   # Integral part
-  ** [irange: 0; 10 |> dig: **[] |> collect];
+  ** (;8);
   # Decimal point
   .;
   # Fractional part
-  ** [irange: 1; 7 |> dig: **[] |> collect];
+  8;
   # Exponent + suffix
-  ** (F;f) [cat: **Ee; **(;+;-); **[irange: 1; 4 |> dig: **[] |> collect]; **(;F;f) |> collect];
+  ** (F;f;L;l) [cat: **Ee; **(;+;-); 8; **(;F;f;L;l) |> collect];
   # Newline
   \n
 ]
