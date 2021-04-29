@@ -221,7 +221,7 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, opts: &RantCliOptions) -> Exi
         println!("{}", output);
       }
       if show_stats {
-        println!("{} in {:?} (seed = {:016x})", "Executed".bright_green().bold(), run_time, seed);
+        eprintln!("{} in {:?} (seed = {:016x})", "Executed".bright_green().bold(), run_time, seed);
       }
       exitcode::OK
     },

@@ -1,9 +1,7 @@
 # Exhaustively generates the various forms of C-style float literals.
 
 # No fractional part
-[cat: 
-  # Sign
-  ** (;-); 
+[cat:
   # Integral part
   8;
   # Exponent + suffix
@@ -13,15 +11,11 @@
 ]
 
 # With fractional part
-[cat: 
-  # Sign
-  ** (;-); 
+[cat:
   # Integral part
   ** (;8);
-  # Decimal point
-  .;
   # Fractional part
-  8;
+  .8;
   # Exponent + suffix
   ** (F;f;L;l) [cat: **Ee; **(;+;-); 8; **(;F;f;L;l) |> collect];
   # Newline

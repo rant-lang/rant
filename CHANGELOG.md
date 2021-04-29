@@ -8,6 +8,7 @@
 * Added old behavior back to `[cat]`; previous `[cat]` behavior migrated to `[print]` function
 
 ### Fixes
+* Fix bench stats in CLI printing to stdout instead of stderr
 
 ## 4.0.0-alpha.22
 
