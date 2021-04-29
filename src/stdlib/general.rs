@@ -36,6 +36,15 @@ pub(crate) fn call(vm: &mut VM, (func, args): (RantFunctionRef, Option<Vec<RantV
 }
 
 pub(crate) fn cat(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult {
+  let frame = vm.cur_frame_mut();
+  for val in args.drain(..) {
+    frame.write_value(val);
+  }
+  
+  Ok(())
+}
+
+pub(crate) fn print(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult {
   if args.len() < 2 {
     let frame = vm.cur_frame_mut();
     for val in args.drain(..) {

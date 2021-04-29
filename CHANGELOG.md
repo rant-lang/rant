@@ -2,6 +2,13 @@
 
 ## 4.0.0-alpha.23 (unreleased)
 
+### New
+
+### Changes
+* Added old behavior back to `[cat]`; previous `[cat]` behavior migrated to `[print]` function
+
+### Fixes
+
 ## 4.0.0-alpha.22
 
 (4/27/2021)

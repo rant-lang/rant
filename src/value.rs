@@ -99,19 +99,19 @@ impl RantValue {
   /// Returns NaN (Not a Number).
   #[inline]
   pub fn nan() -> Self {
-    RantValue::Float(f64::NAN)
+    Self::Float(f64::NAN)
   }
 
   /// Returns true if the value is of type `empty`.
   #[inline]
   pub fn is_empty(&self) -> bool {
-    matches!(self, RantValue::Empty)
+    matches!(self, Self::Empty)
   }
 
   /// Returns true if the value is NaN (Not a Number).
   #[inline]
   pub fn is_nan(&self) -> bool {
-    if let RantValue::Float(f) = self {
+    if let Self::Float(f) = self {
       f64::is_nan(*f)
     } else {
       false
@@ -121,7 +121,7 @@ impl RantValue {
   /// Returns true if the value is callable (e.g. a function).
   #[inline]
   pub fn is_callable(&self) -> bool {
-    matches!(self, RantValue::Function(..))
+    matches!(self, Self::Function(..))
   }
 }
 
@@ -129,54 +129,54 @@ impl RantValue {
 impl RantValue {
   /// Converts to a Rant `int` value (or `empty` if the conversion fails).
   #[inline]
-  pub fn into_rant_int(self) -> RantValue {
+  pub fn into_rant_int(self) -> Self {
     match self {
-      RantValue::Int(_) => self,
-      RantValue::Float(n) => RantValue::Int(n as i64),
-      RantValue::String(s) => {
+      Self::Int(_) => self,
+      Self::Float(n) => Self::Int(n as i64),
+      Self::String(s) => {
         match s.as_str().parse() {
-          Ok(n) => RantValue::Int(n),
-          Err(_) => RantValue::Empty,
+          Ok(n) => Self::Int(n),
+          Err(_) => Self::Empty,
         }
       },
-      RantValue::Boolean(b) => RantValue::Int(bi64(b)),
-      _ => RantValue::Empty
+      Self::Boolean(b) => Self::Int(bi64(b)),
+      _ => Self::Empty
     }
   }
 
   /// Converts to a Rant `float` value (or `empty` if the conversion fails).
   #[inline]
-  pub fn into_rant_float(self) -> RantValue {
+  pub fn into_rant_float(self) -> Self {
     match self {
-      RantValue::Float(_) => self,
-      RantValue::Int(n) => RantValue::Float(n as f64),
-      RantValue::String(s) => {
+      Self::Float(_) => self,
+      Self::Int(n) => Self::Float(n as f64),
+      Self::String(s) => {
         match s.as_str().parse() {
-          Ok(n) => RantValue::Float(n),
-          Err(_) => RantValue::Empty,
+          Ok(n) => Self::Float(n),
+          Err(_) => Self::Empty,
         }
       },
-      RantValue::Boolean(b) => RantValue::Float(bf64(b)),
-      _ => RantValue::Empty
+      Self::Boolean(b) => Self::Float(bf64(b)),
+      _ => Self::Empty
     }
   }
 
   /// Converts to a Rant `string` value.
   #[inline]
-  pub fn into_rant_string(self) -> RantValue {
+  pub fn into_rant_string(self) -> Self {
     match self {
-      RantValue::String(_) => self,
-      _ => RantValue::String(self.to_string().into())
+      Self::String(_) => self,
+      _ => Self::String(self.to_string().into())
     }
   }
 
   /// Converts to a Rant `list` value.
   #[inline]
-  pub fn into_rant_list(self) -> RantValue {
-    RantValue::List(match self {
-      RantValue::String(s) => Rc::new(RefCell::new(s.to_rant_list())),
-      RantValue::List(list) => Rc::new(RefCell::new(list.borrow().clone())),
-      RantValue::Range(range) => Rc::new(RefCell::new(range.to_list())),
+  pub fn into_rant_list(self) -> Self {
+    Self::List(match self {
+      Self::String(s) => Rc::new(RefCell::new(s.to_rant_list())),
+      Self::List(list) => Rc::new(RefCell::new(list.borrow().clone())),
+      Self::Range(range) => Rc::new(RefCell::new(range.to_list())),
       _ => return RantValue::Empty,
     })
   }
@@ -186,15 +186,15 @@ impl RantValue {
   pub fn len(&self) -> usize {
     match self {
       // Length of string is character count
-      RantValue::String(s) => s.len(),
+      Self::String(s) => s.len(),
       // Length of block is element count
-      RantValue::Block(b) => b.elements.len(),
+      Self::Block(b) => b.elements.len(),
       // Length of list is element count
-      RantValue::List(lst) => lst.borrow().len(),
+      Self::List(lst) => lst.borrow().len(),
       // Length of range is element count
-      RantValue::Range(range) => range.len(),
+      Self::Range(range) => range.len(),
       // Length of map is element count
-      RantValue::Map(map) => map.borrow().raw_len(),
+      Self::Map(map) => map.borrow().raw_len(),
       // Treat everything else as length 1, since all other value types are primitives
       _ => 1
     }
@@ -203,10 +203,10 @@ impl RantValue {
   #[inline]
   pub fn reversed(&self) -> Self {
     match self {
-      RantValue::String(s) => RantValue::String(s.reversed()),
-      RantValue::Block(b) => RantValue::Block(Rc::new(b.reversed())),
-      RantValue::List(list) => RantValue::List(Rc::new(RefCell::new(list.borrow().iter().rev().cloned().collect()))),
-      RantValue::Range(range) => RantValue::Range(range.reversed()),
+      Self::String(s) => RantValue::String(s.reversed()),
+      Self::Block(b) => RantValue::Block(Rc::new(b.reversed())),
+      Self::List(list) => RantValue::List(Rc::new(RefCell::new(list.borrow().iter().rev().cloned().collect()))),
+      Self::Range(range) => RantValue::Range(range.reversed()),
       _ => self.clone(),
     }
   }
@@ -215,9 +215,9 @@ impl RantValue {
   #[inline]
   pub fn shallow_copy(&self) -> Self {
     match self {
-      RantValue::List(list) => RantValue::List(Rc::new(RefCell::new(list.borrow().clone()))),
-      RantValue::Map(map) => RantValue::Map(Rc::new(RefCell::new(map.borrow().clone()))),
-      RantValue::Special(special) => RantValue::Special(special.clone()),
+      Self::List(list) => RantValue::List(Rc::new(RefCell::new(list.borrow().clone()))),
+      Self::Map(map) => RantValue::Map(Rc::new(RefCell::new(map.borrow().clone()))),
+      Self::Special(special) => RantValue::Special(special.clone()),
       _ => self.clone(),
     }
   }
@@ -226,17 +226,17 @@ impl RantValue {
   #[inline]
   pub fn get_type(&self) -> RantValueType {
     match self {
-      RantValue::String(_) =>     RantValueType::String,
-      RantValue::Float(_) =>      RantValueType::Float,
-      RantValue::Int(_) =>        RantValueType::Int,
-      RantValue::Boolean(_) =>    RantValueType::Boolean,
-      RantValue::Function(_) =>   RantValueType::Function,
-      RantValue::List(_) =>       RantValueType::List,
-      RantValue::Block(_) =>      RantValueType::Block,
-      RantValue::Map(_) =>        RantValueType::Map,
-      RantValue::Range(_) =>      RantValueType::Range,
-      RantValue::Special(_) =>    RantValueType::Special,
-      RantValue::Empty =>         RantValueType::Empty,
+      Self::String(_) =>     RantValueType::String,
+      Self::Float(_) =>      RantValueType::Float,
+      Self::Int(_) =>        RantValueType::Int,
+      Self::Boolean(_) =>    RantValueType::Boolean,
+      Self::Function(_) =>   RantValueType::Function,
+      Self::List(_) =>       RantValueType::List,
+      Self::Block(_) =>      RantValueType::Block,
+      Self::Map(_) =>        RantValueType::Map,
+      Self::Range(_) =>      RantValueType::Range,
+      Self::Special(_) =>    RantValueType::Special,
+      Self::Empty =>         RantValueType::Empty,
     }
   }
   
@@ -290,39 +290,39 @@ impl RantValue {
     let (slice_from, slice_to) = self.get_uslice(slice).ok_or(SliceError::OutOfRange)?;
 
     match self {
-      RantValue::String(s) => Ok(RantValue::String(s.to_slice(slice_from, slice_to).ok_or(SliceError::OutOfRange)?)),
-      RantValue::Block(b) => {
+      Self::String(s) => Ok(Self::String(s.to_slice(slice_from, slice_to).ok_or(SliceError::OutOfRange)?)),
+      Self::Block(b) => {
         match (slice_from, slice_to) {
-          (None, None) => Ok(RantValue::Block(Rc::clone(b))),
-          (None, Some(to)) => Ok(RantValue::Block(Rc::new(Block {
+          (None, None) => Ok(Self::Block(Rc::clone(b))),
+          (None, Some(to)) => Ok(Self::Block(Rc::new(Block {
             elements: Rc::new((&b.elements[..to]).to_vec()),
             .. *b.as_ref()
           }))),
-          (Some(from), None) => Ok(RantValue::Block(Rc::new(Block {
+          (Some(from), None) => Ok(Self::Block(Rc::new(Block {
             elements: Rc::new((&b.elements[from..]).to_vec()),
             .. *b.as_ref()
           }))),
           (Some(from), Some(to)) => {
             let (from, to) = util::minmax(from, to);
-            Ok(RantValue::Block(Rc::new(Block {
+            Ok(Self::Block(Rc::new(Block {
               elements: Rc::new((&b.elements[from..to]).to_vec()),
               .. *b.as_ref()
             })))
           },
         }
       },
-      RantValue::Range(range) => {
-        Ok(RantValue::Range(range.sliced(slice_from, slice_to).unwrap()))
+      Self::Range(range) => {
+        Ok(Self::Range(range.sliced(slice_from, slice_to).unwrap()))
       },
-      RantValue::List(list) => {
+      Self::List(list) => {
         let list = list.borrow();
         match (slice_from, slice_to) {
           (None, None) => Ok(self.shallow_copy()),
-          (None, Some(to)) => Ok(RantValue::List(Rc::new(RefCell::new((&list[..to]).iter().cloned().collect())))),
-          (Some(from), None) => Ok(RantValue::List(Rc::new(RefCell::new((&list[from..]).iter().cloned().collect())))),
+          (None, Some(to)) => Ok(Self::List(Rc::new(RefCell::new((&list[..to]).iter().cloned().collect())))),
+          (Some(from), None) => Ok(Self::List(Rc::new(RefCell::new((&list[from..]).iter().cloned().collect())))),
           (Some(from), Some(to)) => {
             let (from, to) = util::minmax(from, to);
-            Ok(RantValue::List(Rc::new(RefCell::new((&list[from..to]).iter().cloned().collect()))))
+            Ok(Self::List(Rc::new(RefCell::new((&list[from..to]).iter().cloned().collect()))))
           }
         }
       }
@@ -334,7 +334,7 @@ impl RantValue {
     let (slice_from, slice_to) = self.get_uslice(slice).ok_or(SliceError::OutOfRange)?;
 
     match (self, &val) {
-      (RantValue::List(dst_list), RantValue::List(src_list)) => {
+      (Self::List(dst_list), Self::List(src_list)) => {
         let src_list = src_list.borrow();
         let mut dst_list = dst_list.borrow_mut();
         let src = src_list.iter().cloned();
@@ -355,7 +355,7 @@ impl RantValue {
         }
         Ok(())
       },
-      (RantValue::List(_), other) => Err(SliceError::UnsupportedSpliceSource { src: RantValueType::List, dst: other.get_type() }),
+      (Self::List(_), other) => Err(SliceError::UnsupportedSpliceSource { src: RantValueType::List, dst: other.get_type() }),
       (dst, _src) => Err(SliceError::CannotSetSliceOnType(dst.get_type()))
     }
   }
@@ -363,7 +363,7 @@ impl RantValue {
   /// Indicates whether the value can be indexed into.
   #[inline]
   pub fn is_indexable(&self) -> bool {
-    matches!(self, RantValue::String(_) | RantValue::List(_) | RantValue::Range(_))
+    matches!(self, Self::String(_) | Self::List(_) | Self::Range(_))
   }
 
   /// Attempts to get a value by index.
@@ -371,14 +371,14 @@ impl RantValue {
     let uindex = self.get_uindex(index).ok_or(IndexError::OutOfRange)?;
 
     match self {
-      RantValue::String(s) => {
+      Self::String(s) => {
         if let Some(s) = s.grapheme_at(uindex) {
-          Ok(RantValue::String(s))
+          Ok(Self::String(s))
         } else {
           Err(IndexError::OutOfRange)
         }
       },
-      RantValue::List(list) => {
+      Self::List(list) => {
         let list = list.borrow();
         if uindex < list.len() {
           Ok(list[uindex].clone())
@@ -386,9 +386,9 @@ impl RantValue {
           Err(IndexError::OutOfRange)
         }
       },
-      RantValue::Range(range) => {
+      Self::Range(range) => {
         if let Some(item) = range.get(uindex) {
-          Ok(RantValue::Int(item))
+          Ok(Self::Int(item))
         } else {
           Err(IndexError::OutOfRange)
         }
@@ -402,7 +402,7 @@ impl RantValue {
     let uindex = self.get_uindex(index).ok_or(IndexError::OutOfRange)?;
 
     match self {
-      RantValue::List(list) => {
+      Self::List(list) => {
         let mut list = list.borrow_mut();
 
         if uindex < list.len() {
@@ -412,7 +412,7 @@ impl RantValue {
           Err(IndexError::OutOfRange)
         }
       },
-      RantValue::Map(map) => {
+      Self::Map(map) => {
         let mut map = map.borrow_mut();
         map.raw_set(uindex.to_string().as_str(), val);
         Ok(())
@@ -424,7 +424,7 @@ impl RantValue {
   /// Attempts to get a value by key.
   pub fn key_get(&self, key: &str) -> ValueKeyResult {
     match self {
-      RantValue::Map(map) => {
+      Self::Map(map) => {
         let map = map.borrow();
         // TODO: Use prototype getter here
         if let Some(val) = map.raw_get(key) {
@@ -440,7 +440,7 @@ impl RantValue {
   /// Attempts to set a value by key.
   pub fn key_set(&mut self, key: &str, val: RantValue) -> ValueKeySetResult {
     match self {
-      RantValue::Map(map) => {
+      Self::Map(map) => {
         let mut map = map.borrow_mut();
         // TODO: use prototype setter here
         map.raw_set(key, val);
@@ -454,7 +454,7 @@ impl RantValue {
 impl Default for RantValue {
   /// Gets the default RantValue (`empty`).
   fn default() -> Self {
-    RantValue::Empty
+    Self::Empty
   }
 }
 
@@ -490,17 +490,17 @@ impl RantValueType {
   /// Gets a string slice representing the type.
   pub fn name(&self) -> &'static str {
     match self {
-      RantValueType::String =>      "string",
-      RantValueType::Float =>       "float",
-      RantValueType::Int =>         "int",
-      RantValueType::Boolean =>     "bool",
-      RantValueType::Function =>    "function",
-      RantValueType::Block =>       "block",
-      RantValueType::List =>        "list",
-      RantValueType::Map =>         "map",
-      RantValueType::Special =>     "special",
-      RantValueType::Range =>       "range",
-      RantValueType::Empty =>       "empty",
+      Self::String =>      "string",
+      Self::Float =>       "float",
+      Self::Int =>         "int",
+      Self::Boolean =>     "bool",
+      Self::Function =>    "function",
+      Self::Block =>       "block",
+      Self::List =>        "list",
+      Self::Map =>         "map",
+      Self::Special =>     "special",
+      Self::Range =>       "range",
+      Self::Empty =>       "empty",
     }
   }
 }
@@ -658,17 +658,17 @@ pub(crate) enum RantNumber {
 impl Debug for RantValue {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
-      RantValue::String(s) => write!(f, "{}", s),
-      RantValue::Float(n) => write!(f, "{}", n),
-      RantValue::Int(n) => write!(f, "{}", n),
-      RantValue::Boolean(b) => write!(f, "{}", if *b { "@true" }  else { "@false" }),
-      RantValue::Function(func) => write!(f, "[function({:?})]", func.body),
-      RantValue::Block(block) => write!(f, "[block({})]", block.elements.len()),
-      RantValue::List(l) => write!(f, "[list({})]", l.borrow().len()),
-      RantValue::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
-      RantValue::Range(range) => write!(f, "{}", range),
-      RantValue::Special(special) => write!(f, "[special({:?})]", special),
-      RantValue::Empty => write!(f, "[empty]"),
+      Self::String(s) => write!(f, "{}", s),
+      Self::Float(n) => write!(f, "{}", n),
+      Self::Int(n) => write!(f, "{}", n),
+      Self::Boolean(b) => write!(f, "{}", if *b { "@true" }  else { "@false" }),
+      Self::Function(func) => write!(f, "[function({:?})]", func.body),
+      Self::Block(block) => write!(f, "[block({})]", block.elements.len()),
+      Self::List(l) => write!(f, "[list({})]", l.borrow().len()),
+      Self::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
+      Self::Range(range) => write!(f, "{}", range),
+      Self::Special(special) => write!(f, "[special({:?})]", special),
+      Self::Empty => write!(f, "[empty]"),
     }
   }
 }
@@ -738,17 +738,17 @@ impl Display for RantValue {
 impl PartialEq for RantValue {
   fn eq(&self, other: &Self) -> bool {
     match (self, other) {
-      (RantValue::Empty, RantValue::Empty) => true,
-      (RantValue::String(a), RantValue::String(b)) => a == b,
-      (RantValue::Int(a), RantValue::Int(b)) => a == b,
-      (RantValue::Int(a), RantValue::Float(b)) => *a as f64 == *b,
-      (RantValue::Float(a), RantValue::Float(b)) => a == b,
-      (RantValue::Float(a), RantValue::Int(b)) => *a == *b as f64,
-      (RantValue::Boolean(a), RantValue::Boolean(b)) => a == b,
-      (RantValue::Range(ra), RantValue::Range(rb)) => ra == rb,
-      (RantValue::List(a), RantValue::List(b)) => a.borrow().eq(&b.borrow()),
-      (RantValue::Map(a), RantValue::Map(b)) => Rc::as_ptr(a) == Rc::as_ptr(b),
-      (RantValue::Special(a), RantValue::Special(b)) => a == b,
+      (Self::Empty, Self::Empty) => true,
+      (Self::String(a), Self::String(b)) => a == b,
+      (Self::Int(a), Self::Int(b)) => a == b,
+      (Self::Int(a), Self::Float(b)) => *a as f64 == *b,
+      (Self::Float(a), Self::Float(b)) => a == b,
+      (Self::Float(a), Self::Int(b)) => *a == *b as f64,
+      (Self::Boolean(a), Self::Boolean(b)) => a == b,
+      (Self::Range(ra), Self::Range(rb)) => ra == rb,
+      (Self::List(a), Self::List(b)) => a.borrow().eq(&b.borrow()),
+      (Self::Map(a), Self::Map(b)) => Rc::as_ptr(a) == Rc::as_ptr(b),
+      (Self::Special(a), Self::Special(b)) => a == b,
       _ => false
     }
   }
@@ -759,12 +759,12 @@ impl Eq for RantValue {}
 impl PartialOrd for RantValue {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     match (self, other) {
-      (RantValue::Empty, _) | (_, RantValue::Empty) => None,
-      (RantValue::Int(a), RantValue::Int(b)) => a.partial_cmp(b),
-      (RantValue::Float(a), RantValue::Float(b)) => a.partial_cmp(b),
-      (RantValue::Float(a), RantValue::Int(b)) => a.partial_cmp(&(*b as f64)),
-      (RantValue::Int(a), RantValue::Float(b)) => (&(*a as f64)).partial_cmp(b),
-      (RantValue::String(a), RantValue::String(b)) => a.partial_cmp(b),
+      (Self::Empty, _) | (_, Self::Empty) => None,
+      (Self::Int(a), Self::Int(b)) => a.partial_cmp(b),
+      (Self::Float(a), Self::Float(b)) => a.partial_cmp(b),
+      (Self::Float(a), Self::Int(b)) => a.partial_cmp(&(*b as f64)),
+      (Self::Int(a), Self::Float(b)) => (&(*a as f64)).partial_cmp(b),
+      (Self::String(a), Self::String(b)) => a.partial_cmp(b),
       (a, b) => if a == b { Some(Ordering::Equal) } else { None }
     }
   }
@@ -774,120 +774,120 @@ impl Not for RantValue {
   type Output = Self;
   fn not(self) -> Self::Output {
     match self {
-      RantValue::Empty => RantValue::Boolean(true),
-      RantValue::Boolean(b) => RantValue::Boolean(!b),
+      Self::Empty => Self::Boolean(true),
+      Self::Boolean(b) => Self::Boolean(!b),
       _ => self
     }
   }
 }
 
 impl Neg for RantValue {
-  type Output = RantValue;
+  type Output = Self;
   fn neg(self) -> Self::Output {
     match self {
-      RantValue::Int(a) => RantValue::Int(a.saturating_neg()),
-      RantValue::Float(a) => RantValue::Float(-a),
-      RantValue::Boolean(a) => RantValue::Int(-bi64(a)),
+      Self::Int(a) => Self::Int(a.saturating_neg()),
+      Self::Float(a) => Self::Float(-a),
+      Self::Boolean(a) => Self::Int(-bi64(a)),
       _ => self
     }
   }
 }
 
 impl Add for RantValue {
-  type Output = RantValue;
+  type Output = Self;
   fn add(self, rhs: Self) -> Self::Output {
     match (self, rhs) {
-      (RantValue::Empty, RantValue::Empty) => RantValue::Empty,
-      (lhs, RantValue::Empty) => lhs,
-      (RantValue::Empty, rhs) => rhs,
-      (RantValue::Int(a), RantValue::Int(b)) => RantValue::Int(a.saturating_add(b)),
-      (RantValue::Int(a), RantValue::Float(b)) => RantValue::Float(f64(a) + b),
-      (RantValue::Int(a), RantValue::Boolean(b)) => RantValue::Int(a.saturating_add(bi64(b))),
-      (RantValue::Float(a), RantValue::Float(b)) => RantValue::Float(a + b),
-      (RantValue::Float(a), RantValue::Int(b)) => RantValue::Float(a + f64(b)),
-      (RantValue::Float(a), RantValue::Boolean(b)) => RantValue::Float(a + bf64(b)),
-      (RantValue::String(a), RantValue::String(b)) => RantValue::String(a + b),
-      (RantValue::String(a), rhs) => RantValue::String(a + rhs.to_string().into()),
-      (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Int(bi64(a) + bi64(b)),
-      (RantValue::Boolean(a), RantValue::Int(b)) => RantValue::Int(bi64(a).saturating_add(b)),
-      (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) + b),
-      (RantValue::List(a), RantValue::List(b)) => RantValue::List(Rc::new(RefCell::new(a.borrow().iter().cloned().chain(b.borrow().iter().cloned()).collect()))),
-      (lhs, rhs) => RantValue::String(RantString::from(format!("{}{}", lhs, rhs)))
+      (Self::Empty, Self::Empty) => Self::Empty,
+      (lhs, Self::Empty) => lhs,
+      (Self::Empty, rhs) => rhs,
+      (Self::Int(a), Self::Int(b)) => Self::Int(a.saturating_add(b)),
+      (Self::Int(a), Self::Float(b)) => Self::Float(f64(a) + b),
+      (Self::Int(a), Self::Boolean(b)) => Self::Int(a.saturating_add(bi64(b))),
+      (Self::Float(a), Self::Float(b)) => Self::Float(a + b),
+      (Self::Float(a), Self::Int(b)) => Self::Float(a + f64(b)),
+      (Self::Float(a), Self::Boolean(b)) => Self::Float(a + bf64(b)),
+      (Self::String(a), Self::String(b)) => Self::String(a + b),
+      (Self::String(a), rhs) => Self::String(a + rhs.to_string().into()),
+      (Self::Boolean(a), Self::Boolean(b)) => Self::Int(bi64(a) + bi64(b)),
+      (Self::Boolean(a), Self::Int(b)) => Self::Int(bi64(a).saturating_add(b)),
+      (Self::Boolean(a), Self::Float(b)) => Self::Float(bf64(a) + b),
+      (Self::List(a), Self::List(b)) => Self::List(Rc::new(RefCell::new(a.borrow().iter().cloned().chain(b.borrow().iter().cloned()).collect()))),
+      (lhs, rhs) => Self::String(RantString::from(format!("{}{}", lhs, rhs)))
     }
   }
 }
 
 impl Sub for RantValue {
-  type Output = RantValue;
+  type Output = Self;
   fn sub(self, rhs: Self) -> Self::Output {
     match (self, rhs) {
-      (RantValue::Empty, RantValue::Empty) => RantValue::Empty,
-      (lhs, RantValue::Empty) => lhs,
-      (RantValue::Empty, rhs) => -rhs,
-      (RantValue::Int(a), RantValue::Int(b)) => RantValue::Int(a.saturating_sub(b)),
-      (RantValue::Int(a), RantValue::Float(b)) => RantValue::Float((a as f64) - b),
-      (RantValue::Int(a), RantValue::Boolean(b)) => RantValue::Int(a - bi64(b)),
-      (RantValue::Float(a), RantValue::Float(b)) => RantValue::Float(a - b),
-      (RantValue::Float(a), RantValue::Int(b)) => RantValue::Float(a - (b as f64)),
-      (RantValue::Float(a), RantValue::Boolean(b)) => RantValue::Float(a - bf64(b)),
-      (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Int(bi64(a) - bi64(b)),
-      (RantValue::Boolean(a), RantValue::Int(b)) => RantValue::Int(bi64(a).saturating_sub(b)),
-      (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) - b),
-      _ => RantValue::nan()
+      (Self::Empty, Self::Empty) => Self::Empty,
+      (lhs, Self::Empty) => lhs,
+      (Self::Empty, rhs) => -rhs,
+      (Self::Int(a), Self::Int(b)) => Self::Int(a.saturating_sub(b)),
+      (Self::Int(a), Self::Float(b)) => Self::Float((a as f64) - b),
+      (Self::Int(a), Self::Boolean(b)) => Self::Int(a - bi64(b)),
+      (Self::Float(a), Self::Float(b)) => Self::Float(a - b),
+      (Self::Float(a), Self::Int(b)) => Self::Float(a - (b as f64)),
+      (Self::Float(a), Self::Boolean(b)) => Self::Float(a - bf64(b)),
+      (Self::Boolean(a), Self::Boolean(b)) => Self::Int(bi64(a) - bi64(b)),
+      (Self::Boolean(a), Self::Int(b)) => Self::Int(bi64(a).saturating_sub(b)),
+      (Self::Boolean(a), Self::Float(b)) => Self::Float(bf64(a) - b),
+      _ => Self::nan()
     }
   }
 }
 
 impl Mul for RantValue {
-  type Output = RantValue;
+  type Output = Self;
   fn mul(self, rhs: Self) -> Self::Output {
     match (self, rhs) {
-      (RantValue::Empty, _) | (_, RantValue::Empty) => RantValue::Empty,
-      (RantValue::Int(a), RantValue::Int(b)) => RantValue::Int(a.saturating_mul(b)),
-      (RantValue::Int(a), RantValue::Float(b)) => RantValue::Float((a as f64) * b),
-      (RantValue::Int(a), RantValue::Boolean(b)) => RantValue::Int(a * bi64(b)),
-      (RantValue::Float(a), RantValue::Float(b)) => RantValue::Float(a * b),
-      (RantValue::Float(a), RantValue::Int(b)) => RantValue::Float(a * (b as f64)),
-      (RantValue::Float(a), RantValue::Boolean(b)) => RantValue::Float(a * bf64(b)),
-      (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Int(bi64(a) * bi64(b)),
-      (RantValue::Boolean(a), RantValue::Int(b)) => RantValue::Int(bi64(a) * b),
-      (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) * b),
-      (RantValue::String(a), RantValue::Int(b)) => RantValue::String(a.as_str().repeat(clamp(b, 0, i64::MAX) as usize).into()),
-      _ => RantValue::nan()
+      (Self::Empty, _) | (_, Self::Empty) => Self::Empty,
+      (Self::Int(a), Self::Int(b)) => Self::Int(a.saturating_mul(b)),
+      (Self::Int(a), Self::Float(b)) => Self::Float((a as f64) * b),
+      (Self::Int(a), Self::Boolean(b)) => Self::Int(a * bi64(b)),
+      (Self::Float(a), Self::Float(b)) => Self::Float(a * b),
+      (Self::Float(a), Self::Int(b)) => Self::Float(a * (b as f64)),
+      (Self::Float(a), Self::Boolean(b)) => Self::Float(a * bf64(b)),
+      (Self::Boolean(a), Self::Boolean(b)) => Self::Int(bi64(a) * bi64(b)),
+      (Self::Boolean(a), Self::Int(b)) => Self::Int(bi64(a) * b),
+      (Self::Boolean(a), Self::Float(b)) => Self::Float(bf64(a) * b),
+      (Self::String(a), Self::Int(b)) => Self::String(a.as_str().repeat(clamp(b, 0, i64::MAX) as usize).into()),
+      _ => Self::nan()
     }
   }
 }
 
 impl Div for RantValue {
-  type Output = ValueResult<RantValue>;
+  type Output = ValueResult<Self>;
   fn div(self, rhs: Self) -> Self::Output {
     Ok(match (self, rhs) {
-      (RantValue::Empty, _) | (_, RantValue::Empty) => RantValue::Empty,
-      (_, RantValue::Int(0)) | (_, RantValue::Boolean(false)) => return Err(ValueError::DivideByZero),
-      (RantValue::Int(a), RantValue::Int(b)) => RantValue::Int(a / b),
-      (RantValue::Int(a), RantValue::Float(b)) => RantValue::Float((a as f64) / b),
-      (RantValue::Int(a), RantValue::Boolean(b)) => RantValue::Int(a / bi64(b)),
-      (RantValue::Float(a), RantValue::Float(b)) => RantValue::Float(a / b),
-      (RantValue::Float(a), RantValue::Int(b)) => RantValue::Float(a / (b as f64)),
-      (RantValue::Float(a), RantValue::Boolean(b)) => RantValue::Float(a / bf64(b)),
-      (RantValue::Boolean(a), RantValue::Boolean(b)) => RantValue::Int(bi64(a) / bi64(b)),
-      (RantValue::Boolean(a), RantValue::Int(b)) => RantValue::Int(bi64(a) / b),
-      (RantValue::Boolean(a), RantValue::Float(b)) => RantValue::Float(bf64(a) / b),
-      _ => RantValue::nan()
+      (Self::Empty, _) | (_, Self::Empty) => Self::Empty,
+      (_, Self::Int(0)) | (_, Self::Boolean(false)) => return Err(ValueError::DivideByZero),
+      (Self::Int(a), Self::Int(b)) => Self::Int(a / b),
+      (Self::Int(a), Self::Float(b)) => Self::Float((a as f64) / b),
+      (Self::Int(a), Self::Boolean(b)) => Self::Int(a / bi64(b)),
+      (Self::Float(a), Self::Float(b)) => Self::Float(a / b),
+      (Self::Float(a), Self::Int(b)) => Self::Float(a / (b as f64)),
+      (Self::Float(a), Self::Boolean(b)) => Self::Float(a / bf64(b)),
+      (Self::Boolean(a), Self::Boolean(b)) => Self::Int(bi64(a) / bi64(b)),
+      (Self::Boolean(a), Self::Int(b)) => Self::Int(bi64(a) / b),
+      (Self::Boolean(a), Self::Float(b)) => Self::Float(bf64(a) / b),
+      _ => Self::nan()
     })
   }
 }
 
 impl Rem for RantValue {
-  type Output = ValueResult<RantValue>;
+  type Output = ValueResult<Self>;
   fn rem(self, rhs: Self) -> Self::Output {
     Ok(match (self, rhs) {
-      (RantValue::Empty, _) | (_, RantValue::Empty) => RantValue::Empty,
-      (_, RantValue::Int(0)) | (_, RantValue::Boolean(false)) => return Err(ValueError::DivideByZero),
-      (RantValue::Int(a), RantValue::Int(b)) => RantValue::Int(a % b),
-      (RantValue::Int(a), RantValue::Float(b)) => RantValue::Float((a as f64) % b),
-      (RantValue::Int(a), RantValue::Boolean(b)) => RantValue::Int(a % bi64(b)),
-      _ => RantValue::nan()
+      (Self::Empty, _) | (_, Self::Empty) => Self::Empty,
+      (_, Self::Int(0)) | (_, Self::Boolean(false)) => return Err(ValueError::DivideByZero),
+      (Self::Int(a), Self::Int(b)) => Self::Int(a % b),
+      (Self::Int(a), Self::Float(b)) => Self::Float((a as f64) % b),
+      (Self::Int(a), Self::Boolean(b)) => Self::Int(a % bi64(b)),
+      _ => Self::nan()
     })
   }
 }
@@ -895,9 +895,9 @@ impl Rem for RantValue {
 impl RantValue {
   /// Raises `self` to the `exponent` power.
   #[inline]
-  pub fn pow(self, exponent: RantValue) -> ValueResult<Self> {
+  pub fn pow(self, exponent: Self) -> ValueResult<Self> {
     match (self, exponent) {
-      (RantValue::Int(lhs), RantValue::Int(rhs)) => {
+      (Self::Int(lhs), Self::Int(rhs)) => {
         if rhs >= 0 {
           cast::u32(rhs)
             .map_err(|_| ValueError::Overflow)
@@ -906,21 +906,21 @@ impl RantValue {
               .checked_pow(rhs)
               .ok_or(ValueError::Overflow)
             )
-            .map(RantValue::Int)
+            .map(Self::Int)
         } else {
-          Ok(RantValue::Float((lhs as f64).powf(rhs as f64)))
+          Ok(Self::Float((lhs as f64).powf(rhs as f64)))
         }
       },
-      (RantValue::Int(lhs), RantValue::Float(rhs)) => {
-        Ok(RantValue::Float((lhs as f64).powf(rhs)))
+      (Self::Int(lhs), Self::Float(rhs)) => {
+        Ok(Self::Float((lhs as f64).powf(rhs)))
       },
-      (RantValue::Float(lhs), RantValue::Int(rhs)) => {
-        Ok(RantValue::Float(lhs.powf(rhs as f64)))
+      (Self::Float(lhs), Self::Int(rhs)) => {
+        Ok(Self::Float(lhs.powf(rhs as f64)))
       },
-      (RantValue::Float(lhs), RantValue::Float(rhs)) => {
-        Ok(RantValue::Float(lhs.powf(rhs)))
+      (Self::Float(lhs), Self::Float(rhs)) => {
+        Ok(Self::Float(lhs.powf(rhs)))
       },
-      _ => Ok(RantValue::Empty)
+      _ => Ok(Self::Empty)
     }
   }
 
@@ -928,8 +928,8 @@ impl RantValue {
   #[inline]
   pub fn abs(self) -> ValueResult<Self> {
     match self {
-      RantValue::Int(i) => i.checked_abs().map(RantValue::Int).ok_or(ValueError::Overflow),
-      RantValue::Float(f) => Ok(RantValue::Float(f.abs())),
+      Self::Int(i) => i.checked_abs().map(Self::Int).ok_or(ValueError::Overflow),
+      Self::Float(f) => Ok(Self::Float(f.abs())),
       _ => Ok(self)
     }
   }
