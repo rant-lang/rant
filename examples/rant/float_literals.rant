@@ -1,11 +1,11 @@
-# Exhaustively generates the various forms of C-style float literals.
+# Exhaustively generates the various forms of C89 float literals.
 
 # No fractional part
 [cat:
   # Integral part
   8;
   # Exponent + suffix
-  ** [cat: **(;.); **FfLl |> collect] [cat: **(;.); **Ee; **(;+;-); 8; **(;F;f;L;l) |> collect];
+  ** [cat: **(;.); **(;F;f;L;l) |> collect] [cat: **(;.); **Ee; **(;+;-); 8; **(;F;f;L;l) |> collect];
   # Newline
   \n
 ]
@@ -17,7 +17,7 @@
   # Fractional part
   .8;
   # Exponent + suffix
-  ** (F;f;L;l) [cat: **Ee; **(;+;-); 8; **(;F;f;L;l) |> collect];
+  ** (;F;f;L;l) [cat: **Ee; **(;+;-); 8; **(;F;f;L;l) |> collect];
   # Newline
   \n
 ]
