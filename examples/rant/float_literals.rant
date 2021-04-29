@@ -5,7 +5,7 @@
   # Integral part
   8;
   # Exponent + suffix
-  ** [cat: **(;.); **(;F;f;L;l) |> collect] [cat: **(;.); **Ee; **(;+;-); 8; **(;F;f;L;l) |> collect];
+  ** (.) [cat: **(;.); **FfLl |> collect] [cat: **(;.); **Ee; **(;+;-); 8; **(;F;f;L;l) |> collect];
   # Newline
   \n
 ]
