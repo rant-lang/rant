@@ -1,0 +1,29 @@
+# Exhaustively generates the various forms of C-style float literals.
+
+# No fractional part
+[cat: 
+  # Sign
+  ** (;-); 
+  # Integral part
+  ** [irange: 1; 10 |> dig: **[] |> collect];
+  # Exponent + suffix
+  ** [cat: **(;.); **Ff |> collect] [cat: **(;.); **Ee; **(;+;-); **[irange: 1; 4 |> dig: **[] |> collect]; **(;F;f) |> collect];
+  # Newline
+  \n
+]
+
+# With fractional part
+[cat: 
+  # Sign
+  ** (;-); 
+  # Integral part
+  ** [irange: 0; 10 |> dig: **[] |> collect];
+  # Decimal point
+  .;
+  # Fractional part
+  ** [irange: 1; 7 |> dig: **[] |> collect];
+  # Exponent + suffix
+  ** (F;f) [cat: **Ee; **(;+;-); **[irange: 1; 4 |> dig: **[] |> collect]; **(;F;f) |> collect];
+  # Newline
+  \n
+]
