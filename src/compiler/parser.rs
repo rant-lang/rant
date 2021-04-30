@@ -633,7 +633,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             },
             _ => {
               self.report_error(Problem::ExpectedToken("(".to_owned()), &self.reader.last_token_span());
-              Rst::EmptyVal
+              Rst::EmptyValue
             },
           }
         }),
@@ -715,11 +715,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let accessors = self.parse_accessor()?;
           for accessor in accessors {
             match accessor {
-              Rst::VarGet(..) | Rst::VarDepth(..) => {
+              Rst::Get(..) | Rst::Depth(..) => {
                 is_seq_printing = true;
                 whitespace!(allow);
               },
-              Rst::VarSet(..) | Rst::VarDef(..) | Rst::ConstDef(..) => {
+              Rst::Set(..) | Rst::DefVar(..) | Rst::DefConst(..) => {
                 // whitespace!(ignore both);
               },
               _ => unreachable!()
@@ -800,7 +800,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         
         // Empty
         RantToken::EmptyValue => no_flags!(on {
-          Rst::EmptyVal
+          Rst::EmptyValue
         }),
         
         // Verbatim string literals
@@ -2112,10 +2112,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             RantToken::RightAngle => {              
               if is_const_def {
                 self.track_variable(&var_name, &access_kind, true, VarRole::Normal, &def_span);
-                add_accessor!(Rst::ConstDef(var_name, access_kind, None));
+                add_accessor!(Rst::DefConst(var_name, access_kind, None));
               } else {
                 self.track_variable(&var_name, &access_kind, false, VarRole::Normal, &def_span);
-                add_accessor!(Rst::VarDef(var_name, access_kind, None));
+                add_accessor!(Rst::DefVar(var_name, access_kind, None));
               }
               break 'read
             },
@@ -2123,10 +2123,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             RantToken::Semi => {
               if is_const_def {
                 self.track_variable(&var_name, &access_kind, true, VarRole::Normal, &def_span);
-                add_accessor!(Rst::ConstDef(var_name, access_kind, None));
+                add_accessor!(Rst::DefConst(var_name, access_kind, None));
               } else {
                 self.track_variable(&var_name, &access_kind, false, VarRole::Normal, &def_span);
-                add_accessor!(Rst::VarDef(var_name, access_kind, None));
+                add_accessor!(Rst::DefVar(var_name, access_kind, None));
               }
               continue 'read;
             },
@@ -2142,10 +2142,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               let def_span = access_start_span.start .. self.reader.last_token_span().start;
               if is_const_def {
                 self.track_variable(&var_name, &access_kind, true, VarRole::Normal, &def_span);
-                add_accessor!(Rst::ConstDef(var_name, access_kind, Some(Rc::new(setter_expr))));
+                add_accessor!(Rst::DefConst(var_name, access_kind, Some(Rc::new(setter_expr))));
               } else {
                 self.track_variable(&var_name, &access_kind, false, VarRole::Normal, &def_span);
-                add_accessor!(Rst::VarDef(var_name, access_kind, Some(Rc::new(setter_expr))));
+                add_accessor!(Rst::DefVar(var_name, access_kind, Some(Rc::new(setter_expr))));
               }
               
               match setter_end_type {
@@ -2196,9 +2196,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             RantToken::RightAngle => {
               self.track_variable_access(&var_path, false, false, &var_path_span);
               add_accessor!(if is_depth_op {
-                Rst::VarDepth(var_path.var_name().unwrap(), var_path.kind(), None)
+                Rst::Depth(var_path.var_name().unwrap(), var_path.kind(), None)
               } else { 
-                Rst::VarGet(Rc::new(var_path), None)
+                Rst::Get(Rc::new(var_path), None)
               });
               break 'read;
             },
@@ -2206,9 +2206,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             RantToken::Semi => {
               self.track_variable_access(&var_path, false, false, &var_path_span);
               add_accessor!(if is_depth_op {
-                Rst::VarDepth(var_path.var_name().unwrap(), var_path.kind(), None)
+                Rst::Depth(var_path.var_name().unwrap(), var_path.kind(), None)
               } else { 
-                Rst::VarGet(Rc::new(var_path), None)
+                Rst::Get(Rc::new(var_path), None)
               });
               continue 'read;
             },
@@ -2224,9 +2224,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               self.track_variable_access(&var_path, false, true, &var_path_span);
 
               add_accessor!(if is_depth_op {
-                Rst::VarDepth(var_path.var_name().unwrap(), var_path.kind(), Some(Rc::new(fallback_expr)))
+                Rst::Depth(var_path.var_name().unwrap(), var_path.kind(), Some(Rc::new(fallback_expr)))
               } else { 
-                Rst::VarGet(Rc::new(var_path), Some(Rc::new(fallback_expr)))
+                Rst::Get(Rc::new(var_path), Some(Rc::new(fallback_expr)))
               });
 
               match fallback_end_type {
@@ -2256,7 +2256,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               }
 
               self.track_variable_access(&var_path, true, false, &setter_span);
-              add_accessor!(Rst::VarSet(Rc::new(var_path), Rc::new(setter_rhs_expr)));
+              add_accessor!(Rst::Set(Rc::new(var_path), Rc::new(setter_rhs_expr)));
 
               // Assignment is not valid if we're using depth operator
               if is_depth_op {

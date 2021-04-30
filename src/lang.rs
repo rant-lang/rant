@@ -1,6 +1,6 @@
 //! Contains Rant's syntax tree implementation and supporting data structures.
 
-use std::{collections::HashMap, fmt::Display, ops::{DerefMut, Deref}, rc::Rc};
+use std::{collections::HashMap, fmt::Display, ops::{Deref, DerefMut, Range}, rc::Rc};
 use crate::{RantProgramInfo, InternalString, RantValue, RantValueType};
 
 pub(crate) const PIPE_VALUE_NAME: &str = "~PIPE";
@@ -726,15 +726,15 @@ pub enum Rst {
   /// Function definition
   FuncDef(FunctionDef),
   /// Variable definition
-  VarDef(Identifier, AccessPathKind, Option<Rc<Sequence>>),
+  DefVar(Identifier, AccessPathKind, Option<Rc<Sequence>>),
   /// Constant definition
-  ConstDef(Identifier, AccessPathKind, Option<Rc<Sequence>>),
-  /// Value getter
-  VarGet(Rc<AccessPath>, Option<Rc<Sequence>>),
+  DefConst(Identifier, AccessPathKind, Option<Rc<Sequence>>),
   /// Variable depth
-  VarDepth(Identifier, AccessPathKind, Option<Rc<Sequence>>),
-  /// Value setter
-  VarSet(Rc<AccessPath>, Rc<Sequence>),
+  Depth(Identifier, AccessPathKind, Option<Rc<Sequence>>),
+  /// Getter
+  Get(Rc<AccessPath>, Option<Rc<Sequence>>),
+  /// Setter
+  Set(Rc<AccessPath>, Rc<Sequence>),
   /// Pipe value
   PipeValue,
   /// Fragment
@@ -748,7 +748,7 @@ pub enum Rst {
   /// Boolean value
   Boolean(bool),
   /// Empty value
-  EmptyVal,
+  EmptyValue,
   /// Return
   Return(Option<Rc<Sequence>>),
   /// Continue
@@ -767,7 +767,7 @@ impl Rst {
       Rst::Block(..) =>                       "block",
       Rst::ListInit(_) =>                     "list",
       Rst::MapInit(_) =>                      "map",
-      Rst::Lambda(_) =>                      "closure",
+      Rst::Lambda(_) =>                       "lambda",
       Rst::FuncCall(_) =>                     "function call",
       Rst::FuncDef(_) =>                      "function definition",
       Rst::Fragment(_) =>                     "fragment",
@@ -775,13 +775,13 @@ impl Rst {
       Rst::Integer(_) =>                      "integer",
       Rst::Float(_) =>                        "float",
       Rst::Boolean(_) =>                      "boolean",
-      Rst::EmptyVal =>                        "empty",
+      Rst::EmptyValue =>                        "empty",
       Rst::Nop =>                             "no-op",
-      Rst::VarDef(..) =>                      "variable definition",
-      Rst::ConstDef(..) =>                    "constant definition",
-      Rst::VarDepth(..) =>                    "variable depth",
-      Rst::VarGet(..) =>                      "getter",
-      Rst::VarSet(..) =>                      "setter",
+      Rst::DefVar(..) =>                      "variable definition",
+      Rst::DefConst(..) =>                    "constant definition",
+      Rst::Depth(..) =>                    "variable depth",
+      Rst::Get(..) =>                      "getter",
+      Rst::Set(..) =>                      "setter",
       Rst::BlockValue(_) =>                   "block value",
       Rst::PipedCall(_) =>                    "piped call",
       Rst::PipeValue =>                       "pipe value",

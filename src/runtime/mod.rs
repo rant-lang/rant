@@ -772,7 +772,7 @@ impl<'rant> VM<'rant> {
           self.pre_push_block(&block, block.flag)?;
           return Ok(true)
         },
-        Rst::VarDef(vname, access_kind, val_expr) => {
+        Rst::DefVar(vname, access_kind, val_expr) => {
           if let Some(val_expr) = val_expr {
             // If a value is present, it needs to be evaluated first
             self.cur_frame_mut().push_intent_front(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind, is_const: false });
@@ -783,7 +783,7 @@ impl<'rant> VM<'rant> {
             self.def_var_value(vname.as_str(), *access_kind, RantValue::Empty, false)?;
           }
         },
-        Rst::ConstDef(vname, access_kind, val_expr) => {
+        Rst::DefConst(vname, access_kind, val_expr) => {
           if let Some(val_expr) = val_expr {
             // If a value is present, it needs to be evaluated first
             self.cur_frame_mut().push_intent_front(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind, is_const: true });
@@ -794,11 +794,11 @@ impl<'rant> VM<'rant> {
             self.def_var_value(vname.as_str(), *access_kind, RantValue::Empty, true)?;
           }
         },
-        Rst::VarGet(path, fallback) => {
+        Rst::Get(path, fallback) => {
           self.push_getter_intents(path, false, false, fallback.as_ref().map(Rc::clone));
           return Ok(true)
         },
-        Rst::VarDepth(vname, access_kind, fallback) => {
+        Rst::Depth(vname, access_kind, fallback) => {
           match (self.get_var_depth(vname, *access_kind), fallback) {
             (Ok(depth), _) => self.cur_frame_mut().write_value(RantValue::Int(depth as i64)),
             (Err(_), Some(fallback)) => {
@@ -809,7 +809,7 @@ impl<'rant> VM<'rant> {
             (Err(err), None) => return Err(err),
           }
         },
-        Rst::VarSet(path, val_expr) => {
+        Rst::Set(path, val_expr) => {
           // Get list of dynamic expressions in path
           let exprs = path.dynamic_exprs();
 
@@ -955,7 +955,7 @@ impl<'rant> VM<'rant> {
         Rst::Whitespace(ws) => self.cur_frame_mut().write_ws(ws),
         Rst::Integer(n) => self.cur_frame_mut().write_value(RantValue::Int(*n)),
         Rst::Float(n) => self.cur_frame_mut().write_value(RantValue::Float(*n)),
-        Rst::EmptyVal => self.cur_frame_mut().write_value(RantValue::Empty),
+        Rst::EmptyValue => self.cur_frame_mut().write_value(RantValue::Empty),
         Rst::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
         Rst::BlockValue(block) => self.cur_frame_mut().write_value(RantValue::Block(Rc::clone(block))),
         Rst::Nop => {},
