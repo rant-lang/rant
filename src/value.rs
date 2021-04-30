@@ -635,6 +635,7 @@ impl Display for SliceError {
 
 /// Represents Rant's `special` type, which stores internal runtime data.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum RantSpecial {
   /// Selector state
   Selector(SelectorRef),

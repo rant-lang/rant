@@ -210,13 +210,13 @@ impl OutputBuffer {
   #[inline]
   pub(crate) fn render_string(self, format: &mut OutputFormat) -> Option<InternalString> {
     Some(match self {
-      OutputBuffer::Fragment(s) => s,
-      OutputBuffer::Whitespace(s) => s,
-      OutputBuffer::Value(RantValue::Empty) => return None,
-      OutputBuffer::Value(RantValue::Int(n)) => format.num_format.format_integer(n),
-      OutputBuffer::Value(RantValue::Float(n)) => format.num_format.format_float(n),
-      OutputBuffer::Value(v) => InternalString::from(v.to_string()),
-      OutputBuffer::NumberFormatUpdate(fmt) => {
+      Self::Fragment(s) => s,
+      Self::Whitespace(s) => s,
+      Self::Value(RantValue::Empty) => return None,
+      Self::Value(RantValue::Int(n)) => format.num_format.format_integer(n),
+      Self::Value(RantValue::Float(n)) => format.num_format.format_float(n),
+      Self::Value(v) => InternalString::from(v.to_string()),
+      Self::NumberFormatUpdate(fmt) => {
         format.num_format = fmt;
         return None
       },
