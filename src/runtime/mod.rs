@@ -869,7 +869,7 @@ impl<'rant> VM<'rant> {
 
           return Ok(true)
         },
-        Rst::Closure(ClosureExpr { 
+        Rst::Lambda(LambdaExpr { 
           params, 
           body, 
           capture_vars: to_capture 

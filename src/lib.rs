@@ -1,6 +1,6 @@
 //! # Rant
 //!
-//! Rant is a language for procedural text generation.
+//! Rant is a high-level procedural templating language.
 //! It is designed to help you write more dynamic and expressive templates, dialogue, stories, names, test data, and much more.
 //!
 //! For language documentation, see the [Rant Reference](https://docs.rant-lang.org).

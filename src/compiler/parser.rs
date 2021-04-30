@@ -1179,7 +1179,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   fn parse_func_access(&mut self, flag: PrintFlag) -> ParseResult<Rst> {
     let start_span = self.reader.last_token_span();
     self.reader.skip_ws();
-    // Check if we're defining a function (with [$|% ...]) or creating a closure (with [? ...])
+    // Check if we're defining a function (with [$|% ...]) or creating a lambda (with [? ...])
     if let Some((func_access_type_token, func_access_type_span)) 
     = self.reader.take_where(|t| matches!(t, Some((RantToken::Dollar, ..)) | Some((RantToken::Percent, ..)) | Some((RantToken::Question, ..)))) {
       match func_access_type_token {
@@ -1224,17 +1224,17 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             is_const,
           }))
         },
-        // Closure
+        // Lambda
         RantToken::Question => {
-          // Closure params
+          // Lambda params
           let params = self.parse_func_params(&start_span)?;
           self.reader.skip_ws();
           // Read function body
           let (body, captures) = self.capture_pass(|self_| self_.parse_func_body(&params, true))?;
           
-          Ok(Rst::Closure(ClosureExpr {
+          Ok(Rst::Lambda(LambdaExpr {
             capture_vars: Rc::new(captures),
-            body: Rc::new(body.with_name_str("closure")),
+            body: Rc::new(body.with_name_str("lambda")),
             params: Rc::new(params.into_iter().map(|(p, _)| p).collect()),
           }))
         },

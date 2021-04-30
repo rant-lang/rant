@@ -656,14 +656,14 @@ pub struct FunctionDef {
   pub body: Rc<Sequence>,
 }
 
-/// Describes a Rant closure.
+/// Describes a Rant lambda.
 #[derive(Debug, Clone)]
-pub struct ClosureExpr {
-  /// The body of the closure. 
+pub struct LambdaExpr {
+  /// The body of the lambda. 
   pub body: Rc<Sequence>,
-  /// The parameters associated with the closure.
+  /// The parameters associated with the lambda.
   pub params: Rc<Vec<Parameter>>,
-  /// The variables to capture into the closure.
+  /// The variables to capture into the lambda.
   pub capture_vars: Rc<Vec<Identifier>>,
 }
 
@@ -717,8 +717,8 @@ pub enum Rst {
   ListInit(Rc<Vec<Rc<Sequence>>>),
   /// Map initializer
   MapInit(Rc<Vec<(MapKeyExpr, Rc<Sequence>)>>),
-  /// Closure expression
-  Closure(ClosureExpr),
+  /// Lambda expression
+  Lambda(LambdaExpr),
   /// Single function call
   FuncCall(FunctionCall),
   /// Piped function call
@@ -767,7 +767,7 @@ impl Rst {
       Rst::Block(..) =>                       "block",
       Rst::ListInit(_) =>                     "list",
       Rst::MapInit(_) =>                      "map",
-      Rst::Closure(_) =>                      "closure",
+      Rst::Lambda(_) =>                      "closure",
       Rst::FuncCall(_) =>                     "function call",
       Rst::FuncDef(_) =>                      "function definition",
       Rst::Fragment(_) =>                     "fragment",
