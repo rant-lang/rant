@@ -3,12 +3,17 @@
 ## 4.0.0-alpha.23 (unreleased)
 
 ### New
+* Added stdlib functions:
+  * `[print]`
+  * `[chunks]`
 
 ### Changes
 * Added old behavior back to `[cat]`; previous `[cat]` behavior migrated to `[print]` function
 
 ### Fixes
-* Fix bench stats in CLI printing to stdout instead of stderr
+* Fixed bench stats in CLI printing to stdout instead of stderr
+* Fixed anonymous calls always expecting a pipeval even when not in a piped context
+* Fixed pipeval not getting captured in closures
 
 ## 4.0.0-alpha.22
 

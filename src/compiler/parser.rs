@@ -564,6 +564,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           if let Some(pipeval) = self.var_stack.get_mut(PIPE_VALUE_NAME) {
             emit!(Rst::PipeValue);
             pipeval.add_read(false);
+            // Handle capturing
+            if let Some((capture_frame_height, captures)) = self.capture_stack.last_mut() {
+              // Variable must not exist in the current scope of the active function
+              if self.var_stack.height_of(PIPE_VALUE_NAME).unwrap_or_default() < *capture_frame_height {
+                captures.insert(PIPE_VALUE_NAME.into());
+              }
+            }
           } else {
             self.report_error(Problem::NothingToPipe, &span);
           }
@@ -1377,26 +1384,30 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // What kind of function call is this?
         if is_anonymous {
           // Anonymous function call
-          
-          self.var_stack.push_layer();
-          // Track pipe value inside anonymous function access scope
-          let pipeval_stats = VarStats {
-            writes: 1,
-            reads: 0,
-            def_span: Default::default(), // we'll never need this anyway
-            is_const: true,
-            has_fallible_read: false,
-            role: VarRole::PipeValue,
-          };
-          self.var_stack.define(Identifier::from(PIPE_VALUE_NAME), pipeval_stats);
           let ParsedSequence {
             sequence: func_expr,
             end_type: func_expr_end,
             ..
-          } = self.parse_sequence_inner(SequenceParseMode::AnonFunctionExpr)?;
-          is_pipeval_used |= self.var_stack.get(PIPE_VALUE_NAME).unwrap().reads > 0;
-          self.analyze_top_vars();
-          self.var_stack.pop_layer();
+          } = if is_piped {
+            self.var_stack.push_layer();
+            // Track pipe value inside anonymous function access scope
+            let pipeval_stats = VarStats {
+              writes: 1,
+              reads: 0,
+              def_span: Default::default(), // we'll never need this anyway
+              is_const: true,
+              has_fallible_read: false,
+              role: VarRole::PipeValue,
+            };
+            self.var_stack.define(Identifier::from(PIPE_VALUE_NAME), pipeval_stats);
+            let seq = self.parse_sequence_inner(SequenceParseMode::AnonFunctionExpr)?;
+            is_pipeval_used |= self.var_stack.get(PIPE_VALUE_NAME).unwrap().reads > 0;
+            self.analyze_top_vars();
+            self.var_stack.pop_layer();
+            seq
+          } else {
+            self.parse_sequence(SequenceParseMode::AnonFunctionExpr)?
+          };
           
           // Parse arguments if available
           match func_expr_end {

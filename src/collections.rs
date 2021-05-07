@@ -233,9 +233,9 @@ impl Default for RantRange {
 impl Display for RantRange {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let comparison = if self.start < self.end {
-      ">"
-    } else {
       "<"
+    } else {
+      ">"
     };
     let op = if self.start < self.end { '+' } else { '-' };
     write!(f, "[range({} {} ", self.start, op)?;

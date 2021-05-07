@@ -271,7 +271,7 @@ impl Problem {
       Self::InvalidHintOn(elname) => rmsg!("hint is not valid on {}", elname),
       Self::InvalidSink => rmsg!("sink is not valid"),
       Self::InvalidHint => rmsg!("hint is not valid"),
-      Self::InvalidIdentifier(idname) => rmsg!("'{}' is not a valid identifier; identifiers may only use alphanumerics, underscores, and hyphens but must also contain at least one non-digit", idname),
+      Self::InvalidIdentifier(idname) => rmsg!("'{}' is not a valid identifier; identifiers may only use alphanumerics, underscores, and hyphens (but cannot be only digits)", idname),
       Self::UnclosedFunctionSignature => rmsg!("unclosed function signature; expected ']' followed by body block"),
       Self::InvalidParamOrder(first, second) => rmsg!("{} is not allowed after {}", second, first),
       Self::MissingFunctionBody => rmsg!("missing body in function definition"),

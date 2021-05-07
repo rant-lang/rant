@@ -276,6 +276,12 @@ impl IntoRant for &'static str {
   }
 }
 
+impl IntoRant for Vec<RantValue> {
+  fn into_rant(self) -> Result<RantValue, ValueError> {
+    Ok(RantValue::List(Rc::new(RefCell::new(RantList::from(self)))))
+  }
+}
+
 impl<T: IntoRant> IntoRant for Vec<T> {
   fn into_rant(mut self) -> Result<RantValue, ValueError> {
     let list = self.drain(..).map(|v| v.into_rant()).collect::<Result<RantList, ValueError>>()?;
