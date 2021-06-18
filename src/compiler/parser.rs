@@ -7,6 +7,7 @@ use fnv::FnvBuildHasher;
 use line_col::LineColLookup;
 use quickscope::ScopeMap;
 use std::{collections::{HashMap, HashSet}, ops::Range, rc::Rc};
+use RantToken::*;
 
 type ParseResult<T> = Result<T, ()>;
 
@@ -367,7 +368,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }
         };
         (queue next) => {{
-          if let Some((RantToken::Whitespace, ..)) = self.reader.take_where(|tt| matches!(tt, Some((RantToken::Whitespace, ..)))) {
+          if let Some((Whitespace, ..)) = self.reader.take_where(|tt| matches!(tt, Some((Whitespace, ..)))) {
             pending_whitespace = Some(self.reader.last_token_string());
           }
         }};
@@ -390,9 +391,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       /// Eats as many fragments / escape sequences as possible and combines their string representations into the input `String`.
       macro_rules! consume_fragments {
         ($s:ident) => {
-          while let Some((token, _)) = self.reader.take_where(|t| matches!(t, Some((RantToken::Escape(..), ..)) | Some((RantToken::Fragment, ..)))) {
+          while let Some((token, _)) = self.reader.take_where(|t| matches!(t, Some((Escape(..) | Fragment, ..)))) {
             match token {
-              RantToken::Escape(ch) => $s.push(ch),
+              Escape(ch) => $s.push(ch),
               _ => $s.push_str(&self.reader.last_token_string()),
             }
           }
@@ -403,7 +404,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       match token {
         
         // Hint
-        RantToken::Hint => no_flags!({
+        Hint => no_flags!({
           whitespace!(allow);
           is_seq_printing = true;
           next_print_flag = PrintFlag::Hint;
@@ -412,7 +413,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Sink
-        RantToken::Sink => no_flags!({
+        Sink => no_flags!({
           // Ignore pending whitespace
           whitespace!(ignore prev);
           next_print_flag = PrintFlag::Sink;
@@ -420,7 +421,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           continue
         }),
 
-        RantToken::Keyword(kw) => {
+        Keyword(kw) => {
           let kwstr = kw.as_str();
           match kwstr {
             // Boolean constants
@@ -477,7 +478,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         },
         
         // Defer operator
-        RantToken::Defer => {
+        Defer => {
           self.reader.skip_ws();
           let block = self.parse_block(true, next_print_flag)?;
           
@@ -506,7 +507,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         },
         
         // Block start
-        RantToken::LeftBrace => {
+        LeftBrace => {
           // Read in the entire block
           let block = self.parse_block(false, next_print_flag)?;
 
@@ -535,7 +536,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         },
 
         // Pipe operator
-        RantToken::PipeOp => no_flags!({
+        PipeOp => no_flags!({
           // Ignore pending whitespace
           whitespace!(ignore prev);
           match mode {
@@ -560,7 +561,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
 
         // Pipe value
-        RantToken::PipeValue => no_flags!({
+        PipeValue => no_flags!({
           if let Some(pipeval) = self.var_stack.get_mut(PIPE_VALUE_NAME) {
             emit!(Rst::PipeValue);
             pipeval.add_read(false);
@@ -577,7 +578,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Block element delimiter (when in block parsing mode)
-        RantToken::VertBar => no_flags!({
+        VertBar => no_flags!({
           // Ignore pending whitespace
           whitespace!(ignore prev);
           match mode {
@@ -600,7 +601,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Block/func body/dynamic key end
-        RantToken::RightBrace => no_flags!({
+        RightBrace => no_flags!({
           // Ignore pending whitespace
           whitespace!(ignore prev);
           match mode {
@@ -633,9 +634,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Map initializer
-        RantToken::At => no_flags!(on {
+        At => no_flags!(on {
           match self.reader.next_solid() {
-            Some((RantToken::LeftParen, _)) => {
+            Some((LeftParen, _)) => {
               self.parse_collection_initializer(CollectionInitKind::Map, &span)?
             },
             _ => {
@@ -646,12 +647,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // List initializer
-        RantToken::LeftParen => no_flags!(on {
+        LeftParen => no_flags!(on {
           self.parse_collection_initializer(CollectionInitKind::List, &span)?
         }),
         
         // Collection init termination
-        RantToken::RightParen => no_flags!({
+        RightParen => no_flags!({
           match mode {
             SequenceParseMode::CollectionInit => {
               return Ok(ParsedSequence {
@@ -666,7 +667,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Function creation or call
-        RantToken::LeftBracket => {
+        LeftBracket => {
           let func_access = self.parse_func_access(next_print_flag)?;
           
           // Handle hint/sink behavior
@@ -693,7 +694,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         },
         
         // Can be terminator for function args and anonymous function expressions
-        RantToken::RightBracket => no_flags!({
+        RightBracket => no_flags!({
           match mode {
             SequenceParseMode::AnonFunctionExpr => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("anonymous function expression"),
@@ -718,7 +719,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Variable access start
-        RantToken::LeftAngle => no_flags!({
+        LeftAngle => no_flags!({
           let accessors = self.parse_accessor()?;
           for accessor in accessors {
             match accessor {
@@ -736,7 +737,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Variable access end
-        RantToken::RightAngle => no_flags!({
+        RightAngle => no_flags!({
           match mode {
             SequenceParseMode::VariableAssignment => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("setter value"),
@@ -755,7 +756,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // These symbols are only used in special contexts and can be safely printed
-        RantToken::Bang | RantToken::Question | RantToken::Slash | RantToken::Plus | RantToken::Dollar | RantToken::Equals | RantToken::Percent
+        Bang | Question | Slash | Plus | Dollar | Equals | Percent
         => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
@@ -764,7 +765,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Fragment
-        RantToken::Fragment => no_flags!(on {
+        Fragment => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
           let mut frag = self.reader.last_token_string();
@@ -773,7 +774,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Whitespace (only if sequence isn't empty)
-        RantToken::Whitespace => no_flags!({
+        Whitespace => no_flags!({
           // Don't set is_printing here; whitespace tokens always appear with other printing tokens
           if is_seq_printing {
             let ws = self.reader.last_token_string();
@@ -782,7 +783,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Escape sequences
-        RantToken::Escape(ch) => no_flags!(on {
+        Escape(ch) => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
           let mut frag = InternalString::new();
@@ -792,33 +793,33 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Integers
-        RantToken::Integer(n) => no_flags!(on {
+        Integer(n) => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
           Rst::Integer(n)
         }),
         
         // Floats
-        RantToken::Float(n) => no_flags!(on {
+        Float(n) => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
           Rst::Float(n)
         }),
         
         // Empty
-        RantToken::EmptyValue => no_flags!(on {
+        EmptyValue => no_flags!(on {
           Rst::EmptyValue
         }),
         
         // Verbatim string literals
-        RantToken::StringLiteral(s) => no_flags!(on {
+        StringLiteral(s) => no_flags!(on {
           whitespace!(allow);
           is_seq_printing = true;
           Rst::Fragment(s)
         }),
         
         // Colon can be either fragment or argument separator.
-        RantToken::Colon => no_flags!({
+        Colon => no_flags!({
           match mode {
             SequenceParseMode::AnonFunctionExpr => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("anonymous function expression"),
@@ -831,7 +832,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Semicolon can be a fragment, collection element separator, or argument separator.
-        RantToken::Semi => no_flags!({
+        Semicolon => no_flags!({
           match mode {
             SequenceParseMode::FunctionArg => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("argument"),
@@ -869,7 +870,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Handle unclosed string literals as hard errors
-        RantToken::UnterminatedStringLiteral => {
+        UnterminatedStringLiteral => {
           self.report_error(Problem::UnclosedStringLiteral, &span); 
           return Err(())
         },
@@ -911,7 +912,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         self.reader.skip_ws();
         
         // Exit early on empty list
-        if self.reader.eat_where(|token| matches!(token, Some((RantToken::RightParen, ..)))) {
+        if self.reader.eat_where(|token| matches!(token, Some((RightParen, ..)))) {
           return Ok(Rst::ListInit(Rc::new(vec![])))
         }
         
@@ -953,11 +954,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         loop {
           let key_expr = match self.reader.next_solid() {
             // Allow blocks as dynamic keys
-            Some((RantToken::LeftBrace, _)) => {
+            Some((LeftBrace, _)) => {
               MapKeyExpr::Dynamic(Rc::new(self.parse_dynamic_expr(false)?))
             },
             // Allow fragments as keys if they are valid identifiers
-            Some((RantToken::Fragment, span)) => {
+            Some((Fragment, span)) => {
               let key = self.reader.last_token_string();
               if !is_valid_ident(key.as_str()) {
                 self.report_error(Problem::InvalidIdentifier(key.to_string()), &span);
@@ -965,11 +966,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               MapKeyExpr::Static(key)
             },
             // Allow string literals as static keys
-            Some((RantToken::StringLiteral(s), _)) => {
+            Some((StringLiteral(s), _)) => {
               MapKeyExpr::Static(s)
             },
             // End of map
-            Some((RantToken::RightParen, _)) => break,
+            Some((RightParen, _)) => break,
             // Soft error on anything weird
             Some(_) => {
               self.unexpected_last_token_error();
@@ -983,7 +984,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           };
           
           self.reader.skip_ws();
-          if !self.reader.eat_where(|tok| matches!(tok, Some((RantToken::Equals, ..)))) {
+          if !self.reader.eat_where(|tok| matches!(tok, Some((Equals, ..)))) {
             self.report_error(Problem::ExpectedToken("=".to_owned()), &self.reader.last_token_span());
             return Err(())
           }
@@ -1029,12 +1030,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     // At this point there should either be ':' or ']'
     match self.reader.next_solid() {
       // ':' means there are params to be read
-      Some((RantToken::Colon, _)) => {
+      Some((Colon, _)) => {
         // Read the params
         'read_params: loop {
           match self.reader.next_solid() {
             // Regular parameter
-            Some((RantToken::Fragment, span)) => {              
+            Some((Fragment, span)) => {              
               // We only care about verifying/recording the param if it's in a valid position
               let param_name = Identifier::new(self.reader.last_token_string());
               // Make sure it's a valid identifier
@@ -1049,19 +1050,16 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               
               // Get varity of parameter
               self.reader.skip_ws();
-              let (varity, full_param_span) = if let Some((varity_token, varity_span)) = 
-              self.reader.take_where(|t| matches!(t, 
-                Some((RantToken::Question, _)) |
-                Some((RantToken::Star, _)) | 
-                Some((RantToken::Plus, _)))) 
+              let (varity, full_param_span) = 
+              if let Some((varity_token, varity_span)) = self.reader.take_where(|t| matches!(t, Some((Question | Star | Plus, _)))) 
               {
                 (match varity_token {
                   // Optional parameter
-                  RantToken::Question => Varity::Optional,
+                  Question => Varity::Optional,
                   // Optional variadic parameter
-                  RantToken::Star => Varity::VariadicStar,
+                  Star => Varity::VariadicStar,
                   // Required variadic parameter
-                  RantToken::Plus => Varity::VariadicPlus,
+                  Plus => Varity::VariadicPlus,
                   _ => unreachable!()
                 }, super_range(&span, &varity_span))
               } else {
@@ -1131,11 +1129,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               // Check if there are more params or if the signature is done
               match self.reader.next_solid() {
                 // ';' means there are more params
-                Some((RantToken::Semi, ..)) => {
+                Some((Semicolon, ..)) => {
                   continue 'read_params
                 },
                 // ']' means end of signature
-                Some((RantToken::RightBracket, ..)) => {
+                Some((RightBracket, ..)) => {
                   break 'read_params
                 },
                 // Emit a hard error on anything else
@@ -1150,7 +1148,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               }
             },
             // Error on early close
-            Some((RantToken::RightBracket, span)) => {
+            Some((RightBracket, span)) => {
               self.report_error(Problem::MissingIdentifier, &span);
               break 'read_params
             },
@@ -1166,7 +1164,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }
       },
       // ']' means there are no params-- fall through to the next step
-      Some((RantToken::RightBracket, _)) => {},
+      Some((RightBracket, _)) => {},
       // Something weird is here, emit a hard error
       Some((.., span)) => {
         self.report_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &span);
@@ -1188,11 +1186,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     self.reader.skip_ws();
     // Check if we're defining a function (with [$|% ...]) or creating a lambda (with [? ...])
     if let Some((func_access_type_token, func_access_type_span)) 
-    = self.reader.take_where(|t| matches!(t, Some((RantToken::Dollar, ..)) | Some((RantToken::Percent, ..)) | Some((RantToken::Question, ..)))) {
+    = self.reader.take_where(|t| matches!(t, Some((Dollar | Percent | Question, ..)))) {
       match func_access_type_token {
         // Function definition
-        tt @ RantToken::Dollar | tt @ RantToken::Percent => {
-          let is_const = matches!(tt, RantToken::Percent);
+        tt @ Dollar | tt @ Percent => {
+          let is_const = matches!(tt, Percent);
 
           // Name of variable function will be stored in
           let (func_path, _func_path_span) = self.parse_access_path(false)?;
@@ -1232,7 +1230,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }))
         },
         // Lambda
-        RantToken::Question => {
+        Question => {
           // Lambda params
           let params = self.parse_func_params(&start_span)?;
           self.reader.skip_ws();
@@ -1269,7 +1267,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Next temporal index to be consumed
         let mut cur_temporal_index: usize = 0;
         // Anonymous call flag
-        let is_anonymous = self.reader.eat_where(|t| matches!(t, Some((RantToken::Bang, ..))));
+        let is_anonymous = self.reader.eat_where(|t| matches!(t, Some((Bang, ..))));
         // Temporal call flag
         let mut is_temporal = false;
         // Do the user-supplied args use the pipe value?
@@ -1284,21 +1282,21 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               let mut spread_mode = ArgumentSpreadMode::NoSpread;
 
               // Check for spread operators
-              match self.reader.take_where(|t| matches!(t, Some((RantToken::Star, ..)) | Some((RantToken::Temporal, ..)) | Some((RantToken::TemporalLabeled(_), ..)))) {
+              match self.reader.take_where(|t| matches!(t, Some((Star | Temporal | TemporalLabeled(_), ..)))) {
                 // Parametric spread
-                Some((RantToken::Star, ..)) => {
+                Some((Star, ..)) => {
                   self.reader.skip_ws();
                   spread_mode = ArgumentSpreadMode::Parametric;
                 },
                 // Unlabeled temporal spread
-                Some((RantToken::Temporal, ..)) => {
+                Some((Temporal, ..)) => {
                   is_temporal = true;
                   self.reader.skip_ws();
                   spread_mode = ArgumentSpreadMode::Temporal { label: cur_temporal_index };
                   cur_temporal_index += 1;
                 },
                 // Labeled temporal spread
-                Some((RantToken::TemporalLabeled(label_str), ..)) => {
+                Some((TemporalLabeled(label_str), ..)) => {
                   is_temporal = true;
                   self.reader.skip_ws();
                   let label_index = if let Some(label_index) = temporal_index_labels.get(&label_str) {
@@ -1441,13 +1439,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           if let Some((token, _)) = self.reader.next_solid() {
             match token {
               // No args, fall through
-              RantToken::RightBracket => {
+              RightBracket => {
                 is_finished = true;
               },
               // Parse arguments
-              RantToken::Colon => parse_args!(),
+              Colon => parse_args!(),
               // Pipe without args
-              RantToken::PipeOp => {
+              PipeOp => {
                 is_piped = true;
               }
               _ => {
@@ -1496,18 +1494,18 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   #[inline]
   fn parse_access_path_kind(&mut self) -> AccessPathKind {    
     if let Some((token, _span)) = self.reader.take_where(
-      |t| matches!(t, Some((RantToken::Slash, _)) | Some((RantToken::Caret, _))
-    )) {
+      |t| matches!(t, Some((Slash | Caret, _)))
+    ) {
       match token {
         // Accessor is explicit global
-        RantToken::Slash => {
+        Slash => {
           AccessPathKind::ExplicitGlobal
         },
         // Accessor is for parent scope (descope operator)
-        RantToken::Caret => {
+        Caret => {
           let mut descope_count = 1;
           loop {
-            if !self.reader.eat_where(|t| matches!(t, Some((RantToken::Caret, _)))) {
+            if !self.reader.eat_where(|t| matches!(t, Some((Caret, _)))) {
               break AccessPathKind::Descope(descope_count)
             }
             descope_count += 1;
@@ -1528,7 +1526,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     let start_span = self.reader.last_token_span();
     let mut access_kind = AccessPathKind::Local;
 
-    if allow_anonymous && self.reader.eat_where(|t| matches!(t, Some((RantToken::Bang, ..)))) {
+    if allow_anonymous && self.reader.eat_where(|t| matches!(t, Some((Bang, ..)))) {
       self.reader.skip_ws();
       let ParsedSequence {
         sequence: anon_expr,
@@ -1554,7 +1552,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       // Parse the first part of the path
       match first_part {
         // The first part of the path may only be a variable name (for now)
-        Some((RantToken::Fragment, span)) => {
+        Some((Fragment, span)) => {
           let varname = Identifier::new(self.reader.last_token_string());
           if is_valid_ident(varname.as_str()) {
             idparts.push(AccessPathComponent::Name(varname));
@@ -1563,20 +1561,20 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }
         },
         // An expression can also be used to provide the variable
-        Some((RantToken::LeftBrace, _)) => {
+        Some((LeftBrace, _)) => {
           let dynamic_key_expr = self.parse_dynamic_expr(false)?;
           idparts.push(AccessPathComponent::DynamicKey(Rc::new(dynamic_key_expr)));
         },
         // TODO: Check for dynamic slices here too!
         // First path part can't be a slice
-        Some((RantToken::Colon, span)) => {
-          self.reader.take_where(|t| matches!(t, Some((RantToken::Integer(_), ..))));
+        Some((Colon, span)) => {
+          self.reader.take_where(|t| matches!(t, Some((Integer(_), ..))));
           self.report_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
         }
         // Prevent other slice forms
-        Some((RantToken::Integer(_), span)) => {
+        Some((Integer(_), span)) => {
           self.reader.skip_ws();
-          if self.reader.eat_where(|t| matches!(t, Some((RantToken::Colon, ..)))) {
+          if self.reader.eat_where(|t| matches!(t, Some((Colon, ..)))) {
             self.report_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
           } else {
             self.report_error(Problem::AccessPathStartsWithIndex, &span);
@@ -1597,13 +1595,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       // We expect a '/' between each component, so check for that first.
       // If it's anything else, terminate the path and return it.
       self.reader.skip_ws();
-      if self.reader.eat_where(|t| matches!(t, Some((RantToken::Slash, ..)))) {
+      if self.reader.eat_where(|t| matches!(t, Some((Slash, ..)))) {
         // From here we expect to see either another key (fragment) or index (integer).
         // If it's anything else, return a syntax error.
         let component = self.reader.next_solid();
         match component {
           // Key
-          Some((RantToken::Fragment, span)) => {
+          Some((Fragment, span)) => {
             let varname = Identifier::new(self.reader.last_token_string());
             if is_valid_ident(varname.as_str()) {
               idparts.push(AccessPathComponent::Name(varname));
@@ -1612,29 +1610,25 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           },
           // Index or slice with static from-bound
-          Some((RantToken::Integer(i), _)) => {
+          Some((Integer(i), _)) => {
             self.reader.skip_ws();
             // Look for a colon to see if it's a slice
-            if self.reader.eat_where(|t| matches!(t, Some((RantToken::Colon, ..)))) {
+            if self.reader.eat_where(|t| matches!(t, Some((Colon, ..)))) {
               self.reader.skip_ws();
               match self.reader.peek() {
                 // Between-slice with static from- + to-bounds
-                Some((RantToken::Integer(j), ..)) => {
+                Some((Integer(j), ..)) => {
                   let j = *j;
                   self.reader.skip_one();
                   idparts.push(AccessPathComponent::Slice(SliceExpr::Between(SliceIndex::Static(i), SliceIndex::Static(j))));
                 },
                 // Between-slice with static from-bound + dynamic to-bound
-                Some((RantToken::LeftBrace, ..)) => {
+                Some((LeftBrace, ..)) => {
                   let to_expr = Rc::new(self.parse_dynamic_expr(true)?);
                   idparts.push(AccessPathComponent::Slice(SliceExpr::Between(SliceIndex::Static(i), SliceIndex::Dynamic(to_expr))));
                 },
                 // From-slice with static from-bound
-                Some((RantToken::Slash, ..)) | 
-                Some((RantToken::RightAngle, ..)) | 
-                Some((RantToken::Equals, ..)) | 
-                Some((RantToken::Question, ..)) |
-                Some((RantToken::Semi, ..)) => {
+                Some((Slash | RightAngle | Equals | Question | Semicolon, ..)) => {
                   idparts.push(AccessPathComponent::Slice(SliceExpr::From(SliceIndex::Static(i))));
                 },
                 // Found something weird as the to-bound, emit an error
@@ -1654,26 +1648,22 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           },
           // Full- or to-slice
-          Some((RantToken::Colon, _)) => {
+          Some((Colon, _)) => {
             self.reader.skip_ws();
             match self.reader.peek() {
               // To-slice with static bound
-              Some((RantToken::Integer(to), ..)) => {
+              Some((Integer(to), ..)) => {
                 let to = *to;
                 self.reader.skip_one();
                 idparts.push(AccessPathComponent::Slice(SliceExpr::To(SliceIndex::Static(to))));
               },
               // To-slice with dynamic bound
-              Some((RantToken::LeftBrace, ..)) => {
+              Some((LeftBrace, ..)) => {
                 let to_expr = Rc::new(self.parse_dynamic_expr(true)?);
                 idparts.push(AccessPathComponent::Slice(SliceExpr::To(SliceIndex::Dynamic(to_expr))));
               },
               // Full-slice
-              Some((RantToken::Slash, ..)) | 
-              Some((RantToken::RightAngle, ..)) | 
-              Some((RantToken::Equals, ..)) | 
-              Some((RantToken::Question, ..)) |
-              Some((RantToken::Semi, ..)) => {
+              Some((Slash | RightAngle | Equals | Question | Semicolon, ..)) => {
                 idparts.push(AccessPathComponent::Slice(SliceExpr::Full));
               },
               // Found something weird as the to-bound, emit an error
@@ -1689,30 +1679,26 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           },
           // Dynamic key or slice with dynamic from-bound
-          Some((RantToken::LeftBrace, _)) => {
+          Some((LeftBrace, _)) => {
             let expr = Rc::new(self.parse_dynamic_expr(false)?);
             self.reader.skip_ws();
             // Look for a colon to see if it's a slice
-            if self.reader.eat_where(|t| matches!(t, Some((RantToken::Colon, ..)))) {
+            if self.reader.eat_where(|t| matches!(t, Some((Colon, ..)))) {
               self.reader.skip_ws();
               match self.reader.peek() {
                 // Between-slice with a dynamic from-bound + static to-bound
-                Some((RantToken::Integer(to), ..)) => {
+                Some((Integer(to), ..)) => {
                   let to = *to;
                   self.reader.skip_one();
                   idparts.push(AccessPathComponent::Slice(SliceExpr::Between(SliceIndex::Dynamic(expr), SliceIndex::Static(to))));
                 },
                 // Between-slice with dynamic from- + to-bounds
-                Some((RantToken::LeftBrace, ..)) => {
+                Some((LeftBrace, ..)) => {
                   let to_expr = Rc::new(self.parse_dynamic_expr(true)?);
                   idparts.push(AccessPathComponent::Slice(SliceExpr::Between(SliceIndex::Dynamic(expr), SliceIndex::Dynamic(to_expr))));
                 },
                 // From-slice with dynamic bound
-                Some((RantToken::Slash, ..)) |
-                Some((RantToken::RightAngle, ..)) | 
-                Some((RantToken::Equals, ..)) | 
-                Some((RantToken::Question, ..)) |
-                Some((RantToken::Semi, ..)) => {
+                Some((Slash | RightAngle | Equals | Question | Semicolon, ..)) => {
                   idparts.push(AccessPathComponent::Slice(SliceExpr::From(SliceIndex::Dynamic(expr))));
                 },
                 // Found something weird as the to-bound, emit an error
@@ -1748,7 +1734,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     
   /// Parses a dynamic expression (a linear block).
   fn parse_dynamic_expr(&mut self, expect_opening_brace: bool) -> ParseResult<Sequence> {
-    if expect_opening_brace && !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
+    if expect_opening_brace && !self.reader.eat_where(|t| matches!(t, Some((LeftBrace, _)))) {
       self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
       return Err(())
     }
@@ -1776,9 +1762,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
     let is_block_body = if allow_inline {
       // Determine if the body is a block and eat the opening brace if available
-      self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _))))
+      self.reader.eat_where(|t| matches!(t, Some((LeftBrace, _))))
     } else {
-      if !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
+      if !self.reader.eat_where(|t| matches!(t, Some((LeftBrace, _)))) {
         self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
         return Err(())
       }
@@ -1853,7 +1839,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     
   /// Parses a block.
   fn parse_block(&mut self, expect_opening_brace: bool, flag: PrintFlag) -> ParseResult<Block> {
-    if expect_opening_brace && !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
+    if expect_opening_brace && !self.reader.eat_where(|t| matches!(t, Some((LeftBrace, _)))) {
       self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
       return Err(())
     }
@@ -1922,7 +1908,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   fn parse_ident(&mut self) -> ParseResult<Identifier> {
     if let Some((token, span)) = self.reader.next_solid() {
       match token {
-        RantToken::Fragment => {
+        Fragment => {
           let idstr = self.reader.last_token_string();
           if !is_valid_ident(idstr.as_str()) {
             self.report_error(Problem::InvalidIdentifier(idstr.to_string()), &span);
@@ -2086,17 +2072,17 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       self.reader.skip_ws();
 
       // Check if the accessor ends here as long as there's at least one component
-      if !accessors.is_empty() && self.reader.eat_where(|t| matches!(t, Some((RantToken::RightAngle, ..)))) {
+      if !accessors.is_empty() && self.reader.eat_where(|t| matches!(t, Some((RightAngle, ..)))) {
         break
       }
       
       let (is_def, is_const_def) = if let Some((def_token, ..)) 
-      = self.reader.take_where(|t| matches!(t, Some((RantToken::Dollar, ..)) | Some((RantToken::Percent, ..)))) {
+      = self.reader.take_where(|t| matches!(t, Some((Dollar | Percent, ..)))) {
         match def_token {
           // Variable declaration
-          RantToken::Dollar => (true, false),
+          Dollar => (true, false),
           // Constant declaration
-          RantToken::Percent => (true, true),
+          Percent => (true, true),
           _ => unreachable!()
         }
       } else {
@@ -2120,7 +2106,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         if let Some((token, _token_span)) = self.reader.next_solid() {
           match token {
             // Empty definition
-            RantToken::RightAngle => {              
+            RightAngle => {              
               if is_const_def {
                 self.track_variable(&var_name, &access_kind, true, VarRole::Normal, &def_span);
                 add_accessor!(Rst::DefConst(var_name, access_kind, None));
@@ -2131,7 +2117,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               break 'read
             },
             // Accessor delimiter
-            RantToken::Semi => {
+            Semicolon => {
               if is_const_def {
                 self.track_variable(&var_name, &access_kind, true, VarRole::Normal, &def_span);
                 add_accessor!(Rst::DefConst(var_name, access_kind, None));
@@ -2142,7 +2128,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               continue 'read;
             },
             // Definition and assignment
-            RantToken::Equals => {
+            Equals => {
               self.reader.skip_ws();
               let ParsedSequence { 
                 sequence: setter_expr, 
@@ -2191,7 +2177,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         self.reader.skip_ws();
 
         // Check for depth operator
-        if let Some((_, depth_op_range)) = self.reader.take_where(|t| matches!(t, Some((RantToken::And, _)))) {
+        if let Some((_, depth_op_range)) = self.reader.take_where(|t| matches!(t, Some((And, _)))) {
           if var_path.is_variable() && var_path.var_name().is_some() {
             is_depth_op = true;
           } else if var_path.len() == 1 && matches!(var_path.first(), Some(AccessPathComponent::DynamicKey(..))) {
@@ -2204,7 +2190,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         if let Some((token, cur_token_span)) = self.reader.next_solid() {
           match token {
             // If we hit a '>', it's a getter
-            RantToken::RightAngle => {
+            RightAngle => {
               self.track_variable_access(&var_path, false, false, &var_path_span);
               add_accessor!(if is_depth_op {
                 Rst::Depth(var_path.var_name().unwrap(), var_path.kind(), None)
@@ -2214,7 +2200,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               break 'read;
             },
             // If we hit a ';', it's a getter with another accessor chained after it
-            RantToken::Semi => {
+            Semicolon => {
               self.track_variable_access(&var_path, false, false, &var_path_span);
               add_accessor!(if is_depth_op {
                 Rst::Depth(var_path.var_name().unwrap(), var_path.kind(), None)
@@ -2224,7 +2210,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               continue 'read;
             },
             // If we hit a `?`, it's a getter with a fallback
-            RantToken::Question => {
+            Question => {
               self.reader.skip_ws();
               let ParsedSequence {
                 sequence: fallback_expr,
@@ -2252,7 +2238,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               }
             },
             // If we hit a '=' here, it's a setter
-            RantToken::Equals => {
+            Equals => {
               self.reader.skip_ws();
               let ParsedSequence {
                 sequence: setter_rhs_expr,

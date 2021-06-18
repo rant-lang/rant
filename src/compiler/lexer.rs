@@ -106,7 +106,7 @@ pub enum RantToken {
   
   /// `;`
   #[token(";")]
-  Semi,
+  Semicolon,
   
   /// `@`
   #[token("@", priority = 1)]

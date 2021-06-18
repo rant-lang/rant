@@ -132,7 +132,7 @@ The changelog is updated constantly throughout the development process, providin
 
 ## MSRV
 
-The minimum supported Rust version is `1.50.0`.
+The minimum supported Rust version is `1.53.0`.
 
 ## License
 
