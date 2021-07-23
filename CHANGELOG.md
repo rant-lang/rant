@@ -6,6 +6,7 @@
 * Added stdlib functions:
   * `[print]`
   * `[chunks]`
+  * `[bool]`
 
 ### Changes
 * Added old behavior back to `[cat]`; previous `[cat]` behavior migrated to `[print]` function
