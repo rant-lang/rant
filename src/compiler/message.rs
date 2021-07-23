@@ -67,11 +67,7 @@ pub struct CompilerMessage {
 
 impl CompilerMessage {
   pub(crate) fn new(info: Problem, severity: Severity, pos: Option<Position>) -> Self {
-    Self {
-      info,
-      severity,
-      pos
-    }
+    Self { pos, severity, info }
   }
 
   /// Gets the position in the source where the message was triggered.

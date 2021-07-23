@@ -41,7 +41,7 @@ vm-trace = []
 
 [dependencies]
 # Library
-cast = "0.2.3"                    # Automates a lot of native <-> Rant value conversions  
+cast = "0.2.5"                    # Automates a lot of native <-> Rant value conversions  
 cervine = "0.0.6"                 # Simplifies Rant's by-ref variable passing code.
 fnv = "1.0.7"                     # Hashing algorithm used by Rant's map type and other internals.
 line-col = "0.2.1"                # Calculates locations for compiler messages.
@@ -59,7 +59,7 @@ clap = { version = "2.33.3", optional = true }
 codemap = { version = "0.1.3", optional = true }
 codemap-diagnostic = { version = "0.1.1", optional = true }
 colored = { version = "2.0.0", optional = true }
-ctrlc = { version = "3.1.7", optional = true }
+ctrlc = { version = "3.1.9", optional = true }
 embedded-triple = { version = "0.1.0", optional = true }
 exitcode = { version = "1.1.2", optional = true }
 

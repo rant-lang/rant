@@ -579,8 +579,8 @@ impl TemporalSpreadState {
         arg_labels.insert(i, label);
         // Since temporal indices are always incremental, we can assume the next label index will only be 1 ahead at most.
         // This way, duplicate labels share the same counter.
+        let arg = &args[i];
         if label >= counters.len() {
-          let arg = &args[i];
           let counter_size = if arg.is_indexable() {
             arg.len()
           } else {
@@ -590,7 +590,6 @@ impl TemporalSpreadState {
         } else {
           // If it's an existing index, update the counter size to the minimum argument length.
           // This way, we guarantee that temporal arguments with a shared label *always* provide the same number of values.
-          let arg = &args[i];
           if arg.is_indexable() {
             let (_, n) = &mut counters[label];
             *n = arg.len().min(*n);
@@ -702,6 +701,24 @@ pub enum MapKeyExpr {
   Static(InternalString),
 }
 
+pub trait RstTrace {
+  fn span(&self) -> Range<usize>;
+  fn find(&self, range: &Range<usize>) -> Option<RstLeaf>;
+}
+
+/// Leaf data provided by an AST search.
+pub enum RstLeaf<'a> {
+  Node(&'a RstNode),
+  Identifier(&'a Identifier),
+  Other(&'a dyn RstTrace),
+}
+
+#[derive(Debug)]
+pub struct RstNode {
+  span: Range<usize>,
+  node: Rst,
+}
+
 /// Rant Syntax Tree
 #[derive(Debug)]
 pub enum Rst {
@@ -775,13 +792,13 @@ impl Rst {
       Rst::Integer(_) =>                      "integer",
       Rst::Float(_) =>                        "float",
       Rst::Boolean(_) =>                      "boolean",
-      Rst::EmptyValue =>                        "empty",
+      Rst::EmptyValue =>                      "empty",
       Rst::Nop =>                             "no-op",
       Rst::DefVar(..) =>                      "variable definition",
       Rst::DefConst(..) =>                    "constant definition",
-      Rst::Depth(..) =>                    "variable depth",
-      Rst::Get(..) =>                      "getter",
-      Rst::Set(..) =>                      "setter",
+      Rst::Depth(..) =>                       "variable depth",
+      Rst::Get(..) =>                         "getter",
+      Rst::Set(..) =>                         "setter",
       Rst::BlockValue(_) =>                   "block value",
       Rst::PipedCall(_) =>                    "piped call",
       Rst::PipeValue =>                       "pipe value",

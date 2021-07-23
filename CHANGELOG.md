@@ -9,6 +9,10 @@
 
 ### Changes
 * Added old behavior back to `[cat]`; previous `[cat]` behavior migrated to `[print]` function
+* Upgraded library dependencies:
+  * `cast` &rarr; 0.2.5
+* Upgraded CLI dependencies:
+  * `ctrlc` &rarr; 3.1.9
 
 ### Fixes
 * Fixed bench stats in CLI printing to stdout instead of stderr
