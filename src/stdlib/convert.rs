@@ -19,3 +19,8 @@ pub(crate) fn to_bool(vm: &mut VM, value: RantValue) -> RantStdResult {
   vm.cur_frame_mut().write_value(value.into_rant_bool());
   Ok(())
 }
+
+pub(crate) fn to_list(vm: &mut VM, collection: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write_value(collection.into_rant_list());
+  Ok(())
+}

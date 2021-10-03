@@ -8,11 +8,6 @@ pub(crate) fn collect(vm: &mut VM, items: VarArgs<RantValue>) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn list(vm: &mut VM, collection: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write_value(collection.into_rant_list());
-  Ok(())
-}
-
 pub(crate) fn nlist(vm: &mut VM, items: VarArgs<RantValue>) -> RantStdResult {
   let list = RantValue::List(Rc::new(RefCell::new(items.iter().cloned().collect())));
   vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(RantList::from(vec![list])))));
@@ -331,6 +326,11 @@ pub(crate) fn clear(vm: &mut VM, collection: RantValue) -> RantStdResult {
 
 pub(crate) fn keys(vm: &mut VM, map: RantMapRef) -> RantStdResult {
   vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(map.borrow().raw_keys()))));
+  Ok(())
+}
+
+pub(crate) fn values(vm: &mut VM, map: RantMapRef) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(map.borrow().raw_values()))));
   Ok(())
 }
 

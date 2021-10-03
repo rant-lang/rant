@@ -181,6 +181,11 @@ impl RantMap {
   }
 
   #[inline]
+  pub fn raw_values(&self) -> RantList {
+    self.map.values().cloned().collect()
+  }
+
+  #[inline]
   pub(crate) fn raw_pairs_internal(&self) -> impl Iterator<Item = (&'_ str, &'_ RantValue)> {
     self.map.iter().map(|(k, v)| (k.as_str(), v))
   }

@@ -7,6 +7,7 @@
   * `[print]`
   * `[chunks]`
   * `[bool]`
+  * `[values]`
 
 ### Changes
 * Added old behavior back to `[cat]`; previous `[cat]` behavior migrated to `[print]` function
@@ -14,6 +15,12 @@
   * `cast` &rarr; 0.2.5
 * Upgraded CLI dependencies:
   * `ctrlc` &rarr; 3.1.9
+* Renamed stdlib functions:
+  * `[bool]` &rarr; `[to-bool]`
+  * `[string]` &rarr; `[to-string]`
+  * `[int]` &rarr; `[to-int]`
+  * `[float]` &rarr; `[to-float]`
+  * `[list]` &rarr; `[to-list]`
 
 ### Fixes
 * Fixed bench stats in CLI printing to stdout instead of stderr

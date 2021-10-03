@@ -66,6 +66,7 @@ impl OutputWriter {
   fn write_buffer(&mut self, value: OutputBuffer) {
     // Set the correct mode for the output content
     match (self.buffers.len() + 1, self.mode) {
+      // Decide mode for first buffer in chain
       (1, _) => {
         match &value {
           OutputBuffer::Fragment(_) => {
@@ -81,7 +82,14 @@ impl OutputWriter {
         }
       },
       (_, OutputPrintMode::Single) => {
-        self.mode = OutputPrintMode::Text;
+        match &value {
+          OutputBuffer::Fragment(_) | OutputBuffer::Whitespace(_) | OutputBuffer::Value(RantValue::String(_)) => {
+            self.mode = OutputPrintMode::Text;
+          },
+          _ => {
+            self.mode = OutputPrintMode::Concat;
+          }
+        }
       },
       (_, OutputPrintMode::List) => {
         if !matches!(value, OutputBuffer::Whitespace(_) | OutputBuffer::Value(RantValue::List(_))) {
@@ -176,6 +184,15 @@ impl OutputWriter {
             }
             RantValue::Map(Rc::new(RefCell::new(output)))
           },
+          OutputPrintMode::Concat => {
+            let mut val = RantValue::Empty;
+            for buf in self.buffers {
+              if let OutputBuffer::Value(bufval) = buf {
+                val = val.concat(bufval);
+              }
+            }
+            val
+          }
         }
       }
     }
@@ -194,6 +211,7 @@ enum OutputPrintMode {
   Text,
   List,
   Map,
+  Concat,
 }
 
 /// A unit of output.

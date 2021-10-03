@@ -125,7 +125,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     asin, sin, acos, cos, atan, atan2, tan, sqrt, 
 
     // Conversion functions
-    to_int as "int", to_float as "float", to_string as "string", to_bool as "bool",
+    to_int as "to-int", to_float as "to-float", to_string as "to-string", to_bool as "to-bool", to_list as "to-list",
 
     // Generator functions
     alpha, dig, digh, dignz, maybe, rand, randf, rand_list as "rand-list", randf_list as "randf-list", shred,
@@ -134,7 +134,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     proto, set_proto as "set-proto",
 
     // Collection functions
-    assoc, chunks, clear, collect, has, keys, index_of as "index-of", insert, last_index_of as "last-index-of", list, nlist, remove, rev, sift, sifted, squish, squished, take, translate,
+    assoc, chunks, clear, collect, has, keys, index_of as "index-of", insert, last_index_of as "last-index-of", nlist, remove, rev, sift, sifted, squish, squished, take, translate, values,
 
     // List functions
     pick, filter, join, map, sort, sorted, shuffle, shuffled, sum,

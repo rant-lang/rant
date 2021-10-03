@@ -128,6 +128,9 @@ struct VarStats {
   def_span: Range<usize>,
   writes: usize,
   reads: usize,
+  /// Indicates whether the reads from this variable are fallible (meaning the variable isn't guaranteed to be defined).
+  ///
+  /// For optional parameters without a fallback this is `true`.
   has_fallible_read: bool,
   is_const: bool,
   role: VarRole,
@@ -174,7 +177,7 @@ enum ParsedSequenceExtras {
 struct ParsedSequence {
   sequence: Sequence,
   end_type: SequenceEndType,
-  is_printing: bool,
+  is_text: bool,
   extras: Option<ParsedSequenceExtras>,
 }
 
@@ -435,13 +438,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               is_seq_printing = true;
               Rst::Boolean(false)
             })),
-            // Charms
+            // Control flow
             KW_RETURN | KW_CONTINUE | KW_BREAK | KW_WEIGHT => {
               whitespace!(ignore both);
               let ParsedSequence {
                 sequence: charm_sequence,
                 end_type: charm_end_type,
-                is_printing: is_charm_printing,
+                is_text: is_charm_printing,
                 extras: mut charm_extras
               } = self.parse_sequence(mode)?;
               let charm_sequence_name = charm_sequence.name.clone();
@@ -469,7 +472,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   sequence
                 },
                 end_type: charm_end_type,
-                is_printing: is_charm_printing || is_seq_printing,
+                is_text: is_charm_printing || is_seq_printing,
                 extras: charm_extras,
               })
             },
@@ -544,7 +547,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("argument"),
                 end_type: SequenceEndType::FunctionArgEndToPipe,
-                is_printing: is_seq_printing,
+                is_text: is_seq_printing,
                 extras: None,
               })
             },
@@ -552,7 +555,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("anonymous function expression"),
                 end_type: SequenceEndType::AnonFunctionExprToPipe,
-                is_printing: is_seq_printing,
+                is_text: is_seq_printing,
                 extras: None,
               })
             },
@@ -586,7 +589,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("block element"),
                 end_type: SequenceEndType::BlockDelim,
-                is_printing: is_seq_printing,
+                is_text: is_seq_printing,
                 extras: None,
               })
             },
@@ -609,7 +612,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("block element"),
                 end_type: SequenceEndType::BlockEnd,
-                is_printing: true,
+                is_text: true,
                 extras: None,
               })
             },
@@ -617,7 +620,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("function body"),
                 end_type: SequenceEndType::FunctionBodyEnd,
-                is_printing: true,
+                is_text: true,
                 extras: None,
               })
             },
@@ -625,7 +628,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("dynamic key"),
                 end_type: SequenceEndType::DynamicKeyEnd,
-                is_printing: true,
+                is_text: true,
                 extras: None,
               })
             }
@@ -658,7 +661,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok(ParsedSequence {
                 sequence,
                 end_type: SequenceEndType::CollectionInitEnd,
-                is_printing: true,
+                is_text: true,
                 extras: None,
               })
             },
@@ -699,19 +702,19 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             SequenceParseMode::AnonFunctionExpr => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("anonymous function expression"),
               end_type: SequenceEndType::AnonFunctionExprNoArgs,
-              is_printing: true,
+              is_text: true,
               extras: None,
             }),
             SequenceParseMode::FunctionArg => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("argument"),
               end_type: SequenceEndType::FunctionArgEndBreak,
-              is_printing: true,
+              is_text: true,
               extras: None,
             }),
             SequenceParseMode::ParamDefaultValue => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("default value"),
               end_type: SequenceEndType::ParamDefaultValueSignatureEnd,
-              is_printing: true,
+              is_text: true,
               extras: None,
             }),
             _ => unexpected_token_error!()
@@ -742,13 +745,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             SequenceParseMode::VariableAssignment => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("setter value"),
               end_type: SequenceEndType::VariableAccessEnd,
-              is_printing: true,
+              is_text: true,
               extras: None,
             }),
             SequenceParseMode::AccessorFallbackValue => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("fallback value"),
               end_type: SequenceEndType::AccessorFallbackValueToEnd,
-              is_printing: true,
+              is_text: true,
               extras: None,
             }),
             _ => unexpected_token_error!()
@@ -824,7 +827,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             SequenceParseMode::AnonFunctionExpr => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("anonymous function expression"),
               end_type: SequenceEndType::AnonFunctionExprToArgs,
-              is_printing: true,
+              is_text: true,
               extras: None,
             }),
             _ => emit_last_string!(),
@@ -837,31 +840,31 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             SequenceParseMode::FunctionArg => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("argument"),
               end_type: SequenceEndType::FunctionArgEndNext,
-              is_printing: true,
+              is_text: true,
               extras: None,
             }),
             SequenceParseMode::CollectionInit => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("collection item"),
               end_type: SequenceEndType::CollectionInitDelim,
-              is_printing: true,
+              is_text: true,
               extras: None,
             }),
             SequenceParseMode::VariableAssignment => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("variable assignment"),
               end_type: SequenceEndType::VariableAssignDelim,
-              is_printing: true,
+              is_text: true,
               extras: None,
             }),
             SequenceParseMode::AccessorFallbackValue => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("fallback"),
               end_type: SequenceEndType::AccessorFallbackValueToDelim,
-              is_printing: true,
+              is_text: true,
               extras: None,
             }),
             SequenceParseMode::ParamDefaultValue => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("default value"),
               end_type: SequenceEndType::ParamDefaultValueSeparator,
-              is_printing: true,
+              is_text: true,
               extras: None,
             }),
             // If we're anywhere else, just print the semicolon like normal text
@@ -882,7 +885,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         return Ok(ParsedSequence {
           sequence,
           end_type: SequenceEndType::SingleItemEnd,
-          is_printing: is_seq_printing,
+          is_text: is_seq_printing,
           extras: None,
         })
       }
@@ -900,7 +903,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     Ok(ParsedSequence {
       sequence: sequence.with_name_str(MAIN_PROGRAM_SCOPE_NAME),
       end_type: SequenceEndType::ProgramEnd,
-      is_printing: is_seq_printing,
+      is_text: is_seq_printing,
       extras: None,
     })
   }
@@ -1857,11 +1860,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       let ParsedSequence { 
         sequence, 
         end_type, 
-        is_printing, 
+        is_text, 
         extras 
       } = self.parse_sequence(SequenceParseMode::BlockElement)?;
       
-      auto_hint |= is_printing;
+      auto_hint |= is_text;
 
       let element = BlockElement {
         main: Rc::new(sequence),

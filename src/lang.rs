@@ -11,9 +11,9 @@ pub(crate) const PIPE_VALUE_NAME: &str = "~PIPE";
 pub enum PrintFlag {
   /// Use default printing behavior.
   None,
-  /// Treat the marked element as printing.
+  /// Treat the marked element as text.
   Hint,
-  /// Treat the marked element as non-printing.
+  /// Suppress output from the next element..
   Sink
 }
 
@@ -192,7 +192,7 @@ impl Display for AccessPathComponent {
 }
 
 /// Types of access paths.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum AccessPathKind {
   /// Path points to a variable in the current scope.
   Local,
@@ -250,6 +250,18 @@ impl AccessPath {
   #[inline]
   pub fn is_variable(&self) -> bool {
     self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::Name(..)) | Some(AccessPathComponent::DynamicKey(..)))
+  }
+
+  /// If the path is a static variable with no child access, returns the name of the variable; otherwise, `None`.
+  #[inline]
+  pub fn static_variable(&self) -> Option<&str> {
+    if self.len() == 1 {
+      if let Some(AccessPathComponent::Name(name)) = self.first() {
+        return Some(name.as_str())
+      }
+    }
+
+    None
   }
 
   /// Gets the kind access path this is.

@@ -213,6 +213,29 @@ impl RantValue {
     })
   }
 
+  /// Concatenates two values.
+  #[inline]
+  pub fn concat(self, rhs: Self) -> Self {
+    match (self, rhs) {
+      (Self::Empty, Self::Empty) => Self::Empty,
+      (lhs, Self::Empty) => lhs,
+      (Self::Empty, rhs) => rhs,
+      (Self::Int(a), Self::Int(b)) => Self::Int(a.saturating_add(b)),
+      (Self::Int(a), Self::Float(b)) => Self::Float(f64(a) + b),
+      (Self::Int(a), Self::Boolean(b)) => Self::Int(a.saturating_add(bi64(b))),
+      (Self::Float(a), Self::Float(b)) => Self::Float(a + b),
+      (Self::Float(a), Self::Int(b)) => Self::Float(a + f64(b)),
+      (Self::Float(a), Self::Boolean(b)) => Self::Float(a + bf64(b)),
+      (Self::String(a), Self::String(b)) => Self::String(a + b),
+      (Self::String(a), rhs) => Self::String(a + rhs.to_string().into()),
+      (Self::Boolean(a), Self::Boolean(b)) => Self::Boolean(a || b),
+      (Self::Boolean(a), Self::Int(b)) => Self::Int(bi64(a).saturating_add(b)),
+      (Self::Boolean(a), Self::Float(b)) => Self::Float(bf64(a) + b),
+      (Self::List(a), Self::List(b)) => Self::List(Rc::new(RefCell::new(a.borrow().iter().cloned().chain(b.borrow().iter().cloned()).collect()))),
+      (lhs, rhs) => Self::String(RantString::from(format!("{}{}", lhs, rhs)))
+    }
+  }
+
   /// Gets the length of the value.
   #[inline]
   pub fn len(&self) -> usize {
