@@ -77,7 +77,7 @@ macro_rules! rant_int_conversions {
             Ok($val)
           };
           (isize, $val:expr) => {
-            Ok(isize($val))
+            Ok($val as isize)
           };
           ($to:ident, $val:expr) => {
             $to($val)
