@@ -77,7 +77,14 @@ macro_rules! rant_int_conversions {
             Ok($val)
           };
           (isize, $val:expr) => {
-            $val.try_into().map_err(|_| CastError::Overflow)
+            {
+              let val = $val;
+              val.try_into().map_err(|_| if val < 0 {
+                CastError::Underflow
+              } else {
+                CastError::Overflow
+              })
+            }
           };
           ($to:ident, $val:expr) => {
             $to($val)
