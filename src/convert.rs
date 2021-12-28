@@ -10,7 +10,7 @@ use crate::runtime::*;
 use crate::{lang::{Varity, Parameter, Identifier}, stdlib::RantStdResult};
 use cast::*;
 use cast::Error as CastError;
-use std::{rc::Rc, ops::{DerefMut, Deref}, cell::RefCell};
+use std::{rc::Rc, ops::{DerefMut, Deref}, cell::RefCell, convert::TryInto};
 
 /// Enables conversion from a native type to a `RantValue`.
 pub trait IntoRant {
@@ -77,7 +77,7 @@ macro_rules! rant_int_conversions {
             Ok($val)
           };
           (isize, $val:expr) => {
-            Ok($val as isize)
+            $val.try_into().map_err(|_| CastError::Overflow)
           };
           ($to:ident, $val:expr) => {
             $to($val)
