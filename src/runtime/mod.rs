@@ -957,7 +957,6 @@ impl<'rant> VM<'rant> {
         Rst::Float(n) => self.cur_frame_mut().write_value(RantValue::Float(*n)),
         Rst::EmptyValue => self.cur_frame_mut().write_value(RantValue::Empty),
         Rst::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
-        Rst::BlockValue(block) => self.cur_frame_mut().write_value(RantValue::Block(Rc::clone(block))),
         Rst::Nop => {},
         Rst::Return(expr) => {
           if let Some(expr) = expr {
@@ -1399,10 +1398,6 @@ impl<'rant> VM<'rant> {
                 flag: if is_printing { PrintFlag::Hint } else { PrintFlag::Sink }, 
                 override_print: false 
               });
-            },
-            // If the separator is a block, resolve it
-            RantValue::Block(sep_block) => {
-              self.pre_push_block(&sep_block, sep_block.flag)?;
             },
             // Print the separator if it's a non-function value
             val => {

@@ -35,10 +35,6 @@ pub enum RantToken {
   /// `[]`
   #[token("[]")]
   PipeValue,
-
-  /// `<>`
-  #[token("<>")]
-  Defer,
   
   /// `[`
   #[token("[")]
@@ -56,8 +52,8 @@ pub enum RantToken {
   #[token(")")]
   RightParen,
 
-  /// `~`
-  #[token("~")]
+  /// `<>`
+  #[token("<>")]
   EmptyValue,
 
   /// `<`
@@ -132,12 +128,12 @@ pub enum RantToken {
   #[token("%")]
   Percent,
   
-  /// `'`
-  #[token("'")]
+  /// ```
+  #[token("`")]
   Hint,
   
-  /// `_`
-  #[token("_")]
+  /// `~`
+  #[token("~")]
   Sink,
   
   /// Integer literal

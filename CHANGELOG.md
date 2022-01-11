@@ -22,6 +22,12 @@
   * `[float]` &rarr; `[to-float]`
   * `[list]` &rarr; `[to-list]`
 
+### Removed
+* Removed the `block` type
+* Removed the defer operator
+* Removed stdlib functions:
+  * `[resolve]`
+
 ### Fixes
 * Fixed bench stats in CLI printing to stdout instead of stderr
 * Fixed anonymous calls always expecting a pipeval even when not in a piped context

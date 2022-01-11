@@ -1,25 +1,6 @@
 use super::*;
 use crate::runtime::resolver::{SelectorMode, Reps, Selector};
 
-pub(crate) fn resolve(vm: &mut VM, value: RantValue) -> RantStdResult {
-  if let RantValue::Block(block) = value {
-    vm.pre_push_block(&block, block.flag)?;
-    Ok(())
-  } else {
-    Err(RuntimeError {
-      error_type: RuntimeErrorType::ValueError(
-        ValueError::InvalidConversion {
-          from: value.type_name(),
-          to: "block",
-          message: None,
-        }
-      ),
-      description: Some("value must be a block".to_owned()),
-      stack_trace: None,
-    })
-  }
-}
-
 pub(crate) fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
   vm.resolver_mut().attrs_mut().reps = match reps {
     RantValue::Int(n) => Reps::Repeat(n.max(0) as usize),
