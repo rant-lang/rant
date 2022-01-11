@@ -127,15 +127,15 @@ impl RantValue {
 
 #[allow(clippy::len_without_is_empty)]
 impl RantValue {
-  /// Interprets this value as a boolean value.
+  /// Interprets this value as a boolean value according to Rant's truthiness rules.
   ///
-  /// This conversion adheres to the following rules:
-  /// 1. `bool` is interpreted literally with no change.
-  /// 2. `int` becomes `true` for any non-zero value; otherwise, `false`.
-  /// 3. `float` becomes `true` for any [normal](https://en.wikipedia.org/wiki/Normal_number_(computing)) value; otherwise, `false`.
-  /// 4. `empty` always becomes `false`.
-  /// 5. Collections (`list`, `map`, `range`, `block`) become `true` if they are non-empty; otherwise, `false`.
-  /// 6. All other types become `true`.
+  /// Types are converted as follows:
+  /// 1. `bool` returns itself.
+  /// 2. `int` returns `true` for any non-zero value; otherwise, `false`.
+  /// 3. `float` returns `true` for any [normal](https://en.wikipedia.org/wiki/Normal_number_(computing)) value; otherwise, `false`.
+  /// 4. `empty` returns `false`.
+  /// 5. Collections (`string`, `list`, `map`, `range`, `block`) return `true` if non-empty; otherwise, `false`.
+  /// 6. All other types return `true`.
   #[inline]
   pub fn to_bool(&self) -> bool {
     match self {

@@ -240,9 +240,12 @@ pub(crate) fn zip(vm: &mut VM, (list_a, list_b, zip_func): (RantListRef, RantLis
 }
 
 pub(crate) fn pick(vm: &mut VM, list: RantValue) -> RantStdResult {
-  let index = vm.rng().next_usize(list.len());
-  let item = list.index_get(index as i64).into_runtime_result()?;
-  vm.cur_frame_mut().write_value(item);
+  let n = list.len();
+  if n > 0 {
+    let index = vm.rng().next_usize(n);
+    let item = list.index_get(index as i64).into_runtime_result()?;
+    vm.cur_frame_mut().write_value(item);
+  }
   Ok(())
 }
 

@@ -26,6 +26,7 @@
 * Fixed bench stats in CLI printing to stdout instead of stderr
 * Fixed anonymous calls always expecting a pipeval even when not in a piped context
 * Fixed pipeval not getting captured in closures
+* Fixed panic in `[pick]` when input list is empty; now prints nothing in this case
 
 ## 4.0.0-alpha.22
 
