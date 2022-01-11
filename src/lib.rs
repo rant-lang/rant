@@ -40,13 +40,13 @@ pub mod runtime;
 mod collections;
 mod convert;
 mod format;
+mod func;
 mod lang;
 mod rng;
 mod stdlib;
 mod string;
 mod util;
 mod value;
-mod func;
 mod var;
 
 // Re-exports

@@ -1,4 +1,4 @@
-use crate::{RantFunction, RantString, lang::Block, lang::Slice, util};
+use crate::{RantFunction, RantString, lang::Slice, util};
 use crate::collections::*;
 use crate::runtime::resolver::*;
 use crate::runtime::*;
@@ -81,8 +81,6 @@ pub enum RantValue {
   Boolean(bool),
   /// A Rant value of type `function`. Passed by-reference.
   Function(RantFunctionRef),
-  /// A Rant value of type `block`. Passed by-reference.
-  Block(Rc<Block>),
   /// A Rant value of type `list`. Passed by-reference.
   List(RantListRef),
   /// A Rant value of type `map`. Passed by-reference.
@@ -127,15 +125,15 @@ impl RantValue {
 
 #[allow(clippy::len_without_is_empty)]
 impl RantValue {
-  /// Interprets this value as a boolean value.
+  /// Interprets this value as a boolean value according to Rant's truthiness rules.
   ///
-  /// This conversion adheres to the following rules:
-  /// 1. `bool` is interpreted literally with no change.
-  /// 2. `int` becomes `true` for any non-zero value; otherwise, `false`.
-  /// 3. `float` becomes `true` for any [normal](https://en.wikipedia.org/wiki/Normal_number_(computing)) value; otherwise, `false`.
-  /// 4. `empty` always becomes `false`.
-  /// 5. Collections (`list`, `map`, `range`, `block`) become `true` if they are non-empty; otherwise, `false`.
-  /// 6. All other types become `true`.
+  /// Types are converted as follows:
+  /// 1. `bool` returns itself.
+  /// 2. `int` returns `true` for any non-zero value; otherwise, `false`.
+  /// 3. `float` returns `true` for any [normal](https://en.wikipedia.org/wiki/Normal_number_(computing)) value; otherwise, `false`.
+  /// 4. `empty` returns `false`.
+  /// 5. Collections (`string`, `list`, `map`, `range`, `block`) return `true` if non-empty; otherwise, `false`.
+  /// 6. All other types return `true`.
   #[inline]
   pub fn to_bool(&self) -> bool {
     match self {
@@ -144,7 +142,6 @@ impl RantValue {
       Self::Float(n) => n.is_normal(),
       Self::Int(n) => *n != 0,
       Self::Function(_) => true,
-      Self::Block(b) => b.len() > 0,
       Self::List(l) => !l.borrow().is_empty(),
       Self::Map(m) => !m.borrow().is_empty(),
       Self::Range(r) => !r.is_empty(),
@@ -242,8 +239,6 @@ impl RantValue {
     match self {
       // Length of string is character count
       Self::String(s) => s.len(),
-      // Length of block is element count
-      Self::Block(b) => b.elements.len(),
       // Length of list is element count
       Self::List(lst) => lst.borrow().len(),
       // Length of range is element count
@@ -259,7 +254,6 @@ impl RantValue {
   pub fn reversed(&self) -> Self {
     match self {
       Self::String(s) => RantValue::String(s.reversed()),
-      Self::Block(b) => RantValue::Block(Rc::new(b.reversed())),
       Self::List(list) => RantValue::List(Rc::new(RefCell::new(list.borrow().iter().rev().cloned().collect()))),
       Self::Range(range) => RantValue::Range(range.reversed()),
       _ => self.clone(),
@@ -287,7 +281,6 @@ impl RantValue {
       Self::Boolean(_) =>    RantValueType::Boolean,
       Self::Function(_) =>   RantValueType::Function,
       Self::List(_) =>       RantValueType::List,
-      Self::Block(_) =>      RantValueType::Block,
       Self::Map(_) =>        RantValueType::Map,
       Self::Range(_) =>      RantValueType::Range,
       Self::Special(_) =>    RantValueType::Special,
@@ -346,26 +339,6 @@ impl RantValue {
 
     match self {
       Self::String(s) => Ok(Self::String(s.to_slice(slice_from, slice_to).ok_or(SliceError::OutOfRange)?)),
-      Self::Block(b) => {
-        match (slice_from, slice_to) {
-          (None, None) => Ok(Self::Block(Rc::clone(b))),
-          (None, Some(to)) => Ok(Self::Block(Rc::new(Block {
-            elements: Rc::new((&b.elements[..to]).to_vec()),
-            .. *b.as_ref()
-          }))),
-          (Some(from), None) => Ok(Self::Block(Rc::new(Block {
-            elements: Rc::new((&b.elements[from..]).to_vec()),
-            .. *b.as_ref()
-          }))),
-          (Some(from), Some(to)) => {
-            let (from, to) = util::minmax(from, to);
-            Ok(Self::Block(Rc::new(Block {
-              elements: Rc::new((&b.elements[from..to]).to_vec()),
-              .. *b.as_ref()
-            })))
-          },
-        }
-      },
       Self::Range(range) => {
         Ok(Self::Range(range.sliced(slice_from, slice_to).unwrap()))
       },
@@ -527,8 +500,6 @@ pub enum RantValueType {
   Boolean,
   /// The `function` type.
   Function,
-  /// The `block` type.
-  Block,
   /// The `list` type.
   List,
   /// The `map` type.
@@ -550,7 +521,6 @@ impl RantValueType {
       Self::Int =>         "int",
       Self::Boolean =>     "bool",
       Self::Function =>    "function",
-      Self::Block =>       "block",
       Self::List =>        "list",
       Self::Map =>         "map",
       Self::Special =>     "special",
@@ -719,7 +689,6 @@ impl Debug for RantValue {
       Self::Int(n) => write!(f, "{}", n),
       Self::Boolean(b) => write!(f, "{}", if *b { "@true" }  else { "@false" }),
       Self::Function(func) => write!(f, "[function({:?})]", func.body),
-      Self::Block(block) => write!(f, "[block({})]", block.elements.len()),
       Self::List(l) => write!(f, "[list({})]", l.borrow().len()),
       Self::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
       Self::Range(range) => write!(f, "{}", range),
@@ -736,7 +705,6 @@ fn get_display_string(value: &RantValue, max_depth: usize) -> String {
     RantValue::Int(i) => format!("{}", i),
     RantValue::Boolean(b) => (if *b { "@true" } else { "@false" }).to_string(),
     RantValue::Function(f) => format!("[function({:?})]", f.body),
-    RantValue::Block(b) => format!("[block({})]", b.elements.len()),
     RantValue::List(list) => {
       let mut buf = String::new();
       let mut is_first = true;

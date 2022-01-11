@@ -740,8 +740,6 @@ pub enum Rst {
   Sequence(Rc<Sequence>),
   /// Rant block containing zero or more sequences
   Block(Rc<Block>),
-  /// Block as value
-  BlockValue(Rc<Block>),
   /// List initializer
   ListInit(Rc<Vec<Rc<Sequence>>>),
   /// Map initializer
@@ -811,7 +809,6 @@ impl Rst {
       Rst::Depth(..) =>                       "variable depth",
       Rst::Get(..) =>                         "getter",
       Rst::Set(..) =>                         "setter",
-      Rst::BlockValue(_) =>                   "block value",
       Rst::PipedCall(_) =>                    "piped call",
       Rst::PipeValue =>                       "pipe value",
       Rst::Return(_) =>                       "return",

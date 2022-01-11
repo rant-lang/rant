@@ -1,4 +1,0 @@
-<%test-block = <>{A|B|C}>
-[rep:all]
-[sel:forward]
-[resolve: <test-block> |> assert-eq: ABC]

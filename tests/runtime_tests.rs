@@ -64,7 +64,7 @@ fn spaced_fragments() {
 
 #[test]
 fn sinked_block() {
-  test_rant!("_{test}", "");
+  test_rant!("test _{test}", "testtest");
 }
 
 #[test]
@@ -75,11 +75,6 @@ fn single_element_block() {
 #[test]
 fn repeater() {
   test_rant!("[rep:10]{a}", "aaaaaaaaaa");
-}
-
-#[test]
-fn defer_block() {
-  test_rant_file!("sources/block/defer_block.rant");
 }
 
 #[test]
@@ -181,7 +176,7 @@ fn override_shadowed_locals_with_multi_descope() {
 
 #[test]
 fn multi_accessor_empty_defs() {
-  test_rant!(r#"<$foo; $bar> '[type:<foo>] '[type:<bar>]"#, "empty empty");
+  test_rant!(r#"<$foo; $bar> `[type:<foo>] `[type:<bar>]"#, "empty empty");
 }
 
 #[test]

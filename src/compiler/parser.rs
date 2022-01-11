@@ -13,12 +13,29 @@ type ParseResult<T> = Result<T, ()>;
 
 const MAIN_PROGRAM_SCOPE_NAME: &str = "main scope";
 
+// Keyword names
 const KW_RETURN: &str = "return";
 const KW_BREAK: &str = "break";
 const KW_CONTINUE: &str = "continue";
 const KW_WEIGHT: &str = "weight";
 const KW_TRUE: &str = "true";
 const KW_FALSE: &str = "false";
+const KW_ADD: &str = "add";
+const KW_SUB: &str = "sub";
+const KW_MUL: &str = "mul";
+const KW_DIV: &str = "div";
+const KW_MOD: &str = "mod";
+const KW_AND: &str = "and";
+const KW_OR: &str = "or";
+const KW_NOT: &str = "not";
+const KW_XOR: &str = "xor";
+const KW_MANY: &str = "many";
+const KW_EQUAL: &str = "eq";
+const KW_NOT_EQUAL: &str = "neq";
+const KW_GREATER: &str = "gt";
+const KW_GREATER_OR_EQUAL: &str = "ge";
+const KW_LESS: &str = "lt";
+const KW_LESS_OR_EQUAL: &str = "le";
 
 /// Provides context to the sequence parser; determines valid terminating tokens among other context-sensitive features.
 #[derive(Copy, Clone, PartialEq)]
@@ -478,35 +495,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             },
             other => self.report_error(Problem::InvalidKeyword(other.to_string()), &span),
           }          
-        },
-        
-        // Defer operator
-        Defer => {
-          self.reader.skip_ws();
-          let block = self.parse_block(true, next_print_flag)?;
-          
-          // Decide what to do with surrounding whitespace
-          match next_print_flag {                        
-            // If hinted, allow pending whitespace
-            PrintFlag::Hint => {
-              whitespace!(allow);
-              is_seq_printing = true;
-            },
-            
-            // If sinked, remove surrounding whitespace
-            PrintFlag::Sink => whitespace!(ignore both),
-            
-            // If no flag, take a hint
-            PrintFlag::None => {
-              // Inherit hints from inner blocks
-              if let Block { flag: PrintFlag::Hint, ..} = block {
-                whitespace!(allow);
-                is_seq_printing = true;
-              }
-            }
-          }
-          
-          emit!(Rst::BlockValue(Rc::new(block)));
         },
         
         // Block start

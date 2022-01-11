@@ -79,7 +79,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
 
   load_funcs!(
     // General functions
-    alt, call, cat, data, either, len, get_type as "type", seed, nop, print, range, irange, resolve, fork, unfork, try_ as "try",
+    alt, call, cat, data, either, len, get_type as "type", seed, nop, print, range, irange, fork, unfork, try_ as "try",
 
     // Assertion functions
     assert as "assert", assert_eq as "assert-eq", assert_neq as "assert-neq",
