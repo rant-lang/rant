@@ -1,6 +1,8 @@
 # Changelog
 
-## 4.0.0-alpha.23 (unreleased)
+## 4.0.0-alpha.23
+
+(1/11/2022)
 
 ### New
 * Added stdlib functions:
