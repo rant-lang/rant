@@ -49,7 +49,7 @@ Enjoy a wide array of built-in utilities for generating random numbers, strings,
 Inspired by other popular scripting languages, Rant is a fully-fledged imperative programming language with a dynamic type system. Enjoy support for common primitives like strings, numbers, collections, closures, and more.
 
 🖨 **It's a Templating Language** <br/> 
-Rant is all about "printing": each lexical scope has an output to add print (i.e. append values) to, which then prints itself to the parent output, and so on. 
+Rant is all about "printing": each lexical scope has an output to print (append values) to, which then prints itself to the parent output, and so on. 
 This enables you to intuitively build strings, collections, and more in a familiar templating structure.
 
 🔱 **Advanced Branching** <br/> 
