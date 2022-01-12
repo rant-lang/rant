@@ -35,6 +35,7 @@
   * `[int]` &rarr; `[to-int]`
   * `[float]` &rarr; `[to-float]`
   * `[list]` &rarr; `[to-list]`
+* Move R1005 (fallible optional param access) to R0028 and upgrade it from a warning to an error
 
 ### Removed
 * Removed the `block` type

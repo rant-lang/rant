@@ -2002,9 +2002,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         } else {
           tracker.add_read(!fallback_hint);
 
-          // Warn the user if they're accessing a fallible optional argument without a fallback
+          // Error if user is accessing a fallible optional argument without a fallback
           if tracker.has_fallible_read && tracker.role == VarRole::FallibleOptionalArgument {
-            self.report_warning(Problem::FallibleOptionalArgAccess(id.to_string()), span);
+            self.report_error(Problem::FallibleOptionalArgAccess(id.to_string()), span);
           }
         }
       }
