@@ -151,7 +151,7 @@ impl<'rant> VM<'rant> {
   fn run_inner(&mut self) -> RuntimeResult<RantValue> {
     // Push the program's root sequence onto the call stack
     // This doesn't need an overflow check because it will *always* succeed
-    self.push_frame_unchecked(self.program.root.clone(), true, StackFrameFlavor::FunctionBody);
+    self.push_frame_unchecked(self.program.root.clone(), StackFrameFlavor::FunctionBody);
     
     while !self.is_stack_empty() {
       // Tick VM
@@ -168,7 +168,7 @@ impl<'rant> VM<'rant> {
           if let Some(unwind) = self.unwind() {
             // Fire off handler if available
             if let Some(handler) = unwind.handler {
-              self.call_func(handler, vec![RantValue::String(err.to_string().into())], PrintFlag::None, false)?;
+              self.call_func(handler, vec![RantValue::String(err.to_string().into())], false)?;
               continue;
             }
           } else {
@@ -238,7 +238,7 @@ impl<'rant> VM<'rant> {
                     weights,
                     pop_next_weight: true,
                   });
-                  self.push_frame(weight_expr, true)?;
+                  self.push_frame(weight_expr)?;
                   return Ok(true)
                 },
                 BlockWeight::Constant(weight_value) => {
@@ -252,7 +252,7 @@ impl<'rant> VM<'rant> {
           }
 
           // Weights are finished
-          self.push_block(block.as_ref(), Some(weights), block.flag)?;
+          self.push_block(block.as_ref(), Some(weights))?;
         },
         Intent::SetVar { vname, access_kind } => {
           let val = self.pop_val()?;
@@ -272,7 +272,7 @@ impl<'rant> VM<'rant> {
             } else {
               self.cur_frame_mut().push_intent_front(Intent::BuildDynamicGetter { path, dynamic_key_count, pending_exprs, override_print, prefer_function, fallback });
             }
-            self.push_frame_flavored(Rc::clone(&key_expr), true, StackFrameFlavor::DynamicKeyExpression)?;
+            self.push_frame_flavored(Rc::clone(&key_expr), StackFrameFlavor::DynamicKeyExpression)?;
           } else {
             self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print, prefer_function, fallback });
           }
@@ -290,7 +290,7 @@ impl<'rant> VM<'rant> {
               if !override_print {
                 self.cur_frame_mut().push_intent_front(Intent::PrintLast);
               }
-              self.push_frame(fallback, true)?;
+              self.push_frame(fallback)?;
               return Ok(true)
             }
           }
@@ -323,7 +323,7 @@ impl<'rant> VM<'rant> {
             }
 
             // Evaluate
-            self.push_frame_flavored(cur_expr, true, StackFrameFlavor::ArgumentExpression)?;
+            self.push_frame_flavored(cur_expr, StackFrameFlavor::ArgumentExpression)?;
 
             // Interrupt
             return Ok(true)
@@ -334,7 +334,6 @@ impl<'rant> VM<'rant> {
         Intent::Invoke { 
           arg_exprs, 
           arg_eval_count, 
-          flag, 
           is_temporal, 
         } => {
           // First, evaluate all arguments
@@ -345,13 +344,12 @@ impl<'rant> VM<'rant> {
             // Continuation intent
             self.cur_frame_mut().push_intent_front(Intent::Invoke { 
               arg_exprs, 
-              arg_eval_count: arg_eval_count + 1, 
-              flag, 
+              arg_eval_count: arg_eval_count + 1,
               is_temporal, 
             });
 
             // Evaluate arg
-            self.push_frame_flavored(arg_seq, true, StackFrameFlavor::ArgumentExpression)?;
+            self.push_frame_flavored(arg_seq, StackFrameFlavor::ArgumentExpression)?;
             return Ok(true)
           } else {
             // Pop the evaluated args off the stack
@@ -387,12 +385,11 @@ impl<'rant> VM<'rant> {
                 self.cur_frame_mut().push_intent_front(Intent::CallTemporal { 
                   func,
                   temporal_state, 
-                  args: Rc::new(args), 
-                  flag
+                  args: Rc::new(args),
                 });
               }
             } else {
-              self.call_func(func, args, flag, false)?;
+              self.call_func(func, args, false)?;
             }
             
             return Ok(true)
@@ -402,8 +399,7 @@ impl<'rant> VM<'rant> {
           steps, 
           step_index, 
           state,
-          pipeval, 
-          flag 
+          pipeval,
         } => {          
           match state {
             InvokePipeStepState::EvaluatingFunc => {
@@ -415,7 +411,6 @@ impl<'rant> VM<'rant> {
                 step_index,
                 state: InvokePipeStepState::EvaluatingArgs { num_evaluated: 0 },
                 pipeval,
-                flag,
               });
 
               match &step.target {
@@ -424,7 +419,7 @@ impl<'rant> VM<'rant> {
                   self.push_getter_intents(path, true, true, None);
                 },
                 FunctionCallTarget::Expression(expr) => {
-                  self.push_frame(Rc::clone(expr), true)?;
+                  self.push_frame(Rc::clone(expr))?;
                   if let Some(pipeval) = pipeval_copy {
                     self.def_pipeval(pipeval)?;
                   }
@@ -450,11 +445,10 @@ impl<'rant> VM<'rant> {
                     num_evaluated: num_evaluated + 1,
                   },
                   pipeval,
-                  flag,
                 });
 
                 // Push current argument expression to call stack
-                self.push_frame_flavored(arg_seq, true, StackFrameFlavor::ArgumentExpression)?;
+                self.push_frame_flavored(arg_seq, StackFrameFlavor::ArgumentExpression)?;
                 if let Some(pipeval) = pipeval_copy {
                   self.def_pipeval(pipeval)?;
                 }
@@ -498,7 +492,6 @@ impl<'rant> VM<'rant> {
                   steps,
                   step_index,
                   pipeval,
-                  flag,
                 });
               }
               return Ok(true)
@@ -510,11 +503,10 @@ impl<'rant> VM<'rant> {
                 step_index,
                 state: InvokePipeStepState::PostCall,
                 pipeval,
-                flag,
               });
 
               // Call it and interrupt
-              self.call_func(step_function, args, PrintFlag::None, true)?;
+              self.call_func(step_function, args, true)?;
               return Ok(true)
             },
             InvokePipeStepState::PostCall => {
@@ -528,7 +520,6 @@ impl<'rant> VM<'rant> {
                   step_index: next_step_index,
                   state: InvokePipeStepState::EvaluatingFunc,
                   pipeval: Some(next_pipeval),
-                  flag,
                 });
                 return Ok(true)
               } else {
@@ -559,10 +550,9 @@ impl<'rant> VM<'rant> {
                   args,
                 },
                 pipeval,
-                flag,
               });
 
-              self.call_func(step_function, targs, PrintFlag::None, true)?;
+              self.call_func(step_function, targs, true)?;
               return Ok(true)
             },
             InvokePipeStepState::PostTemporalCall { step_function, args, mut temporal_state } => {
@@ -581,7 +571,6 @@ impl<'rant> VM<'rant> {
                     args,
                   },
                   pipeval,
-                  flag,
                 })
               }
 
@@ -593,7 +582,6 @@ impl<'rant> VM<'rant> {
                   step_index: next_step_index,
                   state: InvokePipeStepState::EvaluatingFunc,
                   pipeval: Some(next_piprval),
-                  flag,
                 });
                 return Ok(true)
               } else {
@@ -603,7 +591,7 @@ impl<'rant> VM<'rant> {
             },
           }
         },
-        Intent::CallTemporal { func, args, mut temporal_state, flag } => {
+        Intent::CallTemporal { func, args, mut temporal_state } => {
           let targs = args.iter().enumerate().map(|(arg_index, arg)| {
             // Check if this is a temporally spread argument
             if let Some(tindex) = temporal_state.get(arg_index) {
@@ -617,13 +605,13 @@ impl<'rant> VM<'rant> {
           }).collect::<Vec<RantValue>>();
 
           if temporal_state.increment() {
-            self.cur_frame_mut().push_intent_front(Intent::CallTemporal { func: Rc::clone(&func), args, temporal_state, flag });
+            self.cur_frame_mut().push_intent_front(Intent::CallTemporal { func: Rc::clone(&func), args, temporal_state });
           }
 
-          self.call_func(func, targs, flag, false)?;
+          self.call_func(func, targs, false)?;
           return Ok(true)
         },
-        Intent::Call { argc, flag, override_print } => {
+        Intent::Call { argc, override_print } => {
           // Pop the evaluated args off the stack
           let mut args = vec![];
           for _ in 0..argc {
@@ -639,7 +627,7 @@ impl<'rant> VM<'rant> {
           };
 
           // Call the function
-          self.call_func(func, args, flag, override_print)?;
+          self.call_func(func, args, override_print)?;
           return Ok(true)
         },
         Intent::BuildDynamicSetter { path, write_mode, expr_count, mut pending_exprs, val_source } => {
@@ -648,7 +636,7 @@ impl<'rant> VM<'rant> {
             // Value must be evaluated from an expression
             SetterValueSource::FromExpression(expr) => {
               self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, write_mode, expr_count, pending_exprs, val_source: SetterValueSource::Consumed });
-              self.push_frame(Rc::clone(&expr), true)?;
+              self.push_frame(Rc::clone(&expr))?;
               return Ok(true)
             },
             // Value can be pushed directly onto the stack
@@ -668,7 +656,7 @@ impl<'rant> VM<'rant> {
               // Continue building setter
               self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, write_mode, expr_count, pending_exprs, val_source: SetterValueSource::Consumed });                
             }
-            self.push_frame_flavored(Rc::clone(&key_expr), true, StackFrameFlavor::DynamicKeyExpression)?;
+            self.push_frame_flavored(Rc::clone(&key_expr), StackFrameFlavor::DynamicKeyExpression)?;
           } else {
             self.cur_frame_mut().push_intent_front(Intent::SetValue { path, write_mode, expr_count });
           }
@@ -691,7 +679,7 @@ impl<'rant> VM<'rant> {
             // Continue list creation
             self.cur_frame_mut().push_intent_front(Intent::BuildList { init: Rc::clone(&init), index: index + 1, list });
             let val_expr = &init[index];
-            self.push_frame(Rc::clone(val_expr), true)?;
+            self.push_frame(Rc::clone(val_expr))?;
             return Ok(true)
           }
         },
@@ -717,10 +705,10 @@ impl<'rant> VM<'rant> {
             let (key_expr, val_expr) = &init[pair_index];
             if let MapKeyExpr::Dynamic(key_expr) = key_expr {
               // Push dynamic key expression onto call stack
-              self.push_frame(Rc::clone(&key_expr), true)?;
+              self.push_frame(Rc::clone(key_expr))?;
             }
             // Push value expression onto call stack
-            self.push_frame(Rc::clone(val_expr), true)?;
+            self.push_frame(Rc::clone(val_expr))?;
             return Ok(true)
           }
         },
@@ -769,14 +757,14 @@ impl<'rant> VM<'rant> {
           return Ok(true)
         },
         Rst::Block(block) => {
-          self.pre_push_block(&block, block.flag)?;
+          self.pre_push_block(block)?;
           return Ok(true)
         },
         Rst::DefVar(vname, access_kind, val_expr) => {
           if let Some(val_expr) = val_expr {
             // If a value is present, it needs to be evaluated first
             self.cur_frame_mut().push_intent_front(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind, is_const: false });
-            self.push_frame(Rc::clone(val_expr), true)?;
+            self.push_frame(Rc::clone(val_expr))?;
             return Ok(true)
           } else {
             // If there's no assignment, just set it to empty value
@@ -787,7 +775,7 @@ impl<'rant> VM<'rant> {
           if let Some(val_expr) = val_expr {
             // If a value is present, it needs to be evaluated first
             self.cur_frame_mut().push_intent_front(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind, is_const: true });
-            self.push_frame(Rc::clone(val_expr), true)?;
+            self.push_frame(Rc::clone(val_expr))?;
             return Ok(true)
           } else {
             // If there's no assignment, just set it to empty value
@@ -803,7 +791,7 @@ impl<'rant> VM<'rant> {
             (Ok(depth), _) => self.cur_frame_mut().write_value(RantValue::Int(depth as i64)),
             (Err(_), Some(fallback)) => {
               self.cur_frame_mut().push_intent_front(Intent::PrintLast);
-              self.push_frame(Rc::clone(fallback), true)?;
+              self.push_frame(Rc::clone(fallback))?;
               return Ok(true)
             },
             (Err(err), None) => return Err(err),
@@ -815,8 +803,8 @@ impl<'rant> VM<'rant> {
 
           if exprs.is_empty() {
             // Setter is static, so run it directly
-            self.cur_frame_mut().push_intent_front(Intent::SetValue { path: Rc::clone(&path), write_mode: VarWriteMode::SetOnly, expr_count: 0 });
-            self.push_frame(Rc::clone(&val_expr), true)?;
+            self.cur_frame_mut().push_intent_front(Intent::SetValue { path: Rc::clone(path), write_mode: VarWriteMode::SetOnly, expr_count: 0 });
+            self.push_frame(Rc::clone(val_expr))?;
           } else {
             // Build dynamic keys before running setter
             self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter {
@@ -839,7 +827,7 @@ impl<'rant> VM<'rant> {
           // Capture variables
           let mut captured_vars = vec![];
           for capture_id in to_capture.iter() {
-            let var = self.call_stack.get_var_mut(&mut self.engine, capture_id, AccessPathKind::Local)?;
+            let var = self.call_stack.get_var_mut(self.engine, capture_id, AccessPathKind::Local)?;
             var.make_by_ref();
             captured_vars.push((capture_id.clone(), var.clone()));
           }
@@ -877,7 +865,7 @@ impl<'rant> VM<'rant> {
           // Capture variables
           let mut captured_vars = vec![];
           for capture_id in to_capture.iter() {
-            let var = self.call_stack.get_var_mut(&mut self.engine, capture_id, AccessPathKind::Local)?;
+            let var = self.call_stack.get_var_mut(self.engine, capture_id, AccessPathKind::Local)?;
             var.make_by_ref();
             captured_vars.push((capture_id.clone(), var.clone()));
           }
@@ -900,7 +888,6 @@ impl<'rant> VM<'rant> {
           let FunctionCall {
             target,
             arguments,
-            flag,
             is_temporal,
           } = fcall;
 
@@ -911,8 +898,6 @@ impl<'rant> VM<'rant> {
               self.cur_frame_mut().push_intent_front(Intent::Invoke {
                 arg_eval_count: 0,
                 arg_exprs: Rc::clone(arguments),
-                
-                flag: *flag,
                 is_temporal: *is_temporal,
               });
 
@@ -924,12 +909,11 @@ impl<'rant> VM<'rant> {
               self.cur_frame_mut().push_intent_front(Intent::Invoke {
                 arg_exprs: Rc::clone(arguments),
                 arg_eval_count: 0,
-                flag: *flag,
                 is_temporal: *is_temporal,
               });
 
               // Push function expression onto stack
-              self.push_frame(Rc::clone(expr), true)?;
+              self.push_frame(Rc::clone(expr))?;
             },
           }
           return Ok(true)
@@ -940,7 +924,6 @@ impl<'rant> VM<'rant> {
             step_index: 0,
             state: InvokePipeStepState::EvaluatingFunc,
             pipeval: None,
-            flag: compcall.flag,
           });
           return Ok(true)
         },
@@ -961,7 +944,7 @@ impl<'rant> VM<'rant> {
         Rst::Return(expr) => {
           if let Some(expr) = expr {
             self.cur_frame_mut().push_intent_front(Intent::ReturnLast);
-            self.push_frame(Rc::clone(expr), true)?;
+            self.push_frame(Rc::clone(expr))?;
             continue
           } else {
             self.func_return(None)?;
@@ -971,7 +954,7 @@ impl<'rant> VM<'rant> {
         Rst::Continue(expr) => {
           if let Some(expr) = expr {
             self.cur_frame_mut().push_intent_front(Intent::ContinueLast);
-            self.push_frame(Rc::clone(expr), true)?;
+            self.push_frame(Rc::clone(expr))?;
             continue
           } else {
             self.interrupt_repeater(None, true)?;
@@ -981,7 +964,7 @@ impl<'rant> VM<'rant> {
         Rst::Break(expr) => {
           if let Some(expr) = expr {
             self.cur_frame_mut().push_intent_front(Intent::BreakLast);
-            self.push_frame(Rc::clone(expr), true)?;
+            self.push_frame(Rc::clone(expr))?;
             continue
           } else {
             self.interrupt_repeater(None, false)?;
@@ -998,9 +981,7 @@ impl<'rant> VM<'rant> {
     
     // Pop frame once its sequence is finished
     let last_frame = self.pop_frame()?;
-    if let Some(output) = last_frame.into_output() {
-      self.push_val(output)?;
-    }
+    self.push_val(last_frame.into_output())?;
     
     Ok(false)
   }
@@ -1034,12 +1015,10 @@ impl<'rant> VM<'rant> {
 
   /// Prepares a call to a function with the specified arguments.
   #[inline]
-  pub fn call_func(&mut self, func: RantFunctionRef, mut args: Vec<RantValue>, flag: PrintFlag, override_print: bool) -> RuntimeResult<()> {
+  pub fn call_func(&mut self, func: RantFunctionRef, mut args: Vec<RantValue>, override_print: bool) -> RuntimeResult<()> {
     let argc = args.len();
-    let is_printing = !flag.is_sink();
 
-    // Tell frame to print output if it's available
-    if is_printing && !override_print {
+    if !override_print {
       self.cur_frame_mut().push_intent_front(Intent::PrintLast);
     }
 
@@ -1056,7 +1035,7 @@ impl<'rant> VM<'rant> {
     match &func.body {
       RantFunctionInterface::Foreign(foreign_func) => {
         let foreign_func = Rc::clone(foreign_func);
-        self.push_native_call_frame(Box::new(move |vm| foreign_func(vm, args)), is_printing, StackFrameFlavor::NativeCall)?;
+        self.push_native_call_frame(Box::new(move |vm| foreign_func(vm, args)), StackFrameFlavor::NativeCall)?;
       },
       RantFunctionInterface::User(user_func) => {
         // Split args at vararg
@@ -1075,7 +1054,7 @@ impl<'rant> VM<'rant> {
         let mut vararg = func.is_variadic().then(|| RantValue::List(Rc::new(RefCell::new(args_iter.collect::<RantList>()))));
 
         // Push the function onto the call stack
-        self.push_frame_flavored(Rc::clone(user_func), is_printing, func.flavor.unwrap_or(StackFrameFlavor::FunctionBody))?;
+        self.push_frame_flavored(Rc::clone(user_func), func.flavor.unwrap_or(StackFrameFlavor::FunctionBody))?;
 
         // Pass captured vars to the function scope
         for (capture_name, capture_var) in func.captured_vars.iter() {
@@ -1098,7 +1077,7 @@ impl<'rant> VM<'rant> {
             let user_arg = args_nonvariadic.next();
             if p.is_optional() && user_arg.is_none() {
               if let Some(default_arg_expr) = &p.default_value_expr {
-                default_arg_exprs.push((Rc::clone(&default_arg_expr), i));
+                default_arg_exprs.push((Rc::clone(default_arg_expr), i));
                 needs_default_args = true;
               }
               continue
@@ -1326,7 +1305,6 @@ impl<'rant> VM<'rant> {
 
   /// Checks for an active block and attempts to iterate it. If a valid element is returned, it is pushed onto the call stack.
   pub fn check_block(&mut self) -> RuntimeResult<()> {
-    let mut is_printing = false;
     let mut is_repeater = false;
 
     let rng = self.rng_clone();
@@ -1337,8 +1315,6 @@ impl<'rant> VM<'rant> {
       
       // Get the next element
       if let Some(element) = state.next_element(rng.as_ref()).into_runtime_result()? {
-        // Figure out if the block is supposed to print anything
-        is_printing = !state.flag().is_sink();
         Some(element)
       } else {
         // If the block is done, pop the state from the block stack
@@ -1358,14 +1334,11 @@ impl<'rant> VM<'rant> {
 
       match element {
         BlockAction::Element(elem_seq) => {
-          // Determine if we should print anything, or just push the result to the stack
-          if is_printing {
-            self.cur_frame_mut().push_intent_front(Intent::PrintLast);
-          }
+          self.cur_frame_mut().push_intent_front(Intent::PrintLast);
+
           // Push the next element
           self.push_frame_flavored(
             Rc::clone(&elem_seq), 
-            is_printing, 
             if is_repeater { 
               StackFrameFlavor::RepeaterElement 
             } else { 
@@ -1374,19 +1347,10 @@ impl<'rant> VM<'rant> {
           )?;
         },
         BlockAction::PipedElement { elem_func, pipe_func } => {
-          // Determine if we should print anything, or just push the result to the stack
-          if is_printing {
-            self.cur_frame_mut().push_intent_front(Intent::PrintLast);
-          }
-
-          let flag = if is_printing {
-            PrintFlag::Hint
-          } else {
-            PrintFlag::Sink
-          };
+          self.cur_frame_mut().push_intent_front(Intent::PrintLast);
 
           // Call the pipe function
-          self.call_func(pipe_func, vec![RantValue::Function(elem_func)], flag, true)?;
+          self.call_func(pipe_func, vec![RantValue::Function(elem_func)], true)?;
         },
         BlockAction::Separator(separator) => {
           match separator {
@@ -1394,8 +1358,7 @@ impl<'rant> VM<'rant> {
             RantValue::Function(sep_func) => {
               self.push_val(RantValue::Function(sep_func))?;
               self.cur_frame_mut().push_intent_front(Intent::Call { 
-                argc: 0, 
-                flag: if is_printing { PrintFlag::Hint } else { PrintFlag::Sink }, 
+                argc: 0,
                 override_print: false 
               });
             },
@@ -1414,7 +1377,7 @@ impl<'rant> VM<'rant> {
   /// Performs any necessary preparation (such as pushing weight intents) before pushing a block.
   /// If the block can be pushed immediately, it will be.
   #[inline]
-  pub fn pre_push_block(&mut self, block: &Rc<Block>, flag: PrintFlag) -> RuntimeResult<()> {
+  pub fn pre_push_block(&mut self, block: &Rc<Block>) -> RuntimeResult<()> {
     if block.is_weighted {
       self.cur_frame_mut().push_intent_front(Intent::BuildWeightedBlock {
         block: Rc::clone(block),
@@ -1422,16 +1385,16 @@ impl<'rant> VM<'rant> {
         pop_next_weight: false,
       });
     } else {
-      self.push_block(block, None, flag)?;
+      self.push_block(block, None)?;
     }
     Ok(())
   }
 
   /// Consumes attributes and pushes a block onto the resolver stack.
   #[inline]
-  pub fn push_block(&mut self, block: &Block, weights: Option<Weights>, flag: PrintFlag) -> RuntimeResult<()> {
+  pub fn push_block(&mut self, block: &Block, weights: Option<Weights>) -> RuntimeResult<()> {
     // Push a new state onto the block stack
-    self.resolver.push_block(block, weights, flag);
+    self.resolver.push_block(block, weights);
 
     // Check the block to make sure it actually does something.
     // If the block has some skip condition, it will automatically remove it, and this method will have no net effect.
@@ -1508,12 +1471,11 @@ impl<'rant> VM<'rant> {
 
   /// Pushes a frame onto the call stack without overflow checks.
   #[inline(always)]
-  fn push_frame_unchecked(&mut self, callee: Rc<Sequence>, use_output: bool, flavor: StackFrameFlavor) {
+  fn push_frame_unchecked(&mut self, callee: Rc<Sequence>, flavor: StackFrameFlavor) {
     runtime_trace!("push_frame_unchecked");
     let frame = StackFrame::new(
       callee, 
-      use_output, 
-      self.call_stack.top().map(|last| last.output()).flatten()
+      self.call_stack.top().map(|last| last.output())
     ).with_flavor(flavor);
 
     self.call_stack.push_frame(frame);
@@ -1521,7 +1483,7 @@ impl<'rant> VM<'rant> {
   
   /// Pushes a frame onto the call stack.
   #[inline(always)]
-  pub fn push_frame(&mut self, callee: Rc<Sequence>, use_output: bool) -> RuntimeResult<()> {
+  pub fn push_frame(&mut self, callee: Rc<Sequence>) -> RuntimeResult<()> {
     runtime_trace!("push_frame");
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
@@ -1530,8 +1492,7 @@ impl<'rant> VM<'rant> {
     
     let frame = StackFrame::new(
       callee,
-      use_output,
-      self.call_stack.top().map(|last| last.output()).flatten()
+      self.call_stack.top().map(|last| last.output())
     );
 
     self.call_stack.push_frame(frame);
@@ -1539,7 +1500,7 @@ impl<'rant> VM<'rant> {
   }
 
   /// Pushes an empty frame onto the call stack with a single `RuntimeCall` intent.
-  pub fn push_native_call_frame(&mut self, callee: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
+  pub fn push_native_call_frame(&mut self, callee: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, flavor: StackFrameFlavor) -> RuntimeResult<()> {
     runtime_trace!("push_native_call_frame");
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
@@ -1550,8 +1511,7 @@ impl<'rant> VM<'rant> {
 
     let mut frame = StackFrame::with_extended_config(
       None,
-      use_output,
-      self.call_stack.top().map(|last| last.output()).flatten(),
+      self.call_stack.top().map(|last| last.output()),
       Rc::clone(last_frame.origin()),
       last_frame.debug_pos(),
       StackFrameFlavor::Original
@@ -1568,7 +1528,7 @@ impl<'rant> VM<'rant> {
 
   /// Pushes a flavored frame onto the call stack.
   #[inline(always)]
-  pub fn push_frame_flavored(&mut self, callee: Rc<Sequence>, use_output: bool, flavor: StackFrameFlavor) -> RuntimeResult<()> {
+  pub fn push_frame_flavored(&mut self, callee: Rc<Sequence>, flavor: StackFrameFlavor) -> RuntimeResult<()> {
     runtime_trace!("push_frame_flavored");
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
@@ -1577,8 +1537,7 @@ impl<'rant> VM<'rant> {
     
     let frame = StackFrame::new(
       callee,
-      use_output,
-      self.call_stack.top().map(|last| last.output()).flatten()
+      self.call_stack.top().map(|last| last.output())
     ).with_flavor(flavor);
 
     self.call_stack.push_frame(frame);
@@ -1602,13 +1561,11 @@ impl<'rant> VM<'rant> {
         self.push_val(break_val)?;
       } else {
         for i in 0..=block_depth {
-          let old_frame = self.pop_frame()?;
-          if let Some(output) = old_frame.into_output() {
-            if i < block_depth {
-              self.cur_frame_mut().write_value(output);
-            } else {
-              self.push_val(output)?;
-            }
+          let old_frame_output = self.pop_frame()?.into_output();
+          if i < block_depth {
+            self.cur_frame_mut().write_value(old_frame_output);
+          } else {
+            self.push_val(old_frame_output)?;
           }
         }
       }
@@ -1639,7 +1596,7 @@ impl<'rant> VM<'rant> {
         for i in 0..=block_depth {
           let old_frame = self.pop_frame()?;
           let old_frame_flavor = old_frame.flavor();
-          let old_frame_value = old_frame.into_output();
+          let old_frame_output = old_frame.into_output();
 
           // If a block state is associated with the popped frame, pop that too
           match old_frame_flavor {
@@ -1650,12 +1607,10 @@ impl<'rant> VM<'rant> {
           }
 
           // Handle output
-          if let Some(output) = old_frame_value {
-            if i < block_depth {
-              self.cur_frame_mut().write_value(output);
-            } else {
-              self.push_val(output)?;
-            }
+          if i < block_depth {
+            self.cur_frame_mut().write_value(old_frame_output);
+          } else {
+            self.push_val(old_frame_output)?;
           }
         }
       }
@@ -1727,13 +1682,13 @@ impl<'rant> VM<'rant> {
   /// Gets a reference to the Rant context that created the VM.
   #[inline(always)]
   pub fn context(&self) -> &Rant {
-    &self.engine
+    self.engine
   }
 
   /// Gets a mutable reference to the Rant context that created the VM.
   #[inline(always)]
   pub fn context_mut(&mut self) -> &mut Rant {
-    &mut self.engine
+    self.engine
   }
 
   /// Gets a reference to the resolver associated with the VM.

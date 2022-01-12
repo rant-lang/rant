@@ -64,7 +64,7 @@ fn spaced_fragments() {
 
 #[test]
 fn sinked_block() {
-  test_rant!("test _{test}", "testtest");
+  test_rant!("test ~{test} test", "testtesttest");
 }
 
 #[test]
@@ -471,41 +471,6 @@ fn slice_list_from_dynamic() {
 #[test]
 fn slice_list_to_dynamic() {
   test_rant_file!("sources/slice/list/to_dynamic.rant");
-}
-
-#[test]
-fn slice_block_full() {
-  test_rant_file!("sources/slice/block/full.rant");
-}
-
-#[test]
-fn slice_block_between_static() {
-  test_rant_file!("sources/slice/block/between_static.rant");
-}
-
-#[test]
-fn slice_block_from_static() {
-  test_rant_file!("sources/slice/block/from_static.rant");
-}
-
-#[test]
-fn slice_block_to_static() {
-  test_rant_file!("sources/slice/block/to_static.rant");
-}
-
-#[test]
-fn slice_block_between_dynamic() {
-  test_rant_file!("sources/slice/block/between_dynamic.rant");
-}
-
-#[test]
-fn slice_block_from_dynamic() {
-  test_rant_file!("sources/slice/block/from_dynamic.rant");
-}
-
-#[test]
-fn slice_block_to_dynamic() {
-  test_rant_file!("sources/slice/block/to_dynamic.rant");
 }
 
 #[test]

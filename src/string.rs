@@ -9,7 +9,7 @@ use crate::{FromRant, InternalString, IntoRant, RantList, RantValue, ValueError,
 type Graphemes = SmallVec<[(usize, usize); 1]>;
 
 /// Represents Rant's `string` type.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct RantString {
   raw: InternalString,
   graphemes: OnceCell<Option<Graphemes>>,
@@ -155,15 +155,6 @@ impl Clone for RantString {
   }
 }
 
-impl Default for RantString {
-  fn default() -> Self {
-    Self {
-      raw: Default::default(),
-      graphemes: Default::default(),
-    }
-  }
-}
-
 impl RantString {
   #[inline]
   pub fn len(&self) -> usize {
@@ -196,7 +187,7 @@ impl From<String> for RantString {
 
 impl From<&String> for RantString {
   fn from(s: &String) -> Self {
-    Self::from_str(&s)
+    Self::from_str(s)
   }
 }
 

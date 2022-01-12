@@ -3,7 +3,7 @@ use std::mem;
 use data::DataSourceError;
 
 use super::*;
-use crate::lang::{AccessPathKind, PrintFlag};
+use crate::lang::{AccessPathKind};
 
 /// `[$alt: a (any); b+ (any)]`
 ///
@@ -31,7 +31,7 @@ pub(crate) fn call(vm: &mut VM, (func, args): (RantFunctionRef, Option<Vec<RantV
       vm.push_val(arg)?;
     }
   }
-  vm.cur_frame_mut().push_intent_front(Intent::Call { argc, flag: PrintFlag::None, override_print: false });
+  vm.cur_frame_mut().push_intent_front(Intent::Call { argc, override_print: false });
   Ok(())
 }
 
@@ -183,10 +183,10 @@ pub(crate) fn require(vm: &mut VM, module_path: String) -> RantStdResult {
     }
 
     // If not cached, attempt to load it from file and run its root sequence
-    let caller_origin = Rc::clone(&vm.cur_frame().origin());
+    let caller_origin = Rc::clone(vm.cur_frame().origin());
     let module_pgm = vm.context_mut().try_read_module(&module_path, caller_origin).into_runtime_result()?;
     vm.cur_frame_mut().push_intent_front(Intent::ImportLastAsModule { module_name, descope: 1 });
-    vm.push_frame_flavored(Rc::clone(&module_pgm.root), true, StackFrameFlavor::FunctionBody)?;
+    vm.push_frame_flavored(Rc::clone(&module_pgm.root), StackFrameFlavor::FunctionBody)?;
     Ok(())
   } else {
     runtime_error!(RuntimeErrorType::ArgumentError, "module name is missing from path");
@@ -198,7 +198,7 @@ pub(crate) fn try_(vm: &mut VM, (context, handler): (RantValue, Option<RantFunct
   vm.cur_frame_mut().push_intent_front(Intent::DropStaleUnwinds);
   match context {
     RantValue::Function(func) => {
-      vm.call_func(func, vec![], PrintFlag::Sink, false)?;
+      vm.call_func(func, vec![], false)?;
     },
     other => runtime_error!(RuntimeErrorType::ArgumentError, "try: cannot protect '{}' value; only functions and blocks can be protected", other.get_type())
   }

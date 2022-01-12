@@ -43,7 +43,6 @@ pub enum Intent {
   Invoke { 
     arg_exprs: Rc<Vec<ArgumentExpr>>, 
     arg_eval_count: usize,
-    flag: PrintFlag, 
     is_temporal: bool, 
   },
   /// Invoke a single function in a piped function call chain.
@@ -56,15 +55,13 @@ pub enum Intent {
     state: InvokePipeStepState,
     /// The pipe value from the last step
     pipeval: Option<RantValue>,
-    /// The print flag to use.
-    flag: PrintFlag,
   },
   /// Evaluates each sequence in `default_arg_exprs` in order and assigns their results to local constants with their associated `Identifier`.
   CreateDefaultArgs { context: RantFunctionRef, default_arg_exprs: Vec<(Rc<Sequence>, usize)>, eval_index: usize, },
   /// Pop `argc` args off the stack, then pop a function off the stack and call it with the args.
-  Call { argc: usize, flag: PrintFlag, override_print: bool },
+  Call { argc: usize, override_print: bool },
   /// Call a function for every variant of a temporal argument set and increment the provided temporal state.
-  CallTemporal { func: RantFunctionRef, args: Rc<Vec<RantValue>>, temporal_state: TemporalSpreadState, flag: PrintFlag, },
+  CallTemporal { func: RantFunctionRef, args: Rc<Vec<RantValue>>, temporal_state: TemporalSpreadState, },
   /// Pop value from stack and add it to a list. If `index` is out of range, print the list.
   BuildList { init: Rc<Vec<Rc<Sequence>>>, index: usize, list: RantList },
   /// Pop value and optional key from stack and add them to a map. If `pair_index` is out of range, print the map.

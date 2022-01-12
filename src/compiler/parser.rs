@@ -198,6 +198,12 @@ struct ParsedSequence {
   extras: Option<ParsedSequenceExtras>,
 }
 
+/// Contains information about a successfully parsed block.
+struct ParsedBlock {
+  auto_hint: bool,
+  block: Block
+}
+
 /// A parser that turns Rant code into an RST (Rant Syntax Tree).
 pub struct RantParser<'source, 'report, R: Reporter> {
   /// A string slice containing the source code being parsed.
@@ -285,7 +291,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     let mut sequence = Sequence::empty(&self.info);
     let mut next_print_flag = PrintFlag::None;
     let mut last_print_flag_span: Option<Range<usize>> = None;
-    let mut is_seq_printing = false;
+    let mut is_seq_text = false;
     let mut pending_whitespace = None;
     let debug = self.debug_enabled;
 
@@ -329,6 +335,28 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       
       // Macro for prohibiting hints/sinks before certain tokens
       macro_rules! no_flags {
+        () => {
+          if (!matches!(next_print_flag, PrintFlag::None)) {
+            if let Some(flag_span) = last_print_flag_span.take() {
+              self.report_error(match next_print_flag {
+                PrintFlag::Hint => Problem::InvalidHint,
+                PrintFlag::Sink => Problem::InvalidSink,
+                PrintFlag::None => unreachable!()
+              }, &flag_span)
+            }
+          }
+        };
+        ($b:block) => {
+          if matches!(next_print_flag, PrintFlag::None) {
+            $b
+          } else if let Some(flag_span) = last_print_flag_span.take() {
+            self.report_error(match next_print_flag {
+              PrintFlag::Hint => Problem::InvalidHint,
+              PrintFlag::Sink => Problem::InvalidSink,
+              PrintFlag::None => unreachable!()
+            }, &flag_span)
+          }
+        };
         (on $b:block) => {{
           let elem = $b;
           if !matches!(next_print_flag, PrintFlag::None) {
@@ -342,18 +370,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }
           inject_debug_info!();
           sequence.push(Rc::new(elem));
-        }};
-        ($b:block) => {
-          if matches!(next_print_flag, PrintFlag::None) {
-            $b
-          } else if let Some(flag_span) = last_print_flag_span.take() {
-            self.report_error(match next_print_flag {
-              PrintFlag::Hint => Problem::InvalidHint,
-              PrintFlag::Sink => Problem::InvalidSink,
-              PrintFlag::None => unreachable!()
-            }, &flag_span)
-          }
-        };
+        }};        
       }
 
       macro_rules! emit {
@@ -379,7 +396,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       
       macro_rules! whitespace {
         (allow) => {
-          if is_seq_printing {
+          if is_seq_text {
             if let Some(ws) = pending_whitespace.take() {
               emit!(Rst::Whitespace(ws));
             }
@@ -426,7 +443,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Hint
         Hint => no_flags!({
           whitespace!(allow);
-          is_seq_printing = true;
+          is_seq_text = true;
           next_print_flag = PrintFlag::Hint;
           last_print_flag_span = Some(span.clone());
           continue
@@ -447,12 +464,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             // Boolean constants
             KW_TRUE => no_debug!(no_flags!(on {
               whitespace!(ignore both);
-              is_seq_printing = true;
+              is_seq_text = true;
               Rst::Boolean(true)
             })),
             KW_FALSE => no_debug!(no_flags!(on {
               whitespace!(ignore both);
-              is_seq_printing = true;
+              is_seq_text = true;
               Rst::Boolean(false)
             })),
             // Control flow
@@ -489,7 +506,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   sequence
                 },
                 end_type: charm_end_type,
-                is_text: is_charm_printing || is_seq_printing,
+                is_text: is_charm_printing || is_seq_text,
                 extras: charm_extras,
               })
             },
@@ -500,14 +517,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Block start
         LeftBrace => {
           // Read in the entire block
-          let block = self.parse_block(false, next_print_flag)?;
+          let parsed_block = self.parse_block(false)?;
 
           // Decide what to do with previous whitespace
           match next_print_flag {                        
             // If hinted, allow pending whitespace
             PrintFlag::Hint => {
               whitespace!(allow);
-              is_seq_printing = true;
+              is_seq_text = true;
             },
             
             // If sinked, delete pending whitespace
@@ -515,15 +532,16 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             
             // If no flag, infer from block contents
             PrintFlag::None => {
-              // Inherit hints from inner blocks
-              if let Block { flag: PrintFlag::Hint, ..} = block {
+              if parsed_block.auto_hint {
                 whitespace!(allow);
-                is_seq_printing = true;
+                is_seq_text = true;
+              } else {
+                whitespace!(ignore both)
               }
             }
           }
           
-          emit!(Rst::Block(Rc::new(block)));
+          emit!(Rst::Block(Rc::new(parsed_block.block)));
         },
 
         // Pipe operator
@@ -535,7 +553,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("argument"),
                 end_type: SequenceEndType::FunctionArgEndToPipe,
-                is_text: is_seq_printing,
+                is_text: is_seq_text,
                 extras: None,
               })
             },
@@ -543,7 +561,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("anonymous function expression"),
                 end_type: SequenceEndType::AnonFunctionExprToPipe,
-                is_text: is_seq_printing,
+                is_text: is_seq_text,
                 extras: None,
               })
             },
@@ -577,7 +595,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("block element"),
                 end_type: SequenceEndType::BlockDelim,
-                is_text: is_seq_printing,
+                is_text: is_seq_text,
                 extras: None,
               })
             },
@@ -659,26 +677,16 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         
         // Function creation or call
         LeftBracket => {
-          let func_access = self.parse_func_access(next_print_flag)?;
+          if let PrintFlag::Sink = next_print_flag {
+            whitespace!(ignore next);
+          }
+
+          let func_access = self.parse_func_access()?;
           
-          // Handle hint/sink behavior
-          match func_access {
-            Rst::FuncCall(FunctionCall { flag, ..}) => {
-              // If the call is not sinked, allow whitespace around it
-              match flag {
-                PrintFlag::Hint => {
-                  is_seq_printing = true;
-                  whitespace!(allow);
-                },
-                _ => whitespace!(ignore both)
-              }
-            },
-            // Definitions are implicitly sinked and ignore surrounding whitespace
-            Rst::FuncDef(_) => {
-              whitespace!(ignore both);
-            },
-            // Do nothing if it's an unsupported node type, e.g. NOP
-            _ => {}
+          // Definitions are implicitly sinked and ignore surrounding whitespace
+          if let Rst::FuncDef(_) = func_access {
+            no_flags!();
+            whitespace!(ignore both);
           }
           
           emit!(func_access);
@@ -715,7 +723,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           for accessor in accessors {
             match accessor {
               Rst::Get(..) | Rst::Depth(..) => {
-                is_seq_printing = true;
+                is_seq_text = true;
                 whitespace!(allow);
               },
               Rst::Set(..) | Rst::DefVar(..) | Rst::DefConst(..) => {
@@ -750,7 +758,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         Bang | Question | Slash | Plus | Dollar | Equals | Percent
         => no_flags!(on {
           whitespace!(allow);
-          is_seq_printing = true;
+          is_seq_text = true;
           let frag = self.reader.last_token_string();
           Rst::Fragment(frag)
         }),
@@ -758,7 +766,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Fragment
         Fragment => no_flags!(on {
           whitespace!(allow);
-          is_seq_printing = true;
+          is_seq_text = true;
           let mut frag = self.reader.last_token_string();
           consume_fragments!(frag);
           Rst::Fragment(frag)
@@ -767,7 +775,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Whitespace (only if sequence isn't empty)
         Whitespace => no_flags!({
           // Don't set is_printing here; whitespace tokens always appear with other printing tokens
-          if is_seq_printing {
+          if is_seq_text {
             let ws = self.reader.last_token_string();
             whitespace!(queue ws);
           }
@@ -776,7 +784,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Escape sequences
         Escape(ch) => no_flags!(on {
           whitespace!(allow);
-          is_seq_printing = true;
+          is_seq_text = true;
           let mut frag = InternalString::new();
           frag.push(ch);
           consume_fragments!(frag);
@@ -786,14 +794,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Integers
         Integer(n) => no_flags!(on {
           whitespace!(allow);
-          is_seq_printing = true;
+          is_seq_text = true;
           Rst::Integer(n)
         }),
         
         // Floats
         Float(n) => no_flags!(on {
           whitespace!(allow);
-          is_seq_printing = true;
+          is_seq_text = true;
           Rst::Float(n)
         }),
         
@@ -805,7 +813,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Verbatim string literals
         StringLiteral(s) => no_flags!(on {
           whitespace!(allow);
-          is_seq_printing = true;
+          is_seq_text = true;
           Rst::Fragment(s)
         }),
         
@@ -873,7 +881,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         return Ok(ParsedSequence {
           sequence,
           end_type: SequenceEndType::SingleItemEnd,
-          is_text: is_seq_printing,
+          is_text: is_seq_text,
           extras: None,
         })
       }
@@ -891,7 +899,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     Ok(ParsedSequence {
       sequence: sequence.with_name_str(MAIN_PROGRAM_SCOPE_NAME),
       end_type: SequenceEndType::ProgramEnd,
-      is_text: is_seq_printing,
+      is_text: is_seq_text,
       extras: None,
     })
   }
@@ -1083,7 +1091,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   SequenceEndType::ParamDefaultValueSeparator => true,
                   SequenceEndType::ParamDefaultValueSignatureEnd => false,
                   SequenceEndType::ProgramEnd => {
-                    self.report_error(Problem::UnclosedFunctionSignature, &start_span);
+                    self.report_error(Problem::UnclosedFunctionSignature, start_span);
                     return Err(())
                   }
                   _ => unreachable!(),
@@ -1133,7 +1141,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   return Err(())
                 },
                 None => {
-                  self.report_error(Problem::UnclosedFunctionSignature, &start_span);
+                  self.report_error(Problem::UnclosedFunctionSignature, start_span);
                   return Err(())
                 },
               }
@@ -1148,7 +1156,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               self.report_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span)
             },
             None => {
-              self.report_error(Problem::UnclosedFunctionSignature, &start_span);
+              self.report_error(Problem::UnclosedFunctionSignature, start_span);
               return Err(())
             }
           }
@@ -1163,7 +1171,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       },
       // Nothing is here, emit a hard error
       None => {
-        self.report_error(Problem::UnclosedFunctionSignature, &start_span);
+        self.report_error(Problem::UnclosedFunctionSignature, start_span);
         return Err(())
       }
     }
@@ -1172,7 +1180,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
     
   /// Parses a function definition, anonymous function, or function call.
-  fn parse_func_access(&mut self, flag: PrintFlag) -> ParseResult<Rst> {
+  fn parse_func_access(&mut self) -> ParseResult<Rst> {
     let start_span = self.reader.last_token_span();
     self.reader.skip_ws();
     // Check if we're defining a function (with [$|% ...]) or creating a lambda (with [? ...])
@@ -1419,7 +1427,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let fcall = FunctionCall {
             target: FunctionCallTarget::Expression(Rc::new(func_expr)),
             arguments: Rc::new(func_args),
-            flag,
             is_temporal,
           };
 
@@ -1454,7 +1461,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             let fcall = FunctionCall {
               target: FunctionCallTarget::Path(Rc::new(func_path)),
               arguments: Rc::new(func_args),
-              flag,
               is_temporal,
             };
 
@@ -1472,7 +1478,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       // Return the finished node
       Ok(if is_piped {
         Rst::PipedCall(PipedCall {
-          flag,
           is_temporal: is_chain_temporal,
           steps: Rc::new(calls),
         })
@@ -1829,7 +1834,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
     
   /// Parses a block.
-  fn parse_block(&mut self, expect_opening_brace: bool, flag: PrintFlag) -> ParseResult<Block> {
+  fn parse_block(&mut self, expect_opening_brace: bool) -> ParseResult<ParsedBlock> {
     if expect_opening_brace && !self.reader.eat_where(|t| matches!(t, Some((LeftBrace, _)))) {
       self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
       return Err(())
@@ -1887,12 +1892,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       }
     }
     
-    // Figure out the printflag before returning the block
-    if auto_hint && flag != PrintFlag::Sink {
-      Ok(Block::new(PrintFlag::Hint, is_weighted, elements))
-    } else {
-      Ok(Block::new(flag, is_weighted, elements))
-    }
+    Ok(ParsedBlock {
+      block: Block::new(is_weighted, elements),
+      auto_hint
+    })
   }
   
   /// Parses an identifier.

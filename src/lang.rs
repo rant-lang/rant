@@ -394,8 +394,6 @@ impl DerefMut for Sequence {
 /// A block is a set of zero or more distinct Rant code snippets.
 #[derive(Debug)]
 pub struct Block {
-  /// The print flag attached to the block.
-  pub flag: PrintFlag,
   /// Determines whether the block uses weights.
   pub is_weighted: bool,
   /// The elements associated with the block.
@@ -404,9 +402,8 @@ pub struct Block {
 
 impl Block {
   /// Creates a new block.
-  pub fn new(flag: PrintFlag, is_weighted: bool, elements: Vec<BlockElement>) -> Self {
+  pub fn new(is_weighted: bool, elements: Vec<BlockElement>) -> Self {
     Block {
-      flag,
       is_weighted,
       elements: Rc::new(elements)
     }
@@ -550,8 +547,6 @@ pub enum FunctionCallTarget {
 /// A function call.
 #[derive(Debug)]
 pub struct FunctionCall {
-  /// The primting behavior.
-  pub flag: PrintFlag,
   /// The function to call.
   pub target: FunctionCallTarget,
   /// The arguments to pass.
@@ -563,8 +558,6 @@ pub struct FunctionCall {
 /// A piped function call.
 #[derive(Debug)]
 pub struct PipedCall {
-  /// The print flag associated with the call.
-  pub flag: PrintFlag,
   /// The function calls in the chain.
   pub steps: Rc<Vec<FunctionCall>>,
   /// Determines whether the call executes temporally.

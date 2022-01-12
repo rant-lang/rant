@@ -741,7 +741,7 @@ fn get_display_string(value: &RantValue, max_depth: usize) -> String {
             } else {
               buf.push_str("; ");
             }
-            buf.push_str(&format!("{} = {}", key_string, get_display_string(&val, max_depth - 1)));
+            buf.push_str(&format!("{} = {}", key_string, get_display_string(val, max_depth - 1)));
           }
         }
       } else {

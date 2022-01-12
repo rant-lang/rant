@@ -1,5 +1,5 @@
 use std::{cell::RefCell, error::Error, fmt::Display, mem, ops::Index, rc::Rc};
-use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionRef, RantValue, ValueError, lang::{Block, BlockElement, PrintFlag, Sequence}, rng::RantRng, runtime_error};
+use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionRef, RantValue, ValueError, lang::{Block, BlockElement, Sequence}, rng::RantRng, runtime_error};
 use smallvec::SmallVec;
 use super::{IntoRuntimeResult, RuntimeError, RuntimeErrorType, RuntimeResult, StackFrameFlavor};
 
@@ -97,8 +97,6 @@ pub struct BlockState {
   weights: Option<Weights>,
   /// Flag to short-circuit the block
   force_stop: bool,
-  /// Indicates how block output should be handled
-  flag: PrintFlag,
   /// The attributes associated with the block
   attrs: AttributeFrame,
   /// How many steps have been run so far
@@ -204,11 +202,6 @@ impl BlockState {
     // Finite repetitions are exhausted
     || (!self.attrs.reps.is_infinite() && self.cur_steps >= self.total_steps)
   }
-
-  #[inline(always)]
-  pub fn flag(&self) -> PrintFlag {
-    self.flag
-  }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -259,12 +252,11 @@ impl Resolver {
 impl Resolver {
   /// Adds a new block state to the block stack.
   #[inline]
-  pub fn push_block(&mut self, block: &Block, weights: Option<Weights>, flag: PrintFlag) {
+  pub fn push_block(&mut self, block: &Block, weights: Option<Weights>) {
     let attrs = self.take_attrs();
     let state = BlockState {
       elements: Rc::clone(&block.elements),
       weights,
-      flag: PrintFlag::prioritize(block.flag, flag),
       cur_steps: 0,
       total_steps: attrs.reps.get_rep_count_for(block),
       attrs,

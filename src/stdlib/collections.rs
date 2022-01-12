@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use super::*;
-use crate::{lang::{PrintFlag, Slice}};
+use crate::lang::Slice;
 
 pub(crate) fn collect(vm: &mut VM, items: VarArgs<RantValue>) -> RantStdResult {
   vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(items.iter().cloned().collect()))));
@@ -111,7 +111,6 @@ pub(crate) fn filter(vm: &mut VM, (list, predicate): (RantListRef, RantFunctionR
     vm.push_val(predicate_arg)?;
     vm.cur_frame_mut().push_intent_front(Intent::Call {
       argc: 1,
-      flag: PrintFlag::None,
       override_print: true,
     });
 
@@ -168,7 +167,6 @@ pub(crate) fn map(vm: &mut VM, (list, map_func): (RantListRef, RantFunctionRef))
     vm.push_val(map_func_arg)?;
     vm.cur_frame_mut().push_intent_front(Intent::Call {
       argc: 1,
-      flag: PrintFlag::None,
       override_print: true,
     });
 
@@ -221,7 +219,6 @@ pub(crate) fn zip(vm: &mut VM, (list_a, list_b, zip_func): (RantListRef, RantLis
     vm.push_val(src_a_ref.get(index).cloned().unwrap_or_default())?;
     vm.cur_frame_mut().push_intent_front(Intent::Call {
       argc: 2,
-      flag: PrintFlag::Hint,
       override_print: true,
     });
 

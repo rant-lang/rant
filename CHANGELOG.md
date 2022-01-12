@@ -23,6 +23,8 @@
 * Changed sink operator: `_` &rarr; `~`
 * Changed emptyval literal: `~` &rarr; `<>`
 * Added old behavior back to `[cat]`; previous `[cat]` behavior migrated to `[print]` function
+* Changed behavior of sinks
+  * Instead of suppressing output, sinking an element does the opposite of hinting: it informs the compiler that the sinked element should be treated as _not text_, causing surrounding whitespace to be ignored during compilation.
 * Upgraded library dependencies:
   * `cast` &rarr; 0.3.0
 * Upgraded CLI dependencies:
