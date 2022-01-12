@@ -33,24 +33,27 @@ just as a regular expression compares inputs to a pattern, Rant generates matchi
 
 ## Why Rant?
 
-🧰 **Painless API** <br/> 
-Rant's API is designed to be as straightforward as possible. Integrating Rant into your project only takes a few lines of code.
+🧰 **Pain-Free API** <br/> 
+Rant has a straightforward, no-nonsense API that is designed to be easy to use.
+No getting lost in configuration hell. Integrating Rant into your project only takes a few lines of code.
 
 💻 **Cross-Platform** <br/> 
-Write once, run anywhere-- Rant code is fully portable across all supported platforms.
+Write once, run anywhere-- Rant code is fully portable across Windows, Mac, and Linux.
 
 🎲 **Built with ♥ for RNG** <br/>
-Enjoy a wide array of built-in utilities for generating random numbers, strings, booleans, lists, list subsets, and much more. The internal RNG can be seeded before execution to produce deterministic outputs.
+Rant is made with random generation in mind as a major use-case.
+
+Enjoy a wide array of built-in utilities for generating random numbers, strings, booleans, lists, list subsets, and much more for all your randomization needs. The internal RNG can be manually seeded to produce repeatable outputs.
+
+🎨 **It's a Scripting Language** <br/> 
+Inspired by other popular scripting languages, Rant is a fully-fledged imperative programming language with a dynamic type system. Enjoy support for common primitives like strings, numbers, collections, closures, and more.
+
+🖨 **It's a Templating Language** <br/> 
+Rant is all about "printing": each lexical scope has an output to add print (i.e. append values) to, which then prints itself to the parent output, and so on. 
+This enables you to intuitively build strings, collections, and more in a familiar templating structure.
 
 🔱 **Advanced Branching** <br/> 
 Fine-tune branching behavior with a multitude of configuration options and branch selection modes for iterative, random, and weighted selection.
-
-🎨 **Dynamic Variable System** <br/> 
-Inspired by other popular scripting languages, Rant's dynamic variable system ergonomically supports common primitives, collection types, closures, and more.
-
-🖨 **Print Semantics** <br/> 
-Rant is all about "printing": each lexical scope has an output to add values ("print") to, which then prints itself to the parent output, and so on. 
-This lets you easily build strings and collections from multiple parts with minimal code.
 
 🧬 **Delightful Combinatorics** <br/> 
 Perform nested mappings, filters, zips, combinations, and more with Rant's intuitive piping syntax.
@@ -58,8 +61,10 @@ Perform nested mappings, filters, zips, combinations, and more with Rant's intui
 🎛 **Automatic Formatting** <br/> 
 Passively format text output with automatic capitalization, whitespace normalization, and number formatting.
 
-🧩 **Modules** <br/> 
-Create libraries of Rant functions and share them between your programs using Rant's simple module system.
+🧩 **Simple Module System** <br/> 
+Creating a Rant module and depending on it in another Rant program is as trivial as writing the script and importing it... that's it.
+
+You can add your own package manager on top if you want, but it's not required.
 
 📚 **Rant Standard Library** <br/> 
 A comprehensive standard library provides the tools needed to rapidly iterate on your ideas.

@@ -1,7 +1,6 @@
 [package]
 name = "rant"
 version = "4.0.0-alpha.23"
-authors = ["Robin Pederson <TheBerkin@users.noreply.github.com>"]
 edition = "2018"
 description = "The Rant procedural templating language"
 license = "AGPL-3.0-or-later"
@@ -10,6 +9,7 @@ homepage = "https://rant-lang.org"
 keywords = ["rant", "rantlang", "procedural", "text", "generation"]
 categories = ["text-processing", "game-development", "template-engine"]
 readme = "README.md"
+rust-version = "1.57"
 include = [
   "**/*.rs", 
   "Cargo.toml",
@@ -41,7 +41,7 @@ vm-trace = []
 
 [dependencies]
 # Library
-cast = "0.2.5"                    # Automates a lot of native <-> Rant value conversions  
+cast = "0.3.0"                    # Automates a lot of native <-> Rant value conversions  
 cervine = "0.0.6"                 # Simplifies Rant's by-ref variable passing code.
 fnv = "1.0.7"                     # Hashing algorithm used by Rant's map type and other internals.
 line-col = "0.2.1"                # Calculates locations for compiler messages.

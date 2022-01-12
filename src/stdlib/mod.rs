@@ -155,7 +155,12 @@ pub(crate) fn load_stdlib(context: &mut Rant)
   // Constants
   context.set_global_force("RANT_VERSION", RantValue::String(RANT_LANG_VERSION.into()), true);
   context.set_global_force("BUILD_VERSION", RantValue::String(BUILD_VERSION.into()), true);
-  context.set_global_force("INFINITY", RantValue::Float(f64::INFINITY), true);
-  context.set_global_force("NEG_INFINITY", RantValue::Float(f64::NEG_INFINITY), true);
-  context.set_global_force("NAN", RantValue::Float(f64::NAN), true);
+  context.set_global_force("EPSILON", RantValue::EPSILON, true);
+  context.set_global_force("MIN_FLOAT", RantValue::MIN_FLOAT, true);
+  context.set_global_force("MAX_FLOAT", RantValue::MAX_FLOAT, true);
+  context.set_global_force("MIN_INT", RantValue::MIN_INT, true);
+  context.set_global_force("MAX_INT", RantValue::MAX_INT, true);
+  context.set_global_force("INFINITY", RantValue::INFINITY, true);
+  context.set_global_force("NEG_INFINITY", RantValue::NEG_INFINITY, true);
+  context.set_global_force("NAN", RantValue::NAN, true);
 }

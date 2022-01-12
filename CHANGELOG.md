@@ -8,11 +8,23 @@
   * `[chunks]`
   * `[bool]`
   * `[values]`
+* Added stdlib constants:
+  * `MIN_INT`, `MAX_INT`
+  * `MIN_FLOAT`, `MAX_FLOAT`
+  * `EPSILON`
+* Added API items:
+  * `RantValue::MIN_INT`, `RantValue::MAX_INT`
+  * `RantValue::MIN_FLOAT`, `RantValue::MAX_FLOAT`
+  * `RantValue::NAN`
+  * `RantValue::EPSILON`
 
 ### Changes
+* Changed hint operator: `'` &rarr; <code>`</code>
+* Changed sink operator: `_` &rarr; `~`
+* Changed emptyval literal: `~` &rarr; `<>`
 * Added old behavior back to `[cat]`; previous `[cat]` behavior migrated to `[print]` function
 * Upgraded library dependencies:
-  * `cast` &rarr; 0.2.5
+  * `cast` &rarr; 0.3.0
 * Upgraded CLI dependencies:
   * `ctrlc` &rarr; 3.1.9
 * Renamed stdlib functions:
@@ -24,15 +36,17 @@
 
 ### Removed
 * Removed the `block` type
-* Removed the defer operator
+* Removed the defer operator (formerly `<>`)
 * Removed stdlib functions:
   * `[resolve]`
+* Removed `RantValue::nan()` (superceded by constant `RantValue::NAN`)
 
 ### Fixes
 * Fixed bench stats in CLI printing to stdout instead of stderr
 * Fixed anonymous calls always expecting a pipeval even when not in a piped context
 * Fixed pipeval not getting captured in closures
 * Fixed panic in `[pick]` when input list is empty; now prints nothing in this case
+* Fixed several panics in number formatter when handling `<MIN_INT>`
 
 ## 4.0.0-alpha.22
 

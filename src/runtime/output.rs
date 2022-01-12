@@ -81,7 +81,7 @@ impl OutputWriter {
           _ => {},
         }
       },
-      (_, OutputPrintMode::Single) => {
+      (_, OutputPrintMode::Single | OutputPrintMode::Concat) => {
         match &value {
           OutputBuffer::Fragment(_) | OutputBuffer::Whitespace(_) | OutputBuffer::Value(RantValue::String(_)) => {
             self.mode = OutputPrintMode::Text;
@@ -133,7 +133,7 @@ impl OutputWriter {
 impl OutputWriter {
   /// Consumes the output and returns the final value.
   #[inline]
-  pub fn render_value(mut self) -> RantValue {    
+  pub fn render_value(mut self) -> RantValue { 
     match self.buffers.len() {
       // An empty output always returns an empty value
       0 => RantValue::Empty,

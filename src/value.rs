@@ -94,11 +94,14 @@ pub enum RantValue {
 }
 
 impl RantValue {
-  /// Returns NaN (Not a Number).
-  #[inline]
-  pub fn nan() -> Self {
-    Self::Float(f64::NAN)
-  }
+  pub const NAN: Self = Self::Float(f64::NAN);
+  pub const INFINITY: Self = Self::Float(f64::INFINITY);
+  pub const NEG_INFINITY: Self = Self::Float(f64::NEG_INFINITY);
+  pub const MIN_FLOAT: Self = Self::Float(f64::MIN);
+  pub const MAX_FLOAT: Self = Self::Float(f64::MAX);
+  pub const EPSILON: Self = Self::Float(f64::EPSILON);
+  pub const MIN_INT: Self = Self::Int(i64::MIN);
+  pub const MAX_INT: Self = Self::Int(i64::MAX);
 
   /// Returns true if the value is of type `empty`.
   #[inline]
@@ -857,7 +860,7 @@ impl Sub for RantValue {
       (Self::Boolean(a), Self::Boolean(b)) => Self::Int(bi64(a) - bi64(b)),
       (Self::Boolean(a), Self::Int(b)) => Self::Int(bi64(a).saturating_sub(b)),
       (Self::Boolean(a), Self::Float(b)) => Self::Float(bf64(a) - b),
-      _ => Self::nan()
+      _ => Self::NAN
     }
   }
 }
@@ -877,7 +880,7 @@ impl Mul for RantValue {
       (Self::Boolean(a), Self::Int(b)) => Self::Int(bi64(a) * b),
       (Self::Boolean(a), Self::Float(b)) => Self::Float(bf64(a) * b),
       (Self::String(a), Self::Int(b)) => Self::String(a.as_str().repeat(clamp(b, 0, i64::MAX) as usize).into()),
-      _ => Self::nan()
+      _ => Self::NAN
     }
   }
 }
@@ -897,7 +900,7 @@ impl Div for RantValue {
       (Self::Boolean(a), Self::Boolean(b)) => Self::Int(bi64(a) / bi64(b)),
       (Self::Boolean(a), Self::Int(b)) => Self::Int(bi64(a) / b),
       (Self::Boolean(a), Self::Float(b)) => Self::Float(bf64(a) / b),
-      _ => Self::nan()
+      _ => Self::NAN
     })
   }
 }
@@ -911,7 +914,7 @@ impl Rem for RantValue {
       (Self::Int(a), Self::Int(b)) => Self::Int(a % b),
       (Self::Int(a), Self::Float(b)) => Self::Float((a as f64) % b),
       (Self::Int(a), Self::Boolean(b)) => Self::Int(a % bi64(b)),
-      _ => Self::nan()
+      _ => Self::NAN
     })
   }
 }

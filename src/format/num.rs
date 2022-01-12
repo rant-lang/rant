@@ -30,7 +30,7 @@ const BABYLONIAN_TENS: &[&str] = &["", "\u{1230b}", "\u{1230b}\u{1230b}", "\u{12
 const BABYLONIAN_TENS_ALT: &[&str] = &["", "\u{1230b}", "\u{1230b}\u{1230b}", "\u{1230d}", "\u{12469}", "\u{1246a}"];
 
 /// Specifies a format for converting a number to a string.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct NumberFormat {
   /// The numeral system to use.
   pub system: NumeralSystem,
@@ -54,23 +54,6 @@ pub struct NumberFormat {
   pub group_sep: Option<InternalString>,
   /// The decimal separator to use.
   pub decimal_sep: Option<InternalString>,
-}
-
-impl Default for NumberFormat {
-  fn default() -> Self {
-    Self {
-      system: Default::default(),
-      alternate: false,
-      uppercase: false,
-      endianness: Default::default(),
-      infinity: Default::default(),
-      sign: Default::default(),
-      padding: 0,
-      precision: None,
-      group_sep: None,
-      decimal_sep: None,
-    }
-  }
 }
 
 /// Defines sign display modes for formatted numbers.
@@ -454,7 +437,8 @@ impl NumberFormat {
 
   fn format_alpha_integer(&self, input: i64) -> InternalString {
     let mut buf = InternalString::new();
-    let mut n = input.abs();
+    let mut n = input;
+    let sign = n.signum();
 
     if n == 0 { return " ".into() }
 
@@ -462,11 +446,11 @@ impl NumberFormat {
 
     buf.push_str(self.get_integer_sign(input));
 
-    while n > 0 {
-      let alpha_index = (n - 1) % 26;
+    while n != 0 {
+      let alpha_index = (n - sign).abs() % 26;
       let digit = (b'a' + alpha_index as u8) as char;
       digit_stack.push(digit);
-      n = (n - alpha_index - 1) / 26;
+      n = (n - (alpha_index - 1) * sign) / 26;
     }
 
     for d in digit_stack.drain(..).rev() {
@@ -597,10 +581,10 @@ impl NumberFormat {
     
     buf.push_str(self.get_integer_sign(input));
 
-    let mut n = input.abs();
+    let mut n = input;
 
     loop {
-      let bab_digit = (n % 60) as usize;
+      let bab_digit = (n % 60).abs() as usize;
 
       // Add spaces between digits
       if num_powers > 0 {
@@ -618,7 +602,7 @@ impl NumberFormat {
 
       num_powers += 1;
       n /= 60;
-      if n <= 0 { break }
+      if n == 0 { break }
     }
 
     for bab in bab_digit_stack.drain(..).rev() {
@@ -657,13 +641,13 @@ impl NumberFormat {
   fn format_roman_integer(&self, input: i64) -> InternalString {
     let mut buf = InternalString::new();
     buf.push_str(self.get_integer_sign(input));
-    let n = input.abs();
+    let n = input;
 
     if n > 0 {
-      let ones = (n % 10) as usize;
-      let tens = ((n % 100) / 10) as usize;
-      let hundreds = ((n % 1000) / 100) as usize;
-      let thousands = (n / 1000) as usize;
+      let ones = (n % 10).abs() as usize;
+      let tens = ((n % 100).abs() / 10) as usize;
+      let hundreds = ((n % 1000).abs() / 100) as usize;
+      let thousands = (n / 1000).abs() as usize;
       for _ in 0..thousands {
         buf.push_str(ROMAN_THOUSAND);
       }
@@ -745,17 +729,17 @@ impl NumberFormat {
     // Add sign
     buf.push_str(self.get_integer_sign(input));
 
-    let mut n = input.abs();
+    let mut n = input;
 
     // Add digits
     loop {
-      let digit = (n % 10) as usize;
+      let digit = (n % 10).abs() as usize;
 
       digit_stack.push(self.system.get_decimal_digit(digit).unwrap());
       num_digits += 1;
 
       n /= 10;
-      if n <= 0 { break }
+      if n == 0 { break }
     }
 
     // Add padding
