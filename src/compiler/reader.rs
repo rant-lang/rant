@@ -34,6 +34,15 @@ impl<'source> RantTokenReader<'source> {
     false
   }
 
+  pub fn eat_kw(&mut self, kwname: &str) -> bool {
+    self.eat_where(|t| {
+      if let Some((RantToken::Keyword(kw), _)) = t.as_ref() {
+        return kw.eq_ignore_ascii_case(kwname)
+      }
+      false
+    })
+  }
+
   // Consumes the next token if it satisfies the predicate and returns it if the predicate was satisfied; otherwise, returns `None`.
   pub fn take_where<F: FnOnce(Option<&(RantToken, Range<usize>)>) -> bool>(&mut self, predicate: F) -> Option<(RantToken, Range<usize>)> {
     if predicate(self.peek()) {

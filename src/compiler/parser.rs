@@ -20,6 +20,7 @@ const KW_CONTINUE: &str = "continue";
 const KW_WEIGHT: &str = "weight";
 const KW_TRUE: &str = "true";
 const KW_FALSE: &str = "false";
+const KW_TEXT: &str = "text";
 const KW_ADD: &str = "add";
 const KW_SUB: &str = "sub";
 const KW_MUL: &str = "mul";
@@ -150,6 +151,7 @@ struct VarStats {
   /// For optional parameters without a fallback this is `true`.
   has_fallible_read: bool,
   is_const: bool,
+  is_auto_hinted: bool,
   role: VarRole,
 }
 
@@ -202,6 +204,18 @@ struct ParsedSequence {
 struct ParsedBlock {
   auto_hint: bool,
   block: Block
+}
+
+/// Contains information about a successfully parsed accessor.
+struct ParsedAccessor {
+  nodes: Vec<Rst>,
+  is_auto_hinted: bool
+}
+
+/// Contains information about a successfully parsed function accessor.
+struct ParsedFunctionAccessor {
+  node: Rst,
+  is_auto_hinted: bool
 }
 
 /// A parser that turns Rant code into an RST (Rant Syntax Tree).
@@ -273,6 +287,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   #[inline]
   fn unexpected_last_token_error(&mut self) {
     self.report_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &self.reader.last_token_span())
+  }
+
+  #[inline]
+  fn unexpected_token_error(&mut self, span: &Range<usize>) {
+    self.report_error(Problem::UnexpectedToken(self.source[span.start .. span.end].to_string()), span)
   }
 
   /// Parses a sequence of items. Items are individual elements of a Rant program (fragments, blocks, function calls, etc.)
@@ -394,6 +413,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         };
       }
       
+      #[allow(unused_assignments)]
       macro_rules! whitespace {
         (allow) => {
           if is_seq_text {
@@ -413,11 +433,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           pending_whitespace = Some($ws);
         };
         (ignore prev) => {{
-          #![allow(unused_assignments)]
           pending_whitespace = None;
         }};
         (ignore next) => {
-          self.reader.skip_ws();
+          self.reader.skip_ws()
         };
         (ignore both) => {{
           whitespace!(ignore prev);
@@ -677,11 +696,21 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         
         // Function creation or call
         LeftBracket => {
-          if let PrintFlag::Sink = next_print_flag {
-            whitespace!(ignore next);
-          }
+          let ParsedFunctionAccessor {
+            node: func_access,
+            is_auto_hinted
+          } = self.parse_func_access()?;
 
-          let func_access = self.parse_func_access()?;
+          match next_print_flag {
+            PrintFlag::Sink => whitespace!(ignore next),
+            PrintFlag::None => {
+              if is_auto_hinted {
+                is_seq_text = true;
+                whitespace!(allow);
+              }
+            },
+            _ => whitespace!(allow)
+          }
           
           // Definitions are implicitly sinked and ignore surrounding whitespace
           if let Rst::FuncDef(_) = func_access {
@@ -719,19 +748,29 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         
         // Variable access start
         LeftAngle => no_flags!({
-          let accessors = self.parse_accessor()?;
-          for accessor in accessors {
-            match accessor {
+          let ParsedAccessor {
+            nodes,
+            is_auto_hinted
+          } = self.parse_accessor()?;
+
+          if is_auto_hinted && matches!(next_print_flag, PrintFlag::None) {
+            is_seq_text = true;
+            whitespace!(allow);
+          }
+
+          for node in nodes {
+            match node {
               Rst::Get(..) | Rst::Depth(..) => {
-                is_seq_text = true;
-                whitespace!(allow);
+                if is_seq_text {
+                  whitespace!(allow);
+                }
               },
               Rst::Set(..) | Rst::DefVar(..) | Rst::DefConst(..) => {
                 // whitespace!(ignore both);
               },
               _ => unreachable!()
             }
-            emit!(accessor);
+            emit!(node);
           }
         }),
         
@@ -1180,8 +1219,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
     
   /// Parses a function definition, anonymous function, or function call.
-  fn parse_func_access(&mut self) -> ParseResult<Rst> {
+  fn parse_func_access(&mut self) -> ParseResult<ParsedFunctionAccessor> {
     let start_span = self.reader.last_token_span();
+    let mut is_auto_hinted = false;
     self.reader.skip_ws();
     // Check if we're defining a function (with [$|% ...]) or creating a lambda (with [? ...])
     if let Some((func_access_type_token, func_access_type_span)) 
@@ -1190,7 +1230,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Function definition
         tt @ Dollar | tt @ Percent => {
           let is_const = matches!(tt, Percent);
-
           // Name of variable function will be stored in
           let (func_path, _func_path_span) = self.parse_access_path(false)?;
 
@@ -1201,32 +1240,39 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           
           self.reader.skip_ws();
 
-          let ((body, params, end_func_sig_span), captures) = self.capture_pass(|self_| {
+          let ((body, params, end_func_sig_span, is_auto_hinted_def), captures) = self.capture_pass(|self_| {
             // Function params
             let params = self_.parse_func_params(&start_span)?;
             let end_func_sig_span = self_.reader.last_token_span();
+
+            self_.reader.skip_ws();
+            let is_auto_hinted_def = self_.reader.eat_kw(KW_TEXT);
+            self_.reader.skip_ws();
             
             // Read function body
             let body = self_.parse_func_body(&params, false)?;
             
-            Ok((body, params, end_func_sig_span))
+            Ok((body, params, end_func_sig_span, is_auto_hinted_def))
           })?;
 
           // Track variable
           if func_path.is_variable() {
             if let Some(id) = &func_path.var_name() {
               let func_def_span = super_range(&start_span, &end_func_sig_span);
-              self.track_variable(id, &func_path.kind(), is_const, VarRole::Function, &func_def_span);
+              self.track_variable(id, &func_path.kind(), is_const, is_auto_hinted_def, VarRole::Function, &func_def_span);
             }
           }
           
-          Ok(Rst::FuncDef(FunctionDef {
-            body: Rc::new(body.with_name_str(format!("[{}]", func_path).as_str())),
-            path: Rc::new(func_path),
-            params: Rc::new(params.into_iter().map(|(p, _)| p).collect()),
-            capture_vars: Rc::new(captures),
-            is_const,
-          }))
+          Ok(ParsedFunctionAccessor {
+            is_auto_hinted: false,
+            node: Rst::FuncDef(FunctionDef {
+              body: Rc::new(body.with_name_str(format!("[{}]", func_path).as_str())),
+              path: Rc::new(func_path),
+              params: Rc::new(params.into_iter().map(|(p, _)| p).collect()),
+              capture_vars: Rc::new(captures),
+              is_const,
+            })
+          })
         },
         // Lambda
         Question => {
@@ -1236,11 +1282,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Read function body
           let (body, captures) = self.capture_pass(|self_| self_.parse_func_body(&params, true))?;
           
-          Ok(Rst::Lambda(LambdaExpr {
-            capture_vars: Rc::new(captures),
-            body: Rc::new(body.with_name_str("lambda")),
-            params: Rc::new(params.into_iter().map(|(p, _)| p).collect()),
-          }))
+          Ok(ParsedFunctionAccessor {
+            is_auto_hinted,
+            node: Rst::Lambda(LambdaExpr {
+              capture_vars: Rc::new(captures),
+              body: Rc::new(body.with_name_str("lambda")),
+              params: Rc::new(params.into_iter().map(|(p, _)| p).collect()),
+            })
+          })
         },
         _ => unreachable!()
       }
@@ -1325,6 +1374,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   reads: 0,
                   def_span: Default::default(), // we'll never need this anyway
                   is_const: true,
+                  is_auto_hinted: false,
                   has_fallible_read: false,
                   role: VarRole::PipeValue,
                 };
@@ -1393,6 +1443,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               reads: 0,
               def_span: Default::default(), // we'll never need this anyway
               is_const: true,
+              is_auto_hinted: false,
               has_fallible_read: false,
               role: VarRole::PipeValue,
             };
@@ -1455,7 +1506,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             fallback_pipe!();
             
             // Record access to function
-            self.track_variable_access(&func_path, false, false, &func_path_span);
+            self.track_variable_access(&func_path, false, false, &func_path_span, Some(&mut is_auto_hinted));
             
             // Create final node for function call
             let fcall = FunctionCall {
@@ -1476,13 +1527,16 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       }
 
       // Return the finished node
-      Ok(if is_piped {
-        Rst::PipedCall(PipedCall {
-          is_temporal: is_chain_temporal,
-          steps: Rc::new(calls),
-        })
-      } else {
-        Rst::FuncCall(calls.drain(..).next().unwrap())
+      Ok(ParsedFunctionAccessor {
+        is_auto_hinted,
+        node: if is_piped {
+          Rst::PipedCall(PipedCall {
+            is_temporal: is_chain_temporal,
+            steps: Rc::new(calls),
+          })
+        } else {
+          Rst::FuncCall(calls.drain(..).next().unwrap())
+        },
       })
     }
   }
@@ -1776,6 +1830,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         writes: 1,
         def_span: span.clone(),
         is_const: true,
+        is_auto_hinted: false,
         has_fallible_read: false,
         role: if param.is_optional() && param.default_value_expr.is_none() {
           VarRole::FallibleOptionalArgument
@@ -1921,7 +1976,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
 
   #[inline]
-  fn track_variable(&mut self, id: &Identifier, access_kind: &AccessPathKind, is_const: bool, role: VarRole, def_span: &Range<usize>) {
+  fn track_variable(&mut self, id: &Identifier, access_kind: &AccessPathKind, is_const: bool, is_auto_hinted: bool, role: VarRole, def_span: &Range<usize>) {
     // Check if there's already a variable with this name
     let (prev_tracker, requested_depth, found_depth) = match access_kind {        
       AccessPathKind::Local => {
@@ -1958,6 +2013,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       def_span: def_span.clone(),
       has_fallible_read: false,
       is_const,
+      is_auto_hinted,
       role,
     };
 
@@ -1976,7 +2032,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
 
   #[inline]
-  fn track_variable_access(&mut self, path: &AccessPath, is_write: bool, fallback_hint: bool, span: &Range<usize>) {
+  fn track_variable_access(&mut self, path: &AccessPath, is_write: bool, fallback_hint: bool, span: &Range<usize>, out_auto_hinted_read: Option<&mut bool>) {
+    let mut out_auto_hinted_read_value = false;
+
     // Handle access stats
     if let Some(id) = &path.var_name() {
       let tracker = match path.kind() {
@@ -2001,6 +2059,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }
         } else {
           tracker.add_read(!fallback_hint);
+          out_auto_hinted_read_value = tracker.is_auto_hinted;
 
           // Error if user is accessing a fallible optional argument without a fallback
           if tracker.has_fallible_read && tracker.role == VarRole::FallibleOptionalArgument {
@@ -2008,6 +2067,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }
         }
       }
+    }
+
+    if let Some(auto_hinted_read) = out_auto_hinted_read {
+      *auto_hinted_read = out_auto_hinted_read_value;
     }
     
     // Handle captures
@@ -2052,8 +2115,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     
   /// Parses one or more accessors (getter/setter/definition).
   #[inline(always)]
-  fn parse_accessor(&mut self) -> ParseResult<Vec<Rst>> {
+  fn parse_accessor(&mut self) -> ParseResult<ParsedAccessor> {
     let mut accessors = vec![];
+    let mut is_auto_hinted_accessor = false;
 
     macro_rules! add_accessor {
       ($rst:expr) => {{
@@ -2063,6 +2127,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
     
     'read: loop {      
+      self.reader.skip_ws();
+      let is_auto_hinted_def = self.reader.eat_kw(KW_TEXT);
+      let auto_hint_span = self.reader.last_token_span();
       self.reader.skip_ws();
 
       // Check if the accessor ends here as long as there's at least one component
@@ -2083,6 +2150,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         (false, false)
       };
 
+      // Error on @text when accessor isn't a definition
+      if !is_def && is_auto_hinted_def {
+        self.unexpected_token_error(&auto_hint_span);
+      }
+
       let access_start_span = self.reader.last_token_span();
 
       self.reader.skip_ws();
@@ -2101,22 +2173,20 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           match token {
             // Empty definition
             RightAngle => {              
+              self.track_variable(&var_name, &access_kind, is_const_def, is_auto_hinted_def, VarRole::Normal, &def_span);
               if is_const_def {
-                self.track_variable(&var_name, &access_kind, true, VarRole::Normal, &def_span);
                 add_accessor!(Rst::DefConst(var_name, access_kind, None));
               } else {
-                self.track_variable(&var_name, &access_kind, false, VarRole::Normal, &def_span);
                 add_accessor!(Rst::DefVar(var_name, access_kind, None));
               }
               break 'read
             },
             // Accessor delimiter
             Semicolon => {
+              self.track_variable(&var_name, &access_kind, is_const_def, is_auto_hinted_def, VarRole::Normal, &def_span);
               if is_const_def {
-                self.track_variable(&var_name, &access_kind, true, VarRole::Normal, &def_span);
                 add_accessor!(Rst::DefConst(var_name, access_kind, None));
               } else {
-                self.track_variable(&var_name, &access_kind, false, VarRole::Normal, &def_span);
                 add_accessor!(Rst::DefVar(var_name, access_kind, None));
               }
               continue 'read;
@@ -2131,11 +2201,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               } = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
 
               let def_span = access_start_span.start .. self.reader.last_token_span().start;
+              self.track_variable(&var_name, &access_kind, true, is_auto_hinted_def, VarRole::Normal, &def_span);
               if is_const_def {
-                self.track_variable(&var_name, &access_kind, true, VarRole::Normal, &def_span);
                 add_accessor!(Rst::DefConst(var_name, access_kind, Some(Rc::new(setter_expr))));
               } else {
-                self.track_variable(&var_name, &access_kind, false, VarRole::Normal, &def_span);
                 add_accessor!(Rst::DefVar(var_name, access_kind, Some(Rc::new(setter_expr))));
               }
               
@@ -2166,6 +2235,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       } else {
         // Read the path to what we're accessing
         let mut is_depth_op = false;
+        let mut is_auto_hinted_get = false;
         let (var_path, var_path_span) = self.parse_access_path(true)?;
         
         self.reader.skip_ws();
@@ -2185,7 +2255,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           match token {
             // If we hit a '>', it's a getter
             RightAngle => {
-              self.track_variable_access(&var_path, false, false, &var_path_span);
+              self.track_variable_access(&var_path, false, false, &var_path_span, Some(&mut is_auto_hinted_get));
+              is_auto_hinted_accessor |= is_auto_hinted_get;
               add_accessor!(if is_depth_op {
                 Rst::Depth(var_path.var_name().unwrap(), var_path.kind(), None)
               } else { 
@@ -2195,7 +2266,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             },
             // If we hit a ';', it's a getter with another accessor chained after it
             Semicolon => {
-              self.track_variable_access(&var_path, false, false, &var_path_span);
+              self.track_variable_access(&var_path, false, false, &var_path_span, Some(&mut is_auto_hinted_get));
+              is_auto_hinted_accessor |= is_auto_hinted_get;
               add_accessor!(if is_depth_op {
                 Rst::Depth(var_path.var_name().unwrap(), var_path.kind(), None)
               } else { 
@@ -2212,8 +2284,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 ..
               } = self.parse_sequence(SequenceParseMode::AccessorFallbackValue)?;
 
-              self.track_variable_access(&var_path, false, true, &var_path_span);
-
+              self.track_variable_access(&var_path, false, true, &var_path_span, Some(&mut is_auto_hinted_get));
+              is_auto_hinted_accessor |= is_auto_hinted_get;
               add_accessor!(if is_depth_op {
                 Rst::Depth(var_path.var_name().unwrap(), var_path.kind(), Some(Rc::new(fallback_expr)))
               } else { 
@@ -2246,7 +2318,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 self.report_error(Problem::AnonValueAssignment, &setter_span);
               }
 
-              self.track_variable_access(&var_path, true, false, &setter_span);
+              self.track_variable_access(&var_path, true, false, &setter_span, None);
               add_accessor!(Rst::Set(Rc::new(var_path), Rc::new(setter_rhs_expr)));
 
               // Assignment is not valid if we're using depth operator
@@ -2284,6 +2356,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       }
     }
     
-    Ok(accessors)
+    Ok(ParsedAccessor {
+      nodes: accessors,
+      is_auto_hinted: is_auto_hinted_accessor
+    })
   }
 }
