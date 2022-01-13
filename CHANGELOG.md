@@ -9,6 +9,7 @@
 * Rant is now relicensed under MIT and Apache 2.0!
 
 ### Fixes
+* Fixed broken `[chunks]` behavior
 
 ## 4.0.0-alpha.23
 

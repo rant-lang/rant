@@ -1079,7 +1079,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Read the params
         'read_params: loop {
           self.reader.skip_ws();
-          let mut is_auto_hinted = self.reader.eat_kw(KW_TEXT);
+          let is_auto_hinted = self.reader.eat_kw(KW_TEXT);
 
           match self.reader.next_solid() {
             // Regular parameter

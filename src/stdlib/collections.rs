@@ -599,32 +599,27 @@ pub(crate) fn chunks(vm: &mut VM, (collection, chunk_count): (RantValue, usize))
   if !collection.is_indexable() {
     runtime_error!(RuntimeErrorType::ArgumentError, "chunks: type '{}' cannot be chunked", collection.type_name())
   }
+  
+  let mut chunks = vec![];
 
-  if chunk_count == 0 {
-    return Ok(())
-  }
-
-  let seg_size = collection.len() / chunk_count;
-
-  if seg_size > 0 {
-    let mut segs = vec![];
-    let len = collection.len();
-    let last_seg_len = len % seg_size;
-    let n = len / seg_size + if last_seg_len > 0 { 1 } else { 0 };
-    if last_seg_len > 0 {
-      for i in 0..n {
-        if i == n - 1 {
-          segs.push(collection.slice_get(&Slice::Between((i * seg_size) as i64, (i * seg_size + last_seg_len) as i64)).into_runtime_result()?);
-        } else {
-          segs.push(collection.slice_get(&Slice::Between((i * seg_size) as i64, ((i + 1) * seg_size) as i64)).into_runtime_result()?);
-        }
-      }
-    } else {
-      for i in 0..n {
-        segs.push(collection.slice_get(&Slice::Between((i * seg_size) as i64, ((i + 1) * seg_size) as i64)).into_runtime_result()?);
-      }
+  if chunk_count > 0 {
+    let min_chunk_size = collection.len() / chunk_count;
+    let max_chunk_size = min_chunk_size + 1;
+    let num_bigger_chunks = collection.len() % chunk_count;
+  
+    let collection_len = collection.len();
+    for i in 0..chunk_count {
+      let chunk_size = if i < num_bigger_chunks { max_chunk_size } else { min_chunk_size };
+      let chunk_offset = if i < num_bigger_chunks { 
+        i * max_chunk_size
+      } else {
+        num_bigger_chunks * max_chunk_size + (i - num_bigger_chunks) * min_chunk_size 
+      };
+  
+      chunks.push(collection.slice_get(&Slice::Between(chunk_offset as i64, (chunk_offset + chunk_size) as i64)).into_runtime_result()?);
     }
-    vm.cur_frame_mut().write_value(segs.into_rant().into_runtime_result()?);
   }
+
+  vm.cur_frame_mut().write_value(chunks.into_rant().into_runtime_result()?);
   Ok(())
 }
