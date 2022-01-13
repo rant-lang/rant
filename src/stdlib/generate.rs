@@ -84,7 +84,7 @@ pub(crate) fn dignz(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn shred(vm: &mut VM, (value, n, variance): (RantValue, i64, Option<f64>)) -> RantStdResult {
+pub(crate) fn rand_list_sum(vm: &mut VM, (value, n, variance): (RantValue, i64, Option<f64>)) -> RantStdResult {
   if n <= 0 {
     return Err(RuntimeError {
       error_type: RuntimeErrorType::ArgumentError,

@@ -128,7 +128,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     to_int as "to-int", to_float as "to-float", to_string as "to-string", to_bool as "to-bool", to_list as "to-list",
 
     // Generator functions
-    alpha, dig, digh, dignz, maybe, rand, randf, rand_list as "rand-list", randf_list as "randf-list", shred,
+    alpha, dig, digh, dignz, maybe, rand, randf, rand_list as "rand-list", randf_list as "randf-list", rand_list_sum as "rand-list-sum",
 
     // Prototype functions
     proto, set_proto as "set-proto",

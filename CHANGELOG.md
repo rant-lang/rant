@@ -7,6 +7,8 @@
 
 ### Changes
 * Rant is now relicensed under MIT and Apache 2.0!
+* Renamed stdlib functions:
+  * `[shred]` &rarr; `[rand-list-sum]`
 
 ### Fixes
 * Fixed broken `[chunks]` behavior
