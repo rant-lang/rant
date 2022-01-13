@@ -218,6 +218,13 @@ struct ParsedFunctionAccessor {
   is_auto_hinted: bool
 }
 
+/// Contains information about a successfully parsed function parameter.
+struct ParsedParameter {
+  param: Parameter,
+  span: Range<usize>,
+  is_auto_hinted: bool
+}
+
 /// A parser that turns Rant code into an RST (Rant Syntax Tree).
 pub struct RantParser<'source, 'report, R: Reporter> {
   /// A string slice containing the source code being parsed.
@@ -1055,7 +1062,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     
   }
   
-  fn parse_func_params(&mut self, start_span: &Range<usize>) -> ParseResult<Vec<(Parameter, Range<usize>)>> {
+  fn parse_func_params(&mut self, start_span: &Range<usize>) -> ParseResult<Vec<ParsedParameter>> {
     // List of parameter names for function
     let mut params = vec![];
     // Separate set of all parameter names to check for duplicates
@@ -1071,6 +1078,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       Some((Colon, _)) => {
         // Read the params
         'read_params: loop {
+          self.reader.skip_ws();
+          let mut is_auto_hinted = self.reader.eat_kw(KW_TEXT);
+
           match self.reader.next_solid() {
             // Regular parameter
             Some((Fragment, span)) => {              
@@ -1143,7 +1153,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 };
 
                 // Add parameter to list
-                params.push((opt_param, full_param_span.end .. self.reader.last_token_span().start));
+                params.push(ParsedParameter {
+                  param: opt_param,
+                  span: full_param_span.end .. self.reader.last_token_span().start,
+                  is_auto_hinted,
+                });
 
                 // Keep reading other params if needed
                 if should_continue {
@@ -1162,7 +1176,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               };
               
               // Add parameter to list
-              params.push((param, full_param_span));
+              params.push(ParsedParameter {
+                param,
+                span: full_param_span,
+                is_auto_hinted,
+              });
                 
               // Check if there are more params or if the signature is done
               match self.reader.next_solid() {
@@ -1268,7 +1286,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             node: Rst::FuncDef(FunctionDef {
               body: Rc::new(body.with_name_str(format!("[{}]", func_path).as_str())),
               path: Rc::new(func_path),
-              params: Rc::new(params.into_iter().map(|(p, _)| p).collect()),
+              params: Rc::new(params.into_iter().map(|pp| pp.param).collect()),
               capture_vars: Rc::new(captures),
               is_const,
             })
@@ -1287,7 +1305,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             node: Rst::Lambda(LambdaExpr {
               capture_vars: Rc::new(captures),
               body: Rc::new(body.with_name_str("lambda")),
-              params: Rc::new(params.into_iter().map(|(p, _)| p).collect()),
+              params: Rc::new(params.into_iter().map(|pp| pp.param).collect()),
             })
           })
         },
@@ -1807,7 +1825,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
 
   /// Parses a function body and DOES NOT capture variables.
-  fn parse_func_body(&mut self, params: &Vec<(Parameter, Range<usize>)>, allow_inline: bool) -> ParseResult<Sequence> {
+  fn parse_func_body(&mut self, params: &Vec<ParsedParameter>, allow_inline: bool) -> ParseResult<Sequence> {
     self.reader.skip_ws();
 
     let is_block_body = if allow_inline {
@@ -1824,13 +1842,17 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     let start_span = self.reader.last_token_span();
 
     // Define each parameter as a variable in the current var_stack frame so they are not accidentally captured
-    for (param, span) in params {
+    for ParsedParameter {
+      param,
+      span,
+      is_auto_hinted
+    } in params {
       self.var_stack.define(param.name.clone(), VarStats {
         reads: 0,
         writes: 1,
         def_span: span.clone(),
         is_const: true,
-        is_auto_hinted: false,
+        is_auto_hinted: *is_auto_hinted,
         has_fallible_read: false,
         role: if param.is_optional() && param.default_value_expr.is_none() {
           VarRole::FallibleOptionalArgument

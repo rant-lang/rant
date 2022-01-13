@@ -3,7 +3,7 @@
 ## 4.0.0-alpha.24 (unreleased)
 
 ### New
-* Added ability to auto-hint variables and functions using the `@text` keyword
+* Added ability to auto-hint variables, params, and function calls using the `@text` keyword
 
 ### Changes
 * Rant is now relicensed under MIT and Apache 2.0!
