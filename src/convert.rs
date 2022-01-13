@@ -169,15 +169,7 @@ impl FromRant for RantEmpty {
 
 impl FromRant for bool {
   fn from_rant(val: RantValue) -> Result<Self, ValueError> {
-    match val {
-      RantValue::Boolean(b) => Ok(b),
-      RantValue::Int(n) => Ok(n != 0),
-      other => Err(ValueError::InvalidConversion {
-        from: other.type_name(),
-        to: "bool",
-        message: None,
-      })
-    }
+    Ok(val.to_bool())
   }
 
   fn is_rant_optional() -> bool {

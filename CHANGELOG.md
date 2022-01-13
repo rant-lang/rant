@@ -7,6 +7,7 @@
 
 ### Changes
 * Rant is now relicensed under MIT and Apache 2.0!
+* Update `FromRant` impl for `bool` to coerce from any RantValue type according to truthiness rules
 * Renamed stdlib functions:
   * `[shred]` &rarr; `[rand-list-sum]`
 
