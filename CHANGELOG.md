@@ -2,6 +2,13 @@
 
 ## 4.0.0-alpha.24 (unreleased)
 
+### New
+
+### Changes
+* Rant is now relicensed under MIT and Apache 2.0!
+
+### Fixes
+
 ## 4.0.0-alpha.23
 
 (1/11/2022)
