@@ -775,6 +775,44 @@ pub enum Rst {
   Continue(Option<Rc<Sequence>>),
   /// Break
   Break(Option<Rc<Sequence>>),
+  /// Logical NOT
+  LogicNot(Rc<Sequence>),
+  /// Negation
+  Negate(Rc<Sequence>),
+  /// Exponentiation
+  Power(Rc<Sequence>, Rc<Sequence>),
+  /// Multipliation
+  Multiply(Rc<Sequence>, Rc<Sequence>),
+  /// Division
+  Divide(Rc<Sequence>, Rc<Sequence>),
+  /// Modulo
+  Modulo(Rc<Sequence>, Rc<Sequence>),
+  /// Addition
+  Add(Rc<Sequence>, Rc<Sequence>),
+  /// Subtraction
+  Subtract(Rc<Sequence>, Rc<Sequence>),
+  /// Less than
+  Less(Rc<Sequence>, Rc<Sequence>),
+  /// Less than or equal
+  LessOrEqual(Rc<Sequence>, Rc<Sequence>),
+  /// Greater than
+  Greater(Rc<Sequence>, Rc<Sequence>),
+  /// Greater than or equal
+  GreaterOrEqual(Rc<Sequence>, Rc<Sequence>),
+  /// Equality
+  Equals(Rc<Sequence>, Rc<Sequence>),
+  /// Inequality
+  NotEquals(Rc<Sequence>, Rc<Sequence>),
+  /// Logical AND
+  LogicAnd(Rc<Sequence>, Rc<Sequence>),
+  /// Logical NOR
+  LogicNor(Rc<Sequence>, Rc<Sequence>),
+  /// Logical XOR
+  LogicXor(Rc<Sequence>, Rc<Sequence>),
+  /// Logical OR
+  LogicOr(Rc<Sequence>, Rc<Sequence>),
+  /// Logical NAND
+  LogicNand(Rc<Sequence>, Rc<Sequence>),
   /// Provides debug information about the next sequence element
   DebugCursor(DebugInfo),
 }
@@ -788,25 +826,44 @@ impl Rst {
       Rst::ListInit(_) =>                     "list",
       Rst::MapInit(_) =>                      "map",
       Rst::Lambda(_) =>                       "lambda",
-      Rst::FuncCall(_) =>                     "function call",
-      Rst::FuncDef(_) =>                      "function definition",
+      Rst::FuncCall(_) =>                     "call function",
+      Rst::FuncDef(_) =>                      "define function",
       Rst::Fragment(_) =>                     "fragment",
       Rst::Whitespace(_) =>                   "whitespace",
       Rst::Integer(_) =>                      "integer",
       Rst::Float(_) =>                        "float",
-      Rst::Boolean(_) =>                      "boolean",
-      Rst::EmptyValue =>                      "empty",
+      Rst::Boolean(_) =>                      "bool",
+      Rst::EmptyValue =>                      "emptyval",
       Rst::Nop =>                             "no-op",
-      Rst::DefVar(..) =>                      "variable definition",
-      Rst::DefConst(..) =>                    "constant definition",
+      Rst::DefVar(..) =>                      "define variable",
+      Rst::DefConst(..) =>                    "define constant",
       Rst::Depth(..) =>                       "variable depth",
       Rst::Get(..) =>                         "getter",
       Rst::Set(..) =>                         "setter",
       Rst::PipedCall(_) =>                    "piped call",
-      Rst::PipeValue =>                       "pipe value",
+      Rst::PipeValue =>                       "pipeval",
       Rst::Return(_) =>                       "return",
       Rst::Continue(_) =>                     "continue",
       Rst::Break(_) =>                        "break",
+      Rst::LogicNot(_) =>                     "not",
+      Rst::Negate(_) =>                       "negate",
+      Rst::Power(_, _) =>                     "power",
+      Rst::Multiply(_, _) =>                  "multiply",
+      Rst::Divide(_, _) =>                    "divide",
+      Rst::Modulo(_, _) =>                    "modulo",
+      Rst::Add(_, _) =>                       "add",
+      Rst::Subtract(_, _) =>                  "subtract",
+      Rst::Less(_, _) =>                      "less than",
+      Rst::LessOrEqual(_, _) =>               "less than or equal",
+      Rst::Greater(_, _) =>                   "greater than",
+      Rst::GreaterOrEqual(_, _) =>            "greater than or equal",
+      Rst::Equals(_, _) =>                    "equals",
+      Rst::NotEquals(_, _) =>                 "not equals",
+      Rst::LogicAnd(_, _) =>                       "and",
+      Rst::LogicNor(_, _) =>                       "nor",
+      Rst::LogicXor(_, _) =>                       "xor",
+      Rst::LogicOr(_, _) =>                        "or",
+      Rst::LogicNand(_, _) =>                      "nand",
       Rst::DebugCursor(_) =>                  "debug cursor",
     }
   }

@@ -37,7 +37,7 @@ impl<'source> RantTokenReader<'source> {
   pub fn eat_kw(&mut self, kwname: &str) -> bool {
     self.eat_where(|t| {
       if let Some((RantToken::Keyword(kw), _)) = t.as_ref() {
-        return kw.eq_ignore_ascii_case(kwname)
+        return kw.name.as_str() == kwname
       }
       false
     })

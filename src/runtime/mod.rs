@@ -149,6 +149,8 @@ impl<'rant> VM<'rant> {
   
   #[inline]
   fn run_inner(&mut self) -> RuntimeResult<RantValue> {
+    runtime_trace!("AST: {:#?}", &self.program.root);
+
     // Push the program's root sequence onto the call stack
     // This doesn't need an overflow check because it will *always* succeed
     self.push_frame_unchecked(self.program.root.clone(), StackFrameFlavor::FunctionBody);
@@ -187,9 +189,9 @@ impl<'rant> VM<'rant> {
 
   #[inline(always)]
   fn tick(&mut self) -> RuntimeResult<bool> {
-    runtime_trace!("tick start (stack @ {}: {})", self.call_stack.len(), self.call_stack.top().map_or("none".to_owned(), |top| top.to_string()));
+    runtime_trace!("tick start (stack size = {}; current frame = {})", self.call_stack.len(), self.call_stack.top().map_or("none".to_owned(), |top| top.to_string()));
     // Read frame's current intents and handle them before running the sequence
-    while let Some(intent) = self.cur_frame_mut().take_intent() {
+    while let Some(intent) = self.cur_frame_mut().pop_intent() {
       runtime_trace!("intent: {}", intent.name());
       match intent {
         Intent::PrintLast => {
@@ -233,12 +235,12 @@ impl<'rant> VM<'rant> {
               Some(weight) => match weight {
                 BlockWeight::Dynamic(weight_expr) => {
                   let weight_expr = Rc::clone(weight_expr);
-                  self.cur_frame_mut().push_intent_front(Intent::BuildWeightedBlock {
+                  self.cur_frame_mut().push_intent(Intent::BuildWeightedBlock {
                     block,
                     weights,
                     pop_next_weight: true,
                   });
-                  self.push_frame(weight_expr)?;
+                  self.push_frame(weight_expr, true)?;
                   return Ok(true)
                 },
                 BlockWeight::Constant(weight_value) => {
@@ -268,13 +270,13 @@ impl<'rant> VM<'rant> {
           if let Some(key_expr) = pending_exprs.pop() {
             // Set next intent based on remaining expressions in getter
             if pending_exprs.is_empty() {
-              self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print, prefer_function, fallback });
+              self.cur_frame_mut().push_intent(Intent::GetValue { path, dynamic_key_count, override_print, prefer_function, fallback });
             } else {
-              self.cur_frame_mut().push_intent_front(Intent::BuildDynamicGetter { path, dynamic_key_count, pending_exprs, override_print, prefer_function, fallback });
+              self.cur_frame_mut().push_intent(Intent::BuildDynamicGetter { path, dynamic_key_count, pending_exprs, override_print, prefer_function, fallback });
             }
             self.push_frame_flavored(Rc::clone(&key_expr), StackFrameFlavor::DynamicKeyExpression)?;
           } else {
-            self.cur_frame_mut().push_intent_front(Intent::GetValue { path, dynamic_key_count, override_print, prefer_function, fallback });
+            self.cur_frame_mut().push_intent(Intent::GetValue { path, dynamic_key_count, override_print, prefer_function, fallback });
           }
           return Ok(true)
         },
@@ -288,9 +290,9 @@ impl<'rant> VM<'rant> {
             // Run fallback if available
             (Err(_), Some(fallback)) => {
               if !override_print {
-                self.cur_frame_mut().push_intent_front(Intent::PrintLast);
+                self.cur_frame_mut().push_intent(Intent::PrintLast);
               }
-              self.push_frame(fallback)?;
+              self.push_frame(fallback, true)?;
               return Ok(true)
             }
           }
@@ -315,7 +317,7 @@ impl<'rant> VM<'rant> {
             // Continuation intent (if needed)  
             eval_index += 1;
             if eval_index <= default_arg_exprs.len() {
-              self.cur_frame_mut().push_intent_front(Intent::CreateDefaultArgs {
+              self.cur_frame_mut().push_intent(Intent::CreateDefaultArgs {
                 context,
                 default_arg_exprs,
                 eval_index,
@@ -342,7 +344,7 @@ impl<'rant> VM<'rant> {
             let arg_seq = Rc::clone(&arg_expr.expr);
 
             // Continuation intent
-            self.cur_frame_mut().push_intent_front(Intent::Invoke { 
+            self.cur_frame_mut().push_intent(Intent::Invoke { 
               arg_exprs, 
               arg_eval_count: arg_eval_count + 1,
               is_temporal, 
@@ -382,7 +384,7 @@ impl<'rant> VM<'rant> {
               
               // If the temporal state has zero iterations, don't call the function at all
               if !temporal_state.is_empty() {
-                self.cur_frame_mut().push_intent_front(Intent::CallTemporal { 
+                self.cur_frame_mut().push_intent(Intent::CallTemporal { 
                   func,
                   temporal_state, 
                   args: Rc::new(args),
@@ -406,7 +408,7 @@ impl<'rant> VM<'rant> {
               let step = &steps[step_index];
               let pipeval_copy = pipeval.clone();
 
-              self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
+              self.cur_frame_mut().push_intent(Intent::InvokePipeStep {
                 steps: Rc::clone(&steps),
                 step_index,
                 state: InvokePipeStepState::EvaluatingArgs { num_evaluated: 0 },
@@ -419,7 +421,7 @@ impl<'rant> VM<'rant> {
                   self.push_getter_intents(path, true, true, None);
                 },
                 FunctionCallTarget::Expression(expr) => {
-                  self.push_frame(Rc::clone(expr))?;
+                  self.push_frame(Rc::clone(expr), true)?;
                   if let Some(pipeval) = pipeval_copy {
                     self.def_pipeval(pipeval)?;
                   }
@@ -438,7 +440,7 @@ impl<'rant> VM<'rant> {
                 let pipeval_copy = pipeval.clone();
 
                 // Prepare next arg eval intent
-                self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep { 
+                self.cur_frame_mut().push_intent(Intent::InvokePipeStep { 
                   steps: Rc::clone(&steps),
                   step_index,
                   state: InvokePipeStepState::EvaluatingArgs {
@@ -479,7 +481,7 @@ impl<'rant> VM<'rant> {
                 };
                 
                 // Transition to pre-call for next step
-                self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
+                self.cur_frame_mut().push_intent(Intent::InvokePipeStep {
                   state: if step.is_temporal {  
                     InvokePipeStepState::PreTemporalCall {
                       step_function,
@@ -498,7 +500,7 @@ impl<'rant> VM<'rant> {
             },
             InvokePipeStepState::PreCall { step_function, args } => {
               // Transition intent to PostCall after function returns
-              self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
+              self.cur_frame_mut().push_intent(Intent::InvokePipeStep {
                 steps,
                 step_index,
                 state: InvokePipeStepState::PostCall,
@@ -515,7 +517,7 @@ impl<'rant> VM<'rant> {
               // Check if there is a next step
               if next_step_index < steps.len() {
                 // Create intent for next step
-                self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
+                self.cur_frame_mut().push_intent(Intent::InvokePipeStep {
                   steps,
                   step_index: next_step_index,
                   state: InvokePipeStepState::EvaluatingFunc,
@@ -541,7 +543,7 @@ impl<'rant> VM<'rant> {
               }).collect::<Vec<RantValue>>();
 
               // Push continuation intent for temporal call
-              self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
+              self.cur_frame_mut().push_intent(Intent::InvokePipeStep {
                 steps,
                 step_index,
                 state: InvokePipeStepState::PostTemporalCall {
@@ -562,7 +564,7 @@ impl<'rant> VM<'rant> {
 
               // Queue next iteration if available
               if temporal_state.increment() {
-                self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
+                self.cur_frame_mut().push_intent(Intent::InvokePipeStep {
                   steps: Rc::clone(&steps),
                   step_index,
                   state: InvokePipeStepState::PreTemporalCall {
@@ -577,7 +579,7 @@ impl<'rant> VM<'rant> {
               // Call next function in chain
               if next_step_index < step_count {
                 // Create intent for next step
-                self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
+                self.cur_frame_mut().push_intent(Intent::InvokePipeStep {
                   steps,
                   step_index: next_step_index,
                   state: InvokePipeStepState::EvaluatingFunc,
@@ -605,7 +607,7 @@ impl<'rant> VM<'rant> {
           }).collect::<Vec<RantValue>>();
 
           if temporal_state.increment() {
-            self.cur_frame_mut().push_intent_front(Intent::CallTemporal { func: Rc::clone(&func), args, temporal_state });
+            self.cur_frame_mut().push_intent(Intent::CallTemporal { func: Rc::clone(&func), args, temporal_state });
           }
 
           self.call_func(func, targs, false)?;
@@ -635,8 +637,8 @@ impl<'rant> VM<'rant> {
           match val_source {
             // Value must be evaluated from an expression
             SetterValueSource::FromExpression(expr) => {
-              self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, write_mode, expr_count, pending_exprs, val_source: SetterValueSource::Consumed });
-              self.push_frame(Rc::clone(&expr))?;
+              self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter { path, write_mode, expr_count, pending_exprs, val_source: SetterValueSource::Consumed });
+              self.push_frame(Rc::clone(&expr), true)?;
               return Ok(true)
             },
             // Value can be pushed directly onto the stack
@@ -651,14 +653,14 @@ impl<'rant> VM<'rant> {
             // Set next intent based on remaining expressions in setter
             if pending_exprs.is_empty() {
               // Set value once this frame is active again
-              self.cur_frame_mut().push_intent_front(Intent::SetValue { path, write_mode, expr_count });
+              self.cur_frame_mut().push_intent(Intent::SetValue { path, write_mode, expr_count });
             } else {
               // Continue building setter
-              self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter { path, write_mode, expr_count, pending_exprs, val_source: SetterValueSource::Consumed });                
+              self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter { path, write_mode, expr_count, pending_exprs, val_source: SetterValueSource::Consumed });                
             }
             self.push_frame_flavored(Rc::clone(&key_expr), StackFrameFlavor::DynamicKeyExpression)?;
           } else {
-            self.cur_frame_mut().push_intent_front(Intent::SetValue { path, write_mode, expr_count });
+            self.cur_frame_mut().push_intent(Intent::SetValue { path, write_mode, expr_count });
           }
           
           return Ok(true)
@@ -677,9 +679,9 @@ impl<'rant> VM<'rant> {
             self.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list))))
           } else {
             // Continue list creation
-            self.cur_frame_mut().push_intent_front(Intent::BuildList { init: Rc::clone(&init), index: index + 1, list });
+            self.cur_frame_mut().push_intent(Intent::BuildList { init: Rc::clone(&init), index: index + 1, list });
             let val_expr = &init[index];
-            self.push_frame(Rc::clone(val_expr))?;
+            self.push_frame(Rc::clone(val_expr), true)?;
             return Ok(true)
           }
         },
@@ -701,14 +703,14 @@ impl<'rant> VM<'rant> {
             self.cur_frame_mut().write_value(RantValue::Map(Rc::new(RefCell::new(map))));
           } else {
             // Continue map creation
-            self.cur_frame_mut().push_intent_front(Intent::BuildMap { init: Rc::clone(&init), pair_index: pair_index + 1, map });
+            self.cur_frame_mut().push_intent(Intent::BuildMap { init: Rc::clone(&init), pair_index: pair_index + 1, map });
             let (key_expr, val_expr) = &init[pair_index];
             if let MapKeyExpr::Dynamic(key_expr) = key_expr {
               // Push dynamic key expression onto call stack
-              self.push_frame(Rc::clone(key_expr))?;
+              self.push_frame(Rc::clone(key_expr), true)?;
             }
             // Push value expression onto call stack
-            self.push_frame(Rc::clone(val_expr))?;
+            self.push_frame(Rc::clone(val_expr), true)?;
             return Ok(true)
           }
         },
@@ -739,7 +741,116 @@ impl<'rant> VM<'rant> {
             }
             self.unwinds.pop();
           }
+        },
+        Intent::LogicShortCircuit { on_truthiness, gen_op_intent, rhs } => {
+          let lhs = self.pop_val()?;
+          let lhs_truth = lhs.to_bool();
+          self.push_val(lhs)?;
+
+          if lhs_truth != on_truthiness {
+            let op_intent = gen_op_intent();
+            self.cur_frame_mut().push_intent(op_intent);
+            self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: rhs });
+            return Ok(true);
+          }
+        },
+        Intent::CallOperand { sequence } => {
+          self.push_frame(sequence, false)?;
+          return Ok(true)
+        },
+        Intent::Add => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(lhs + rhs)?;
+        },
+        Intent::Subtract => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(lhs - rhs)?;
+        },
+        Intent::Multiply => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(lhs * rhs)?;
+        },
+        Intent::Divide => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val((lhs / rhs).into_runtime_result()?)?;
+        },
+        Intent::Modulo => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val((lhs % rhs).into_runtime_result()?)?;
+        },
+        Intent::Power => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(lhs.pow(rhs).into_runtime_result()?)?;
+        },
+        Intent::Negate => {
+          let operand = self.pop_val()?;
+          self.push_val(-operand)?;
+        },
+        Intent::LogicNot => {
+          let operand = self.pop_val()?;
+          self.push_val(!operand)?;
         }
+        Intent::LogicAnd => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(lhs.and(rhs))?;
+        },
+        Intent::LogicOr => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(lhs.or(rhs))?;
+        },
+        Intent::LogicNand => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(!lhs.and(rhs))?;
+        },
+        Intent::LogicNor => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(!lhs.or(rhs))?;
+        },
+        Intent::LogicXor => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(lhs.xor(rhs))?;
+        },
+        Intent::Equals => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(RantValue::Boolean(lhs == rhs))?;
+        },
+        Intent::NotEquals => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(RantValue::Boolean(lhs != rhs))?;
+        },
+        Intent::Less => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(RantValue::Boolean(lhs < rhs))?;
+        },
+        Intent::LessOrEqual => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(RantValue::Boolean(lhs <= rhs))?;
+        },
+        Intent::Greater => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(RantValue::Boolean(lhs > rhs))?;
+        },
+        Intent::GreaterOrEqual => {
+          let rhs = self.pop_val()?;
+          let lhs = self.pop_val()?;
+          self.push_val(RantValue::Boolean(lhs >= rhs))?;
+        },
       }
     }
 
@@ -749,11 +860,11 @@ impl<'rant> VM<'rant> {
     while let Some(rst) = &self.cur_frame_mut().seq_next() {
       match Rc::deref(rst) {        
         Rst::ListInit(elements) => {
-          self.cur_frame_mut().push_intent_front(Intent::BuildList { init: Rc::clone(elements), index: 0, list: RantList::with_capacity(elements.len()) });
+          self.cur_frame_mut().push_intent(Intent::BuildList { init: Rc::clone(elements), index: 0, list: RantList::with_capacity(elements.len()) });
           return Ok(true)
         },
         Rst::MapInit(elements) => {
-          self.cur_frame_mut().push_intent_front(Intent::BuildMap { init: Rc::clone(elements), pair_index: 0, map: RantMap::new() });
+          self.cur_frame_mut().push_intent(Intent::BuildMap { init: Rc::clone(elements), pair_index: 0, map: RantMap::new() });
           return Ok(true)
         },
         Rst::Block(block) => {
@@ -763,8 +874,8 @@ impl<'rant> VM<'rant> {
         Rst::DefVar(vname, access_kind, val_expr) => {
           if let Some(val_expr) = val_expr {
             // If a value is present, it needs to be evaluated first
-            self.cur_frame_mut().push_intent_front(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind, is_const: false });
-            self.push_frame(Rc::clone(val_expr))?;
+            self.cur_frame_mut().push_intent(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind, is_const: false });
+            self.push_frame(Rc::clone(val_expr), true)?;
             return Ok(true)
           } else {
             // If there's no assignment, just set it to empty value
@@ -774,8 +885,8 @@ impl<'rant> VM<'rant> {
         Rst::DefConst(vname, access_kind, val_expr) => {
           if let Some(val_expr) = val_expr {
             // If a value is present, it needs to be evaluated first
-            self.cur_frame_mut().push_intent_front(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind, is_const: true });
-            self.push_frame(Rc::clone(val_expr))?;
+            self.cur_frame_mut().push_intent(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind, is_const: true });
+            self.push_frame(Rc::clone(val_expr), true)?;
             return Ok(true)
           } else {
             // If there's no assignment, just set it to empty value
@@ -790,8 +901,8 @@ impl<'rant> VM<'rant> {
           match (self.get_var_depth(vname, *access_kind), fallback) {
             (Ok(depth), _) => self.cur_frame_mut().write_value(RantValue::Int(depth as i64)),
             (Err(_), Some(fallback)) => {
-              self.cur_frame_mut().push_intent_front(Intent::PrintLast);
-              self.push_frame(Rc::clone(fallback))?;
+              self.cur_frame_mut().push_intent(Intent::PrintLast);
+              self.push_frame(Rc::clone(fallback), true)?;
               return Ok(true)
             },
             (Err(err), None) => return Err(err),
@@ -803,11 +914,11 @@ impl<'rant> VM<'rant> {
 
           if exprs.is_empty() {
             // Setter is static, so run it directly
-            self.cur_frame_mut().push_intent_front(Intent::SetValue { path: Rc::clone(path), write_mode: VarWriteMode::SetOnly, expr_count: 0 });
-            self.push_frame(Rc::clone(val_expr))?;
+            self.cur_frame_mut().push_intent(Intent::SetValue { path: Rc::clone(path), write_mode: VarWriteMode::SetOnly, expr_count: 0 });
+            self.push_frame(Rc::clone(val_expr), true)?;
           } else {
             // Build dynamic keys before running setter
-            self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter {
+            self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter {
               expr_count: exprs.len(),
               write_mode: VarWriteMode::SetOnly,
               path: Rc::clone(path),
@@ -847,7 +958,7 @@ impl<'rant> VM<'rant> {
 
           // Evaluate setter path
           let dynamic_keys = path.dynamic_exprs();
-          self.cur_frame_mut().push_intent_front(Intent::BuildDynamicSetter {
+          self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter {
             expr_count: dynamic_keys.len(),
             write_mode: if *is_const { VarWriteMode::DefineConst } else { VarWriteMode::Define },
             pending_exprs: dynamic_keys,
@@ -895,7 +1006,7 @@ impl<'rant> VM<'rant> {
             // Named function call
             FunctionCallTarget::Path(path) => {
               // Queue up the function call behind the dynamic keys
-              self.cur_frame_mut().push_intent_front(Intent::Invoke {
+              self.cur_frame_mut().push_intent(Intent::Invoke {
                 arg_eval_count: 0,
                 arg_exprs: Rc::clone(arguments),
                 is_temporal: *is_temporal,
@@ -906,20 +1017,20 @@ impl<'rant> VM<'rant> {
             // Anonymous function call
             FunctionCallTarget::Expression(expr) => {
               // Evaluate arguments after function is evaluated
-              self.cur_frame_mut().push_intent_front(Intent::Invoke {
+              self.cur_frame_mut().push_intent(Intent::Invoke {
                 arg_exprs: Rc::clone(arguments),
                 arg_eval_count: 0,
                 is_temporal: *is_temporal,
               });
 
               // Push function expression onto stack
-              self.push_frame(Rc::clone(expr))?;
+              self.push_frame(Rc::clone(expr), true)?;
             },
           }
           return Ok(true)
         },
         Rst::PipedCall(compcall) => {     
-          self.cur_frame_mut().push_intent_front(Intent::InvokePipeStep {
+          self.cur_frame_mut().push_intent(Intent::InvokePipeStep {
             steps: Rc::clone(&compcall.steps),
             step_index: 0,
             state: InvokePipeStepState::EvaluatingFunc,
@@ -943,8 +1054,8 @@ impl<'rant> VM<'rant> {
         Rst::Nop => {},
         Rst::Return(expr) => {
           if let Some(expr) = expr {
-            self.cur_frame_mut().push_intent_front(Intent::ReturnLast);
-            self.push_frame(Rc::clone(expr))?;
+            self.cur_frame_mut().push_intent(Intent::ReturnLast);
+            self.push_frame(Rc::clone(expr), true)?;
             continue
           } else {
             self.func_return(None)?;
@@ -953,8 +1064,8 @@ impl<'rant> VM<'rant> {
         },
         Rst::Continue(expr) => {
           if let Some(expr) = expr {
-            self.cur_frame_mut().push_intent_front(Intent::ContinueLast);
-            self.push_frame(Rc::clone(expr))?;
+            self.cur_frame_mut().push_intent(Intent::ContinueLast);
+            self.push_frame(Rc::clone(expr), true)?;
             continue
           } else {
             self.interrupt_repeater(None, true)?;
@@ -963,13 +1074,156 @@ impl<'rant> VM<'rant> {
         },
         Rst::Break(expr) => {
           if let Some(expr) = expr {
-            self.cur_frame_mut().push_intent_front(Intent::BreakLast);
-            self.push_frame(Rc::clone(expr))?;
+            self.cur_frame_mut().push_intent(Intent::BreakLast);
+            self.push_frame(Rc::clone(expr), true)?;
             continue
           } else {
             self.interrupt_repeater(None, false)?;
             return Ok(true)
           }
+        },
+        Rst::Add(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::Add);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::Subtract(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::Subtract);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::Multiply(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::Multiply);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::Divide(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::Divide);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::Modulo(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::Modulo);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::Power(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::Power);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::Negate(operand) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::Negate);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(operand) });
+          return Ok(true)
+        },
+        Rst::LogicNot(operand) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::LogicNot);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(operand) });
+          return Ok(true)
+        },
+        Rst::Equals(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::Equals);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::NotEquals(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::NotEquals);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::Less(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::Less);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::LessOrEqual(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::LessOrEqual);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::Greater(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::Greater);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::GreaterOrEqual(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::GreaterOrEqual);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::LogicAnd(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::LogicShortCircuit {
+            on_truthiness: false,
+            rhs: Rc::clone(rhs),
+            gen_op_intent: Box::new(|| Intent::LogicAnd),
+          });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::LogicOr(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::LogicShortCircuit {
+            on_truthiness: true,
+            rhs: Rc::clone(rhs),
+            gen_op_intent: Box::new(|| Intent::LogicOr),
+          });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::LogicNand(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::LogicShortCircuit {
+            on_truthiness: false,
+            rhs: Rc::clone(rhs),
+            gen_op_intent: Box::new(|| Intent::LogicNand),
+          });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::LogicNor(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::LogicShortCircuit {
+            on_truthiness: false,
+            rhs: Rc::clone(rhs),
+            gen_op_intent: Box::new(|| Intent::LogicNor),
+          });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::LogicXor(lhs, rhs) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::LogicXor);
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
+          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
         },
         rst => {
           runtime_error!(RuntimeErrorType::InternalError, format!("unsupported node type: '{}'", rst.display_name()));
@@ -991,7 +1245,7 @@ impl<'rant> VM<'rant> {
     let dynamic_keys = path.dynamic_exprs();
 
     // Run the getter to retrieve the function we're calling first...
-    self.cur_frame_mut().push_intent_front(if dynamic_keys.is_empty() {
+    self.cur_frame_mut().push_intent(if dynamic_keys.is_empty() {
       // Getter is static, so run it directly
       Intent::GetValue { 
         path: Rc::clone(path), 
@@ -1019,7 +1273,7 @@ impl<'rant> VM<'rant> {
     let argc = args.len();
 
     if !override_print {
-      self.cur_frame_mut().push_intent_front(Intent::PrintLast);
+      self.cur_frame_mut().push_intent(Intent::PrintLast);
     }
 
     // Verify the args fit the signature
@@ -1096,7 +1350,7 @@ impl<'rant> VM<'rant> {
 
         // Evaluate default args if needed
         if needs_default_args {
-          self.cur_frame_mut().push_intent_front(Intent::CreateDefaultArgs {
+          self.cur_frame_mut().push_intent(Intent::CreateDefaultArgs {
             context: Rc::clone(&func),
             default_arg_exprs,
             eval_index: 0,
@@ -1330,11 +1584,11 @@ impl<'rant> VM<'rant> {
     // TODO: Consider moving BlockAction handler into Resolver
     if let Some(element) = next_element {  
       // Tell the calling frame to check the block status once the separator returns
-      self.cur_frame_mut().push_intent_front(Intent::CheckBlock);
+      self.cur_frame_mut().push_intent(Intent::CheckBlock);
 
       match element {
         BlockAction::Element(elem_seq) => {
-          self.cur_frame_mut().push_intent_front(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
 
           // Push the next element
           self.push_frame_flavored(
@@ -1347,7 +1601,7 @@ impl<'rant> VM<'rant> {
           )?;
         },
         BlockAction::PipedElement { elem_func, pipe_func } => {
-          self.cur_frame_mut().push_intent_front(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
 
           // Call the pipe function
           self.call_func(pipe_func, vec![RantValue::Function(elem_func)], true)?;
@@ -1357,7 +1611,7 @@ impl<'rant> VM<'rant> {
             // If the separator is a function, call the function
             RantValue::Function(sep_func) => {
               self.push_val(RantValue::Function(sep_func))?;
-              self.cur_frame_mut().push_intent_front(Intent::Call { 
+              self.cur_frame_mut().push_intent(Intent::Call { 
                 argc: 0,
                 override_print: false 
               });
@@ -1379,7 +1633,7 @@ impl<'rant> VM<'rant> {
   #[inline]
   pub fn pre_push_block(&mut self, block: &Rc<Block>) -> RuntimeResult<()> {
     if block.is_weighted {
-      self.cur_frame_mut().push_intent_front(Intent::BuildWeightedBlock {
+      self.cur_frame_mut().push_intent(Intent::BuildWeightedBlock {
         block: Rc::clone(block),
         weights: Weights::new(block.elements.len()),
         pop_next_weight: false,
@@ -1441,6 +1695,7 @@ impl<'rant> VM<'rant> {
   #[inline(always)]
   pub fn push_val(&mut self, val: RantValue) -> RuntimeResult<usize> {
     if self.val_stack.len() < MAX_STACK_SIZE {
+      runtime_trace!("value stack <- {}", &val);
       self.val_stack.push(val);
       Ok(self.val_stack.len())
     } else {
@@ -1452,6 +1707,7 @@ impl<'rant> VM<'rant> {
   #[inline(always)]
   pub fn pop_val(&mut self) -> RuntimeResult<RantValue> {
     if let Some(val) = self.val_stack.pop() {
+      runtime_trace!("value stack -> {}", &val);
       Ok(val)
     } else {
       runtime_error!(RuntimeErrorType::StackUnderflow, "value stack has underflowed");
@@ -1483,17 +1739,24 @@ impl<'rant> VM<'rant> {
   
   /// Pushes a frame onto the call stack.
   #[inline(always)]
-  pub fn push_frame(&mut self, callee: Rc<Sequence>) -> RuntimeResult<()> {
+  pub fn push_frame(&mut self, callee: Rc<Sequence>, has_scope: bool) -> RuntimeResult<()> {
     runtime_trace!("push_frame");
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");
     }
     
-    let frame = StackFrame::new(
-      callee,
-      self.call_stack.top().map(|last| last.output())
-    );
+    let frame = if has_scope {
+      StackFrame::new(
+        callee,
+        self.call_stack.top().map(|last| last.output())
+      )
+    } else {
+      StackFrame::new(
+        callee,
+        self.call_stack.top().map(|last| last.output())
+      ).without_scope()
+    };
 
     self.call_stack.push_frame(frame);
     Ok(())
@@ -1513,11 +1776,12 @@ impl<'rant> VM<'rant> {
       None,
       self.call_stack.top().map(|last| last.output()),
       Rc::clone(last_frame.origin()),
+      true,
       last_frame.debug_pos(),
       StackFrameFlavor::Original
     ).with_flavor(flavor);
 
-    frame.push_intent_front(Intent::RuntimeCall {
+    frame.push_intent(Intent::RuntimeCall {
       function: callee,
       interrupt: true,
     });

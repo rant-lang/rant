@@ -188,6 +188,7 @@ fn run_rant(ctx: &mut Rant, source: ProgramSource, opts: &RantCliOptions) -> Exi
         vec![]
       }
     };
+    eprintln!(); // extra line to separate code from errors
     emitter.emit(&[d]);
   }
 

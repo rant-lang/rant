@@ -4,12 +4,35 @@
 
 ### New
 * Added ability to auto-hint variables, params, and function calls using the `@text` keyword
+* Added a ton of arithmetic, logic, and comparison operators, including many C-style infix operators with precedence support 
+  * Addition: `+`
+  * Subtraction: `-`
+  * Multiplication: `*`
+  * Division: `/`
+  * Modulo: `%`
+  * Exponentiation: `**`
+  * Negation: `@neg` (`-` is still valid for negating constants, e.g. `-123`)
+  * Logical AND: `@and`
+  * Logical OR: `@or`
+  * Logical NOT: `@not`
+  * Logical NAND: `@nand`
+  * Logical NOR: `@nor`
+  * Logical XOR: `@xor`
+  * Equality: `@eq`
+  * Inequality: `@neq`
+  * Less than: `@lt`
+  * Less than or equal: `@le`
+  * Greater than: `@gt`
+  * Greater than or equal to: `@ge`
 
 ### Changes
 * Rant is now relicensed under MIT and Apache 2.0!
 * Update `FromRant` impl for `bool` to coerce from any RantValue type according to truthiness rules
 * Renamed stdlib functions:
   * `[shred]` &rarr; `[rand-list-sum]`
+
+### Removed
+* Removed inline lambda bodies. All lambda bodies now require braces.
 
 ### Fixes
 * Fixed broken `[chunks]` behavior

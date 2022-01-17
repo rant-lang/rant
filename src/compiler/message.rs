@@ -167,6 +167,9 @@ pub enum Problem {
   InvalidDepthUsage,
   DepthAssignment,
   FallibleOptionalArgAccess(String),
+  MissingLeftOperand,
+  MissingRightOperand,
+  MissingOperand,
 }
 
 macro_rules! rmsg {
@@ -238,6 +241,11 @@ impl Problem {
       // Keywords (0200 - 0249)
       Self::InvalidKeyword(_) =>                                rcode!(0200),
       Self::WeightNotAllowed =>                                 rcode!(0201),
+
+      // Operators (0250 - 0299)
+      Self::MissingOperand =>                                   rcode!(0250),
+      Self::MissingLeftOperand =>                               rcode!(0251),
+      Self::MissingRightOperand =>                              rcode!(0252),
       
       // Common warnings (1000 - 1099)
       Self::UnusedVariable(_) =>                                rcode!(1000),
@@ -297,6 +305,9 @@ impl Problem {
       Self::DepthAssignment => rmsg!("variable depth cannot be assigned to"),
       Self::InvalidDepthUsage => rmsg!("depth operator is not valid in this context"),
       Self::FallibleOptionalArgAccess(argname) => rmsg!("access to optional argument '{}' can fail; add a fallback to the accessor or specify a default argument", argname),
+      Self::MissingOperand => rmsg!("expected operand"),
+      Self::MissingLeftOperand => rmsg!("expected left-hand operand"),
+      Self::MissingRightOperand => rmsg!("expected right-hand operand"),
     }
   }
   

@@ -1,5 +1,4 @@
 use std::{rc::Rc};
-use std::{collections::VecDeque};
 use fnv::{FnvBuildHasher};
 use quickscope::ScopeMap;
 use crate::{lang::{Sequence, Rst}, RantValue, Rant};
@@ -46,7 +45,9 @@ impl<I> CallStack<I> {
   #[inline]
   pub fn pop_frame(&mut self) -> Option<StackFrame<I>> {
     if let Some(frame) = self.frames.pop() {
-      self.locals.pop_layer();
+      if frame.has_scope {
+        self.locals.pop_layer();
+      }
       return Some(frame)
     }
     None
@@ -55,7 +56,9 @@ impl<I> CallStack<I> {
   /// Adds a frame to the top of the stack.
   #[inline]
   pub fn push_frame(&mut self, frame: StackFrame<I>) {
-    self.locals.push_layer();
+    if frame.has_scope {
+      self.locals.push_layer();
+    }
     self.frames.push(frame);
   }
 
@@ -344,14 +347,17 @@ impl<I> CallStack<I> {
 pub struct StackFrame<I> {
   /// Node sequence being executed by the frame
   sequence: Option<Rc<Sequence>>,
+  /// Does this stack frame have a variable scope?
+  has_scope: bool,
   /// Program Counter (as index in sequence) for the current frame
   pc: usize,
   /// Has frame sequence started running?
+  /// TODO: Get rid of this field.
   started: bool,
   /// Output for the frame
   output: OutputWriter,
   /// Intent queue for the frame
-  intents: VecDeque<I>,
+  intents: Vec<I>,
   /// Line/col for debug info
   debug_pos: (usize, usize),
   /// Origin of sequence
@@ -368,6 +374,7 @@ impl<I> StackFrame<I> {
       sequence: Some(sequence),
       output: OutputWriter::new(prev_output),
       started: false,
+      has_scope: true,
       pc: 0,
       intents: Default::default(),
       debug_pos: (0, 0),
@@ -380,6 +387,7 @@ impl<I> StackFrame<I> {
     sequence: Option<Rc<Sequence>>,
     prev_output: Option<&OutputWriter>, 
     origin: Rc<RantProgramInfo>, 
+    has_scope: bool,
     debug_pos: (usize, usize),
     flavor: StackFrameFlavor
   ) -> Self 
@@ -389,11 +397,18 @@ impl<I> StackFrame<I> {
       sequence,
       output: OutputWriter::new(prev_output),
       started: false,
+      has_scope,
       pc: 0,
       intents: Default::default(),
       debug_pos,
       flavor,
     }
+  }
+
+  pub(crate) fn without_scope(self) -> Self {
+    let mut frame = self;
+    frame.has_scope = false;
+    frame
   }
 
   #[inline(always)]
@@ -464,22 +479,16 @@ impl<I> StackFrame<I> {
       )
   }
 
-  /// Takes the next intent to be handled.
+  /// Pushes an intent to the top of the intent stack.
   #[inline(always)]
-  pub(crate) fn take_intent(&mut self) -> Option<I> {
-    self.intents.pop_front()
+  pub fn push_intent(&mut self, intent: I) {
+    self.intents.push(intent);
   }
 
-  /// Pushes an intent to the front of the queue so that it is handled next.
+  /// Removes the topmost intent from the intent stack and returns it.
   #[inline(always)]
-  pub fn push_intent_front(&mut self, intent: I) {
-    self.intents.push_front(intent);
-  }
-
-  /// Pushes an intent to the back of the queue so that it is handled last.
-  #[inline(always)]
-  pub fn push_intent_back(&mut self, intent: I) {
-    self.intents.push_back(intent);
+  pub(crate) fn pop_intent(&mut self) -> Option<I> {
+    self.intents.pop()
   }
 
   /// Writes debug information to the current frame to be used in stack trace generation.

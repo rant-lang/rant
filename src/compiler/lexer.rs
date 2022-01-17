@@ -1,11 +1,44 @@
 use logos::*;
 use crate::InternalString;
 
+// Keyword names
+pub const KW_RETURN: &str = "return";
+pub const KW_BREAK: &str = "break";
+pub const KW_CONTINUE: &str = "continue";
+pub const KW_WEIGHT: &str = "weight";
+pub const KW_TRUE: &str = "true";
+pub const KW_FALSE: &str = "false";
+pub const KW_TEXT: &str = "text";
+pub const KW_AND: &str = "and";
+pub const KW_OR: &str = "or";
+pub const KW_NEG: &str = "neg";
+pub const KW_NOT: &str = "not";
+pub const KW_NAND: &str = "nand";
+pub const KW_NOR: &str = "nor";
+pub const KW_XOR: &str = "xor";
+pub const KW_EQ: &str = "eq";
+pub const KW_NEQ: &str = "neq";
+pub const KW_GT: &str = "gt";
+pub const KW_GE: &str = "ge";
+pub const KW_LT: &str = "lt";
+pub const KW_LE: &str = "le";
+
+pub fn is_valid_keyword_name(kw_name: &str) -> bool {
+  matches!(kw_name, KW_RETURN | KW_BREAK | KW_CONTINUE | KW_WEIGHT | KW_TRUE | KW_FALSE | KW_TEXT | KW_AND | KW_OR | KW_NEG | KW_NOT | KW_NAND | KW_NOR | KW_XOR | KW_EQ | KW_NEQ | KW_GT | KW_GE | KW_LT | KW_LE)
+}
+
+#[derive(Debug, PartialEq)]
+pub struct KeywordInfo {
+  pub name: InternalString,
+  pub is_valid: bool,
+}
+
 #[derive(Logos, Debug, PartialEq)]
 pub enum RantToken {
-  /// Sequence of printable non-whitespace characters
+  /// Sequence of printable non-whitespace characters that isn't a number
+  /// This regex is so crazy because simply doing [\w\-_]+ would accidentally capture negative numbers
   #[error]
-  #[regex(r"[\w\-_]+")]
+  #[regex(r"([0-9]+(\.[0-9]+([Ee][+\-]?\d+)?|[Ee][+\-]?\d+)?[\p{L}\-_]|[\w_][\p{L}\-_]|\-[\p{L}\-_])[\w\-_]*", priority = 1)]
   Fragment,
 
   /// Sequence of printable whitespace characters
@@ -15,6 +48,9 @@ pub enum RantToken {
   /// Sequence of non-printable whitespace characters
   #[regex(r"[\r\n]+\s*|\s*[\r\n]+", logos::skip, priority = 3)]
   Blackspace,
+
+  #[token("-", priority = 10)]
+  Minus,
   
   /// `{`
   #[token("{")]
@@ -70,7 +106,7 @@ pub enum RantToken {
 
   /// `**`
   #[token("**")]
-  Temporal,
+  DoubleStar,
   
   /// Labeled temporal operator, e.g. `*a*`
   #[regex(r"\*[\w\d\-_]+\*", parse_temporal_spread_label)]
@@ -108,9 +144,9 @@ pub enum RantToken {
   #[token("@", priority = 1)]
   At,
 
-  /// Some charm keyword, e.g. `@return`
+  /// Keyword, e.g. `@return`
   #[regex(r"@[\w\d_-]+", parse_keyword, priority = 2, ignore(case))]
-  Keyword(InternalString),
+  Keyword(KeywordInfo),
   
   /// `/`
   #[token("/")]
@@ -136,13 +172,13 @@ pub enum RantToken {
   #[token("~")]
   Sink,
   
-  /// Integer literal
-  #[regex(r"\-?[0-9]+", parse_integer, priority = 2)]
-  Integer(i64),
+  /// Unsigned integer literal
+  #[regex(r"[0-9]+", parse_integer, priority = 2)]
+  IntegerUnsigned(i64),
   
-  /// Float literal
-  #[regex(r"\-?[0-9]+(\.[0-9]+([Ee][+\-]?\d+)?|[Ee][+\-]?\d+)", parse_float, priority = 3)]
-  Float(f64),
+  /// Unsigned floating-point literal
+  #[regex(r"[0-9]+(\.[0-9]+([Ee][+\-]?\d+)?|[Ee][+\-]?\d+)", parse_float, priority = 3)]
+  FloatUnsigned(f64),
   
   /// Represents inline and multi-line comments
   #[regex(r"\s*##([^#]|#[^#])*(##\s*)?", logos::skip, priority = 6)]
@@ -191,10 +227,13 @@ fn parse_string_literal(lex: &mut Lexer<RantToken>) -> InternalString {
   string_content
 }
 
-fn parse_keyword(lex: &mut Lexer<RantToken>) -> InternalString {
+fn parse_keyword(lex: &mut Lexer<RantToken>) -> KeywordInfo {
   let kwd_literal = lex.slice();
   let kwd_content = &kwd_literal[1..];
-  InternalString::from(kwd_content)
+  KeywordInfo {
+    is_valid: is_valid_keyword_name(kwd_content),
+    name: InternalString::from(kwd_content),
+  }
 }
 
 /// Filter function for whitespace lexer rule to exclude whitespace at start of source

@@ -800,11 +800,7 @@ impl PartialOrd for RantValue {
 impl Not for RantValue {
   type Output = Self;
   fn not(self) -> Self::Output {
-    match self {
-      Self::Empty => Self::Boolean(true),
-      Self::Boolean(b) => Self::Boolean(!b),
-      _ => self
-    }
+    RantValue::Boolean(!self.to_bool())
   }
 }
 
@@ -959,5 +955,35 @@ impl RantValue {
       Self::Float(f) => Ok(Self::Float(f.abs())),
       _ => Ok(self)
     }
+  }
+
+  /// Calculates the logical AND.
+  #[inline]
+  pub fn and(self, rhs: RantValue) -> Self {
+    let truth_lhs = self.to_bool();
+    if !truth_lhs {
+      self
+    } else {
+      rhs
+    }
+  }
+
+  /// Calculates the logical OR.
+  #[inline]
+  pub fn or(self, rhs: RantValue) -> Self {
+    let truth_lhs = self.to_bool();
+    if truth_lhs {
+      self
+    } else {
+      rhs
+    }
+  }
+
+  /// Calculates the logical XOR.
+  #[inline]
+  pub fn xor(self, rhs: RantValue) -> Self {
+    let truth_lhs = self.to_bool();
+    let truth_rhs = rhs.to_bool();
+    RantValue::Boolean(truth_lhs ^ truth_rhs)
   }
 }

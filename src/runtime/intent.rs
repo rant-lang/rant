@@ -5,7 +5,7 @@ use crate::{RantFunctionRef, RantList, RantMap, RantValue};
 
 use super::{RuntimeResult, SetterValueSource, VM, VarWriteMode, resolver::Weights};
 
-// Intents are actions queued on a stack frame that are performed before the frame runs.
+/// Actions that can be queued on a stack frame that are performed before the frame runs.
 ///
 /// ## "Call" or "Invoke"?
 /// In the context of Rant runtime intents, "calling" and "invoking" have specific meanings:
@@ -60,6 +60,8 @@ pub enum Intent {
   CreateDefaultArgs { context: RantFunctionRef, default_arg_exprs: Vec<(Rc<Sequence>, usize)>, eval_index: usize, },
   /// Pop `argc` args off the stack, then pop a function off the stack and call it with the args.
   Call { argc: usize, override_print: bool },
+  /// Call a sequence without an inner variable scope, then push its output to the value stack.
+  CallOperand { sequence: Rc<Sequence> },
   /// Call a function for every variant of a temporal argument set and increment the provided temporal state.
   CallTemporal { func: RantFunctionRef, args: Rc<Vec<RantValue>>, temporal_state: TemporalSpreadState, },
   /// Pop value from stack and add it to a list. If `index` is out of range, print the list.
@@ -72,33 +74,96 @@ pub enum Intent {
   RuntimeCall { function: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, interrupt: bool },
   /// Drops all unwind states that are no longer within the call stack.
   DropStaleUnwinds,
+  /// Pops two values (RHS, LHS), performs addition, and pushes the result.
+  Add,
+  /// Pops two values (RHS, LHS), performs subtraction, and pushes the result.
+  Subtract,
+  /// Pops two values (RHS, LHS), performs multiplication, and pushes the result.
+  Multiply,
+  /// Pops two values (RHS, LHS), performs division, and pushes the result.
+  Divide,
+  /// Pops two values (RHS, LHS), performs modulo, and pushes the result.
+  Modulo,
+  /// Pops two values (RHS, LHS), performs exponentiation, and pushes the result.
+  Power,
+  /// Pops a value, performs logical NOT, and pushes the result.
+  LogicNot,
+  /// Pops a value, performs negation, and pushes the result.
+  Negate,
+  /// Pops a value off the value stack and compares its truthiness against `on_truthiness`, and re-pushes the value.
+  /// If they match, do nothing and continue.
+  /// If they don't match, calls `gen_op_intent` and pushes the returned intent onto the current frame, then evaluates `rhs` using the `CallOperand` intent.
+  LogicShortCircuit { on_truthiness: bool, gen_op_intent: Box<dyn FnOnce() -> Intent>, rhs: Rc<Sequence> },
+  /// Pops two values, performs logical AND, and pushes the result.
+  LogicAnd,
+  /// Pops two values, performs logical OR, and pushes the result.
+  LogicOr,
+  /// Pops two values (RHS, LHS), performs logical NAND, and pushes the result.
+  LogicNand,
+  /// Pops two values (RHS, LHS), performs logical NOR, and pushes the result.
+  LogicNor,
+  /// Pops two values (RHS, LHS), performs logical XOR, and pushes the result.
+  LogicXor,
+  /// Pops two values (RHS, LHS), calculates `LHS == RHS`, and pushes the result.
+  Equals,
+  /// Pops two values (RHS, LHS), calculates `LHS != RHS`, and pushes the result.
+  NotEquals,
+  /// Pops two values (RHS, LHS), calculates `LHS > RHS`, and pushes the result. 
+  Greater,
+  /// Pops two values (RHS, LHS), calculates `LHS >= RHS`, and pushes the result.
+  GreaterOrEqual,
+  /// Pops two values (RHS, LHS), calculates `LHS < RHS`, and pushes the result.
+  Less,
+  /// Pops two values (RHS, LHS), calculates `LHS <= RHS`, and pushes the result.
+  LessOrEqual,
 }
 
 impl Intent {
   pub(crate) fn name(&self) -> &'static str {
     match self {
-      Intent::PrintLast => "print",
-      Intent::CheckBlock => "check_block",
-      Intent::SetVar { .. } => "set_var",
-      Intent::DefVar { .. } => "def_var",
-      Intent::BuildDynamicGetter { .. } => "build_dyn_getter",
-      Intent::GetValue { .. } => "get_value",
-      Intent::BuildDynamicSetter { .. } => "build_dyn_setter",
-      Intent::SetValue { .. } => "set_value",
-      Intent::Invoke { .. } => "invoke",
-      Intent::InvokePipeStep { .. } => "invoke_pipe_step",
-      Intent::Call { .. } => "call",
-      Intent::CallTemporal { .. } => "call_temporal",
-      Intent::BuildList { .. } => "build_list",
-      Intent::BuildMap { .. } => "build_map",
-      Intent::ImportLastAsModule { .. } => "load_module",
-      Intent::RuntimeCall { .. } => "runtime_call",
-      Intent::DropStaleUnwinds => "drop_stale_unwinds",
-      Intent::ReturnLast => "return_last",
-      Intent::ContinueLast => "continue_last",
-      Intent::BreakLast => "break_last",
-      Intent::BuildWeightedBlock { .. } => "build_weighted_block",
-      Intent::CreateDefaultArgs { .. } => "create_default_args",
+      Self::PrintLast => "print",
+      Self::CheckBlock => "check_block",
+      Self::SetVar { .. } => "set_var",
+      Self::DefVar { .. } => "def_var",
+      Self::BuildDynamicGetter { .. } => "build_dyn_getter",
+      Self::GetValue { .. } => "get_value",
+      Self::BuildDynamicSetter { .. } => "build_dyn_setter",
+      Self::SetValue { .. } => "set_value",
+      Self::Invoke { .. } => "invoke",
+      Self::InvokePipeStep { .. } => "invoke_pipe_step",
+      Self::Call { .. } => "call",
+      Self::CallOperand { .. } => "call_operand",
+      Self::CallTemporal { .. } => "call_temporal",
+      Self::BuildList { .. } => "build_list",
+      Self::BuildMap { .. } => "build_map",
+      Self::ImportLastAsModule { .. } => "load_module",
+      Self::RuntimeCall { .. } => "runtime_call",
+      Self::DropStaleUnwinds => "drop_stale_unwinds",
+      Self::ReturnLast => "return_last",
+      Self::ContinueLast => "continue_last",
+      Self::BreakLast => "break_last",
+      Self::BuildWeightedBlock { .. } => "build_weighted_block",
+      Self::CreateDefaultArgs { .. } => "create_default_args",
+      Self::Add => "add",
+      Self::Subtract => "subtract",
+      Self::Multiply => "multiply",
+      Self::Divide => "divide",
+      Self::Modulo => "modulo",
+      Self::Power => "power",
+      Self::Negate => "negate",
+      Self::LogicShortCircuit { .. } => "logic_short_circuit",
+      Self::LogicNot => "not",
+      Self::LogicAnd => "and",
+      Self::LogicOr => "or",
+      Self::LogicNand => "nand",
+      Self::LogicNor => "nor",
+      Self::LogicXor => "xor",
+      Self::Equals => "equals",
+      Self::NotEquals => "not_equals",
+      Self::Less => "less",
+      Self::LessOrEqual => "less_or_equal",
+      Self::Greater => "greater",
+      Self::GreaterOrEqual => "greater_or_equal",
     }
   }
 }

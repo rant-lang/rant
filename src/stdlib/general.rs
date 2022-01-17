@@ -31,7 +31,7 @@ pub(crate) fn call(vm: &mut VM, (func, args): (RantFunctionRef, Option<Vec<RantV
       vm.push_val(arg)?;
     }
   }
-  vm.cur_frame_mut().push_intent_front(Intent::Call { argc, override_print: false });
+  vm.cur_frame_mut().push_intent(Intent::Call { argc, override_print: false });
   Ok(())
 }
 
@@ -185,7 +185,7 @@ pub(crate) fn require(vm: &mut VM, module_path: String) -> RantStdResult {
     // If not cached, attempt to load it from file and run its root sequence
     let caller_origin = Rc::clone(vm.cur_frame().origin());
     let module_pgm = vm.context_mut().try_read_module(&module_path, caller_origin).into_runtime_result()?;
-    vm.cur_frame_mut().push_intent_front(Intent::ImportLastAsModule { module_name, descope: 1 });
+    vm.cur_frame_mut().push_intent(Intent::ImportLastAsModule { module_name, descope: 1 });
     vm.push_frame_flavored(Rc::clone(&module_pgm.root), StackFrameFlavor::FunctionBody)?;
     Ok(())
   } else {
@@ -195,7 +195,7 @@ pub(crate) fn require(vm: &mut VM, module_path: String) -> RantStdResult {
 
 pub(crate) fn try_(vm: &mut VM, (context, handler): (RantValue, Option<RantFunctionRef>)) -> RantStdResult {
   vm.push_unwind_state(handler);
-  vm.cur_frame_mut().push_intent_front(Intent::DropStaleUnwinds);
+  vm.cur_frame_mut().push_intent(Intent::DropStaleUnwinds);
   match context {
     RantValue::Function(func) => {
       vm.call_func(func, vec![], false)?;

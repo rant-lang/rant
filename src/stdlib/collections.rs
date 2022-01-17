@@ -98,7 +98,7 @@ pub(crate) fn filter(vm: &mut VM, (list, predicate): (RantListRef, RantFunctionR
     let predicate_clone = Rc::clone(&predicate);
 
     // Prepare next iteration
-    vm.cur_frame_mut().push_intent_front(Intent::RuntimeCall {
+    vm.cur_frame_mut().push_intent(Intent::RuntimeCall {
       function: Box::new(move |vm| {
         _iterate_filter(vm, src_clone, dest, index + 1, predicate)?;
         Ok(())
@@ -109,7 +109,7 @@ pub(crate) fn filter(vm: &mut VM, (list, predicate): (RantListRef, RantFunctionR
     // Prepare predicate call for current iteration
     vm.push_val(RantValue::Function(predicate_clone))?;
     vm.push_val(predicate_arg)?;
-    vm.cur_frame_mut().push_intent_front(Intent::Call {
+    vm.cur_frame_mut().push_intent(Intent::Call {
       argc: 1,
       override_print: true,
     });
@@ -118,7 +118,7 @@ pub(crate) fn filter(vm: &mut VM, (list, predicate): (RantListRef, RantFunctionR
   }
 
   let list_clone = Rc::clone(&list);
-  vm.cur_frame_mut().push_intent_front(Intent::RuntimeCall{
+  vm.cur_frame_mut().push_intent(Intent::RuntimeCall{
     function: Box::new(move |vm| {
       _iterate_filter(vm, list_clone, RantList::new(), 0, predicate)
     }),
@@ -154,7 +154,7 @@ pub(crate) fn map(vm: &mut VM, (list, map_func): (RantListRef, RantFunctionRef))
     let map_func_clone = Rc::clone(&map_func);
 
     // Prepare next iteration
-    vm.cur_frame_mut().push_intent_front(Intent::RuntimeCall {
+    vm.cur_frame_mut().push_intent(Intent::RuntimeCall {
       function: Box::new(move |vm| {
         _iterate_map(vm, src_clone, dest, index + 1, map_func)?;
         Ok(())
@@ -165,7 +165,7 @@ pub(crate) fn map(vm: &mut VM, (list, map_func): (RantListRef, RantFunctionRef))
     // Prepare predicate call for current iteration
     vm.push_val(RantValue::Function(map_func_clone))?;
     vm.push_val(map_func_arg)?;
-    vm.cur_frame_mut().push_intent_front(Intent::Call {
+    vm.cur_frame_mut().push_intent(Intent::Call {
       argc: 1,
       override_print: true,
     });
@@ -174,7 +174,7 @@ pub(crate) fn map(vm: &mut VM, (list, map_func): (RantListRef, RantFunctionRef))
   }
 
   let list_clone = Rc::clone(&list);
-  vm.cur_frame_mut().push_intent_front(Intent::RuntimeCall {
+  vm.cur_frame_mut().push_intent(Intent::RuntimeCall {
     function: Box::new(move |vm| {
       _iterate_map(vm, list_clone, RantList::new(), 0, map_func)
     }),
@@ -206,7 +206,7 @@ pub(crate) fn zip(vm: &mut VM, (list_a, list_b, zip_func): (RantListRef, RantLis
     let zip_func_clone = Rc::clone(&zip_func);
 
     // Prepare next iteration
-    vm.cur_frame_mut().push_intent_front(Intent::RuntimeCall { 
+    vm.cur_frame_mut().push_intent(Intent::RuntimeCall { 
       function: Box::new(move |vm| {
         _iterate_zip(vm, src_a_clone, src_b_clone, dest, index + 1, max_len, zip_func_clone)
       }),
@@ -217,7 +217,7 @@ pub(crate) fn zip(vm: &mut VM, (list_a, list_b, zip_func): (RantListRef, RantLis
     vm.push_val(RantValue::Function(zip_func))?;
     vm.push_val(src_b_ref.get(index).cloned().unwrap_or_default())?;
     vm.push_val(src_a_ref.get(index).cloned().unwrap_or_default())?;
-    vm.cur_frame_mut().push_intent_front(Intent::Call {
+    vm.cur_frame_mut().push_intent(Intent::Call {
       argc: 2,
       override_print: true,
     });
@@ -226,7 +226,7 @@ pub(crate) fn zip(vm: &mut VM, (list_a, list_b, zip_func): (RantListRef, RantLis
   }
 
   let (list_a_clone, list_b_clone) = (Rc::clone(&list_a), Rc::clone(&list_b));
-  vm.cur_frame_mut().push_intent_front(Intent::RuntimeCall {
+  vm.cur_frame_mut().push_intent(Intent::RuntimeCall {
     function: Box::new(move |vm| {
       _iterate_zip(vm, list_a_clone, list_b_clone, RantList::new(), 0, max_len, zip_func)
     }),
