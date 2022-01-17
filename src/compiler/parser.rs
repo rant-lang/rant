@@ -1054,6 +1054,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           return Err(())
         },
         token => {
+          let mut op_end_type = SequenceEndType::Infix;
           // Check for infix operator
           if let Some(mut op) = InfixOperator::from_token(&token) {
             whitespace!(ignore both);
@@ -1072,8 +1073,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 sequence: rhs_seq,
                 next_infix_op: rhs_next_lower_infix_op,
                 is_text: rhs_is_text,
+                end_type: rhs_end_type,
                 ..
               } = self.parse_sequence_inner(mode, op_precedence)?;
+
+              op_end_type = rhs_end_type;
 
               // Make sure RHS is not empty
               if rhs_seq.is_empty() {
@@ -1113,9 +1117,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               // Fall through and return the operator with the updated sequence
               if let Some(rhs_next_lower_infix_op) = rhs_next_lower_infix_op {
                 op = rhs_next_lower_infix_op;
-              } else {
-                // If there isn't another operator, just finish parsing
-                break
               }
             }
 
@@ -1124,7 +1125,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             // The upper parsers will continue to short-circuit as long as the next_infix_op's precedence is lower than theirs.
             return Ok(ParsedSequence {
               sequence,
-              end_type: SequenceEndType::Infix,
+              end_type: op_end_type,
               is_text: is_seq_text,
               extras: None,
               next_infix_op: Some(op),
