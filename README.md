@@ -88,12 +88,22 @@ $ cargo install rant --version 4.0.0-alpha.24 --features cli
 Then run it:
 
 ```sh
+# Launch the REPL
 $ rant
+
+# Get a full list of options
+$ rant -h
+
+# Run an inline script and display output
+$ rant -e '[rep:3] [sep:\s] {b{ee|i|o|u}bbity}'
+
+# Run hello_world.rant and send output to result.txt
+$ rant hello_world.rant > result.txt
 ```
 
 ### Library
 
-Add Rant to your `Cargo.toml`:
+To use Rant in a Rust project, add the `rant` crate to `Cargo.toml`:
 
 ```toml
 [dependencies]
