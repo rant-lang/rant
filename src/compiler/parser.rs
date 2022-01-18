@@ -25,6 +25,7 @@ const PREC_XOR: usize = 2;
 const PREC_DISJUNCTIVE: usize = 1;
 const PREC_SEQUENCE: usize = 0;
 
+// TODO: Reorganize this garbage so that pre/postfix are apparent from this enum
 #[derive(Copy, Clone, PartialEq)]
 enum OrderedOperator {
   Add,
@@ -1271,13 +1272,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           self.report_error(Problem::UnclosedStringLiteral, &span); 
           return Err(())
         },
-        token => {
-          let mut op_end_type = SequenceEndType::Operator;
-
+        token => {          
           // Check for ordered operator
+          // TODO: Split out this horror into its own function PLEASE
           if let Some(mut next_op) = OrderedOperator::from_token(&token) {
+            let mut op_end_type = SequenceEndType::Operator;
             loop {
-              
               let op_precedence = next_op.precedence();
               let op_type = next_op.op_type();
               match op_type {
