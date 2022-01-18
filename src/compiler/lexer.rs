@@ -51,6 +51,20 @@ pub struct KeywordInfo {
   pub is_valid: bool,
 }
 
+/// Represents the contents of a positive float literal token.
+#[derive(Debug, PartialEq)]
+pub enum PositiveFloatToken {
+  Value(f64),
+  OutOfRange,
+}
+
+/// Represents the contents of a positive integer literal token.
+#[derive(Debug, PartialEq)]
+pub enum PositiveIntegerToken {
+  Value(u64),
+  OutOfRange,
+}
+
 #[derive(Logos, Debug, PartialEq)]
 pub enum RantToken {
   /// Sequence of printable non-whitespace characters that isn't a number
@@ -192,11 +206,11 @@ pub enum RantToken {
   
   /// Unsigned integer literal
   #[regex(r"[0-9]+", parse_integer, priority = 2)]
-  IntegerUnsigned(i64),
+  IntegerPositive(PositiveIntegerToken),
   
   /// Unsigned floating-point literal
   #[regex(r"[0-9]+(\.[0-9]+([Ee][+\-]?\d+)?|[Ee][+\-]?\d+)", parse_float, priority = 3)]
-  FloatUnsigned(f64),
+  FloatPositive(PositiveFloatToken),
   
   /// Represents inline and multi-line comments
   #[regex(r"\s*##([^#]|#[^#])*(##\s*)?", logos::skip, priority = 6)]
@@ -279,14 +293,18 @@ fn parse_code_point_escape(lex: &mut Lexer<RantToken>) -> Option<char> {
   Some(codepoint as char)
 }
 
-fn parse_float(lex: &mut Lexer<RantToken>) -> Option<f64> {
+fn parse_float(lex: &mut Lexer<RantToken>) -> PositiveFloatToken {
   let slice = lex.slice();
-  let n = slice.parse().ok()?;
-  Some(n)
+  match slice.parse() {
+    Ok(f) => PositiveFloatToken::Value(f),
+    Err(_) => PositiveFloatToken::OutOfRange,
+  }
 }
 
-fn parse_integer(lex: &mut Lexer<RantToken>) -> Option<i64> {
+fn parse_integer(lex: &mut Lexer<RantToken>) -> PositiveIntegerToken {
   let slice = lex.slice();
-  let n = slice.parse().ok()?;
-  Some(n)
+  match slice.parse() {
+    Ok(i) => PositiveIntegerToken::Value(i),
+    Err(_) => PositiveIntegerToken::OutOfRange,
+  }
 }

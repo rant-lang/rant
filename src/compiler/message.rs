@@ -135,6 +135,8 @@ pub enum Problem {
   UnclosedVariableAccess,
   UnclosedList,
   UnclosedMap,
+  IntegerLiteralOutOfRange,
+  FloatLiteralOutOfRange,
   AnonValueAssignment,
   MultipleVariadicParams,
   MissingFunctionBody,
@@ -195,8 +197,7 @@ impl Problem {
     }
 
     match self {
-      // Syntax errors (0000 - 0500)
-      // Tokens
+      // Un/expected token errors (0000 - 0001)
       Self::UnexpectedToken(_) =>                               rcode!(0000),
       Self::ExpectedToken(_) =>                                 rcode!(0001),
 
@@ -209,6 +210,8 @@ impl Problem {
       Self::UnclosedList =>                                     rcode!(0007),
       Self::UnclosedMap =>                                      rcode!(0008),
       Self::UnclosedCondition =>                                rcode!(0009),
+      Self::IntegerLiteralOutOfRange =>                         rcode!(0010),
+      Self::FloatLiteralOutOfRange =>                           rcode!(0011),
 
       // Functions (0021 - 0039)
       Self::InvalidParamOrder(..) =>                            rcode!(0021),
@@ -319,7 +322,9 @@ impl Problem {
       Self::MissingRequireArgument => rmsg!("missing argument for @require"),
       Self::InvalidRequireArgumentToken => rmsg!("@require path should be a string literal"),
       Self::EmptyCondition => rmsg!("condition cannot be empty"),
-      Self::UnclosedCondition => rmsg!("unclosed condition"),
+      Self::UnclosedCondition => rmsg!("unclosed condition; expected ':'"),
+      Self::IntegerLiteralOutOfRange => rmsg!("integer literal is out of range for the `int` type; consider changing it (or if applicable, using a string instead)"),
+      Self::FloatLiteralOutOfRange => rmsg!("float literal is out of range for the `float` type; consider changing it (or if applicable, using a string instead)"),
     }
   }
   

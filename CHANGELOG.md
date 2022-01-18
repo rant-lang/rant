@@ -2,7 +2,21 @@
 
 ## 4.0.0-alpha.25 (unreleased)
 
+### New
+* Added compiler errors when int/float literals are out of range
+
+### Changes
+
+### Removed
+
+### Fixes
+* Fixed fallible optional parameters not generating warnings when unused
+* Fixed minimum int value not being parsed correctly
+
+
 ## 4.0.0-alpha.24
+
+(1/17/2022)
 
 ### New
 * Added `@require` statements. These take *static* module paths. You can still use `[require]` if you need to import modules dynamically.
@@ -44,6 +58,7 @@
 ### Fixes
 * Fixed broken `[chunks]` behavior
 
+
 ## 4.0.0-alpha.23
 
 (1/11/2022)
@@ -52,7 +67,7 @@
 * Added stdlib functions:
   * `[print]`
   * `[chunks]`
-  * `[bool]`
+  * `[to-bool]`
   * `[values]`
 * Added stdlib constants:
   * `MIN_INT`, `MAX_INT`
@@ -76,7 +91,6 @@
 * Upgraded CLI dependencies:
   * `ctrlc` &rarr; 3.1.9
 * Renamed stdlib functions:
-  * `[bool]` &rarr; `[to-bool]`
   * `[string]` &rarr; `[to-string]`
   * `[int]` &rarr; `[to-int]`
   * `[float]` &rarr; `[to-float]`

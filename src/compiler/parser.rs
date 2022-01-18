@@ -273,12 +273,19 @@ impl VarStats {
   }
 }
 
+/// Provides context to a variable tracked by the compiler.
 #[derive(Copy, Clone, PartialEq)]
 enum VarRole {
+  /// Just a normal variable.
   Normal,
+  /// A variable known to be a function.
   Function,
+  /// Function argument.
   Argument,
+  /// Optional function argument without a fallback.
+  /// If accessed without a fallback expression, should generate a compiler error.
   FallibleOptionalArgument,
+  /// Pipeval from a piped call.
   PipeValue,
 }
 
@@ -295,6 +302,7 @@ enum ParsedSequenceExtras {
   }
 }
 
+// TODO: Add a helper function for creating simple instances of `ParsedSequence` to reduce code bloat
 /// Contains information about a successfully parsed sequence and its context.
 struct ParsedSequence {
   sequence: Sequence,
@@ -1167,11 +1175,27 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         Minus if is_seq_text || sequence.is_empty() => {
           whitespace!(allow);
           whitespace!(queue next);
-          if let Some((number_token, _number_token_span)) = self.reader.take_where(|t| matches!(t, Some((RantToken::IntegerUnsigned(_) | RantToken::FloatUnsigned(_), _)))) {
+          // Check if it's supposed to be a negative number
+          if let Some((number_token, number_token_span)) = self.reader.take_where(|t| matches!(t, Some((RantToken::IntegerPositive(_) | RantToken::FloatPositive(_), _)))) {
             whitespace!(ignore prev);
             emit!(match number_token {
-              RantToken::IntegerUnsigned(n) => Rst::Integer(-n),
-              RantToken::FloatUnsigned(n) => Rst::Float(-n),
+              RantToken::IntegerPositive(nt) => match nt {
+                PositiveIntegerToken::Value(n) => match self.try_sign_unsigned_int(n, true, &number_token_span) {
+                  Ok(n) => Rst::Integer(n),
+                  Err(_) => Rst::EmptyValue
+                },
+                PositiveIntegerToken::OutOfRange => {
+                  self.report_error(Problem::IntegerLiteralOutOfRange, &span);
+                  Rst::EmptyValue
+                }
+              },
+              RantToken::FloatPositive(nt) => match nt {
+                PositiveFloatToken::Value(n) => Rst::Float(-n),
+                PositiveFloatToken::OutOfRange => {
+                  self.report_error(Problem::FloatLiteralOutOfRange, &span);
+                  Rst::EmptyValue
+                },
+              },
               _ => unreachable!()
             });
           } else {
@@ -1180,15 +1204,33 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         },
         
         // Integers
-        IntegerUnsigned(n) => no_flags!(on {
+        IntegerPositive(nt) => no_flags!(on {
           whitespace!(allow);
-          Rst::Integer(n)
+          match nt {
+            PositiveIntegerToken::Value(n) => match cast::i64(n) {
+              Ok(n) => Rst::Integer(n),
+              Err(_) => {
+                self.report_error(Problem::IntegerLiteralOutOfRange, &span);
+                Rst::EmptyValue
+              }
+            },
+            PositiveIntegerToken::OutOfRange => {
+              self.report_error(Problem::IntegerLiteralOutOfRange, &span);
+              Rst::EmptyValue
+            }
+          }
         }),
         
         // Floats
-        FloatUnsigned(n) => no_flags!(on {
+        FloatPositive(nt) => no_flags!(on {
           whitespace!(allow);
-          Rst::Float(n)
+          match nt {
+            PositiveFloatToken::Value(n) => Rst::Float(n),
+            PositiveFloatToken::OutOfRange => {
+              self.report_error(Problem::FloatLiteralOutOfRange, &span);
+              Rst::EmptyValue
+            }
+          }
         }),
         
         // Empty
@@ -2645,7 +2687,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     for (name, role, span) in unused_vars {
       match role {
         VarRole::Normal => self.report_warning(Problem::UnusedVariable(name), &span),
-        VarRole::Argument => self.report_warning(Problem::UnusedParameter(name), &span),
+        VarRole::Argument | VarRole::FallibleOptionalArgument => self.report_warning(Problem::UnusedParameter(name), &span),
         VarRole::Function => self.report_warning(Problem::UnusedFunction(name), &span),
         // Ignore any other roles
         _ => {},
@@ -2706,7 +2748,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         self.reader.skip_ws();
         // Read name of variable we're defining
         let var_name = self.parse_ident()?;
-
         let def_span = access_start_span.start .. self.reader.last_token_span().end;
         
         if let Some((token, _token_span)) = self.reader.next_solid() {
@@ -2906,13 +2947,31 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   ///
   /// Will generate a compiler error if there's a dangling sign.
   fn try_read_signed_int(&mut self) -> ParseResult<Option<i64>> {
-    if let Some((token, _span)) = self.reader.take_where(|t| matches!(t, Some((RantToken::Minus | RantToken::IntegerUnsigned(_), _)))) {
+    if let Some((token, span)) = self.reader.take_where(|t| matches!(t, Some((RantToken::Minus | RantToken::IntegerPositive(_), _)))) {
       match token {
-        RantToken::IntegerUnsigned(i) => return Ok(Some(i)),
+        RantToken::IntegerPositive(nt) => match nt {
+          PositiveIntegerToken::Value(n) => match self.try_sign_unsigned_int(n, false, &span) {
+            Ok(i) => return Ok(Some(i)),
+            Err(()) => return Err(())
+          },
+          PositiveIntegerToken::OutOfRange => {
+            self.report_error(Problem::IntegerLiteralOutOfRange, &span);
+            return Err(())
+          }
+        },
         RantToken::Minus => {
           self.reader.skip_ws();
-          if let Some((RantToken::IntegerUnsigned(i), _span)) = self.reader.take_where(|t| matches!(t, Some((RantToken::IntegerUnsigned(_), _)))) {
-            return Ok(Some(-i))
+          if let Some((RantToken::IntegerPositive(nt), span)) = self.reader.take_where(|t| matches!(t, Some((RantToken::IntegerPositive(_), _)))) {
+            return match nt {
+              PositiveIntegerToken::Value(n) => match self.try_sign_unsigned_int(n, true, &span) {
+                Ok(i) => Ok(Some(i)),
+                Err(()) => Err(())
+              },
+              PositiveIntegerToken::OutOfRange => {
+                self.report_error(Problem::IntegerLiteralOutOfRange, &span);
+                Err(())
+              }
+            }
           } else {
             self.report_error(Problem::ExpectedToken("<integer>".to_owned()), &self.reader.last_token_span());
             return Err(())
@@ -2922,5 +2981,19 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       }
     }
     Ok(None)
+  }
+
+  /// Tries to convert a unsigned 64-bit integer to a signed 64-bit integer with the specified sign.
+  /// 
+  /// Accounts for the minimum 64-bit integer value, whose absolute value is out of range for `i64`.
+  #[inline]
+  fn try_sign_unsigned_int(&mut self, value_unsigned: u64, negate: bool, span: &Range<usize>) -> ParseResult<i64> {
+    match cast::i64(if negate { -1 } else { 1 } * cast::i128(value_unsigned)) {
+      Ok(value_signed) => Ok(value_signed),
+      Err(_) => {
+        self.report_error(Problem::IntegerLiteralOutOfRange, span);
+        Err(())
+      }
+    }
   }
 }
