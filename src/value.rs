@@ -135,7 +135,7 @@ impl RantValue {
   /// 2. `int` returns `true` for any non-zero value; otherwise, `false`.
   /// 3. `float` returns `true` for any [normal](https://en.wikipedia.org/wiki/Normal_number_(computing)) value; otherwise, `false`.
   /// 4. `empty` returns `false`.
-  /// 5. Collections (`string`, `list`, `map`, `range`, `block`) return `true` if non-empty; otherwise, `false`.
+  /// 5. Collections (`string`, `list`, `map`, `range`) return `true` if non-empty; otherwise, `false`.
   /// 6. All other types return `true`.
   #[inline]
   pub fn to_bool(&self) -> bool {
