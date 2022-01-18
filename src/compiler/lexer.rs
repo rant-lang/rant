@@ -1,14 +1,26 @@
 use logos::*;
 use crate::InternalString;
 
-// Keyword names
+// Module keywords
+pub const KW_REQUIRE: &str = "require";
+
+// Control flow keywords
 pub const KW_RETURN: &str = "return";
 pub const KW_BREAK: &str = "break";
 pub const KW_CONTINUE: &str = "continue";
 pub const KW_WEIGHT: &str = "weight";
+pub const KW_IF: &str = "if";
+pub const KW_ELSEIF: &str = "elseif";
+pub const KW_ELSE: &str = "else";
+
+// Value constant keywords
 pub const KW_TRUE: &str = "true";
 pub const KW_FALSE: &str = "false";
+
+// Hinting keywords
 pub const KW_TEXT: &str = "text";
+
+// Infix operator keywords
 pub const KW_AND: &str = "and";
 pub const KW_OR: &str = "or";
 pub const KW_NEG: &str = "neg";
@@ -24,7 +36,13 @@ pub const KW_LT: &str = "lt";
 pub const KW_LE: &str = "le";
 
 pub fn is_valid_keyword_name(kw_name: &str) -> bool {
-  matches!(kw_name, KW_RETURN | KW_BREAK | KW_CONTINUE | KW_WEIGHT | KW_TRUE | KW_FALSE | KW_TEXT | KW_AND | KW_OR | KW_NEG | KW_NOT | KW_NAND | KW_NOR | KW_XOR | KW_EQ | KW_NEQ | KW_GT | KW_GE | KW_LT | KW_LE)
+  matches!(kw_name, 
+    KW_REQUIRE |
+    KW_RETURN | KW_BREAK | KW_CONTINUE | KW_WEIGHT | KW_IF | KW_ELSEIF | KW_ELSE |
+    KW_TRUE | KW_FALSE | KW_TEXT | 
+    KW_AND | KW_OR | KW_NEG | KW_NOT | KW_NAND | KW_NOR | KW_XOR | 
+    KW_EQ | KW_NEQ | KW_GT | KW_GE | KW_LT | KW_LE
+  )
 }
 
 #[derive(Debug, PartialEq)]
@@ -145,7 +163,7 @@ pub enum RantToken {
   At,
 
   /// Keyword, e.g. `@return`
-  #[regex(r"@[\w\d_-]+", parse_keyword, priority = 2, ignore(case))]
+  #[regex(r"@[a-z0-9_-]+", parse_keyword, priority = 2, ignore(case))]
   Keyword(KeywordInfo),
   
   /// `/`

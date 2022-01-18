@@ -3,6 +3,8 @@
 ## 4.0.0-alpha.24 (unreleased)
 
 ### New
+* Added `@require` statements. These take *static* module paths. You can still use `[require]` if you need to import modules dynamically.
+* Added conditional branching with `@if`, `@elseif`, `@else`
 * Added ability to auto-hint variables, params, and function calls using the `@text` keyword
 * Added a ton of arithmetic, logic, and comparison operators, including many C-style infix operators with precedence support 
   * Addition: `+`

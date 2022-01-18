@@ -742,10 +742,17 @@ impl<'rant> VM<'rant> {
             self.unwinds.pop();
           }
         },
-        Intent::LogicShortCircuit { on_truthiness, gen_op_intent, rhs } => {
+        Intent::LogicShortCircuit { on_truthiness, short_circuit_result, gen_op_intent, rhs } => {
           let lhs = self.pop_val()?;
           let lhs_truth = lhs.to_bool();
-          self.push_val(lhs)?;
+          self.push_val(if lhs_truth == on_truthiness { 
+            match short_circuit_result {
+              LogicShortCircuitHandling::Passthrough => lhs,
+              LogicShortCircuitHandling::OverrideWith(b) => RantValue::Boolean(b),
+            }
+          } else { 
+            lhs 
+          })?;
 
           if lhs_truth != on_truthiness {
             let op_intent = gen_op_intent();
@@ -851,6 +858,37 @@ impl<'rant> VM<'rant> {
           let lhs = self.pop_val()?;
           self.push_val(RantValue::Boolean(lhs >= rhs))?;
         },
+        Intent::CheckCondition { conditions, fallback, index } => {
+          if index == 0 {
+            // No conditions have run yet
+            let condition = Rc::clone(&conditions[index].0);
+            self.cur_frame_mut().push_intent(Intent::CheckCondition { conditions, fallback, index: index + 1 });
+            self.push_frame(condition, false)?;
+            return Ok(true)
+          } else {
+            let prev_cond_result = self.pop_val()?.to_bool();
+            if prev_cond_result {
+              // Condition was met; run the body
+              self.push_frame(Rc::clone(&conditions[index - 1].1), true)?;
+              return Ok(true)
+            }
+
+            // Previous condition failed
+            if index < conditions.len() {
+              // Run next condition
+              let condition = Rc::clone(&conditions[index].0);
+              self.cur_frame_mut().push_intent(Intent::CheckCondition { conditions, fallback, index: index + 1 });
+              self.push_frame(condition, false)?;
+              return Ok(true)
+            } else {
+              // All conditions have been checked
+              if let Some(fallback) = fallback {
+                self.push_frame(fallback, true)?;
+                return Ok(true)
+              }
+            }
+          }
+        }
       }
     }
 
@@ -1183,6 +1221,7 @@ impl<'rant> VM<'rant> {
           self.cur_frame_mut().push_intent(Intent::LogicShortCircuit {
             on_truthiness: false,
             rhs: Rc::clone(rhs),
+            short_circuit_result: LogicShortCircuitHandling::Passthrough,
             gen_op_intent: Box::new(|| Intent::LogicAnd),
           });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
@@ -1193,6 +1232,7 @@ impl<'rant> VM<'rant> {
           self.cur_frame_mut().push_intent(Intent::LogicShortCircuit {
             on_truthiness: true,
             rhs: Rc::clone(rhs),
+            short_circuit_result: LogicShortCircuitHandling::Passthrough,
             gen_op_intent: Box::new(|| Intent::LogicOr),
           });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
@@ -1203,6 +1243,7 @@ impl<'rant> VM<'rant> {
           self.cur_frame_mut().push_intent(Intent::LogicShortCircuit {
             on_truthiness: false,
             rhs: Rc::clone(rhs),
+            short_circuit_result: LogicShortCircuitHandling::OverrideWith(true),
             gen_op_intent: Box::new(|| Intent::LogicNand),
           });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
@@ -1211,8 +1252,9 @@ impl<'rant> VM<'rant> {
         Rst::LogicNor(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::LogicShortCircuit {
-            on_truthiness: false,
+            on_truthiness: true,
             rhs: Rc::clone(rhs),
+            short_circuit_result: LogicShortCircuitHandling::OverrideWith(false),
             gen_op_intent: Box::new(|| Intent::LogicNor),
           });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
@@ -1223,6 +1265,40 @@ impl<'rant> VM<'rant> {
           self.cur_frame_mut().push_intent(Intent::LogicXor);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
+          return Ok(true)
+        },
+        Rst::Require { alias, path } => {
+          // TODO: Move this into a separate function
+          // Get name of module from path
+          if let Some(module_name) = 
+          PathBuf::from(path.as_str())
+          .with_extension("")
+          .file_name()
+          .map(|name| name.to_str())
+          .flatten()
+          .map(|name| name.to_owned())
+          {
+            // Check if module is cached; if so, don't do anything
+            if let Some(RantValue::Map(module_cache_ref)) = self.context().get_global(crate::MODULES_CACHE_KEY) {
+              if let Some(module @ RantValue::Map(..)) = module_cache_ref.borrow().raw_get(&module_name) {
+                self.def_var_value(alias.as_ref().map(|a| a.as_str()).unwrap_or_else(|| module_name.as_str()), AccessPathKind::Local, module.clone(), true)?;
+                continue
+              }
+            }
+
+            // If not cached, attempt to load it from file and run its root sequence
+            let caller_origin = Rc::clone(self.cur_frame().origin());
+            let module_pgm = self.context_mut().try_read_module(path.as_str(), caller_origin).into_runtime_result()?;
+            self.cur_frame_mut().push_intent(Intent::ImportLastAsModule { module_name: alias.as_ref().map(|a| a.to_string()).unwrap_or(module_name), descope: 0 });
+            self.push_frame_flavored(Rc::clone(&module_pgm.root), StackFrameFlavor::FunctionBody)?;
+            continue
+          } else {
+            runtime_error!(RuntimeErrorType::ArgumentError, "module name is missing from path");
+          }
+        },
+        Rst::Conditional { conditions, fallback } => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.cur_frame_mut().push_intent(Intent::CheckCondition{ conditions: Rc::clone(conditions), fallback: fallback.as_ref().map(Rc::clone), index: 0 });
           return Ok(true)
         },
         rst => {

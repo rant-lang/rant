@@ -813,8 +813,12 @@ pub enum Rst {
   LogicOr(Rc<Sequence>, Rc<Sequence>),
   /// Logical NAND
   LogicNand(Rc<Sequence>, Rc<Sequence>),
+  /// Conditional branch
+  Conditional { conditions: Rc<Vec<(Rc<Sequence>, Rc<Sequence>)>>, fallback: Option<Rc<Sequence>> },
   /// Provides debug information about the next sequence element
   DebugCursor(DebugInfo),
+  /// Require statement
+  Require { alias: Option<InternalString>, path: InternalString },
 }
 
 impl Rst {
@@ -859,12 +863,14 @@ impl Rst {
       Rst::GreaterOrEqual(_, _) =>            "greater than or equal",
       Rst::Equals(_, _) =>                    "equals",
       Rst::NotEquals(_, _) =>                 "not equals",
-      Rst::LogicAnd(_, _) =>                       "and",
-      Rst::LogicNor(_, _) =>                       "nor",
-      Rst::LogicXor(_, _) =>                       "xor",
-      Rst::LogicOr(_, _) =>                        "or",
-      Rst::LogicNand(_, _) =>                      "nand",
+      Rst::LogicAnd(_, _) =>                  "and",
+      Rst::LogicNor(_, _) =>                  "nor",
+      Rst::LogicXor(_, _) =>                  "xor",
+      Rst::LogicOr(_, _) =>                   "or",
+      Rst::LogicNand(_, _) =>                 "nand",
       Rst::DebugCursor(_) =>                  "debug cursor",
+      Rst::Conditional { .. } =>              "conditional",
+      Rst::Require { .. } =>                  "require",
     }
   }
 }

@@ -170,6 +170,10 @@ pub enum Problem {
   MissingLeftOperand,
   MissingRightOperand,
   MissingOperand,
+  MissingRequireArgument,
+  InvalidRequireArgumentToken,
+  EmptyCondition,
+  UnclosedCondition,
 }
 
 macro_rules! rmsg {
@@ -196,7 +200,7 @@ impl Problem {
       Self::UnexpectedToken(_) =>                               rcode!(0000),
       Self::ExpectedToken(_) =>                                 rcode!(0001),
 
-      // Unclosed
+      // Common (0002 - 0019)
       Self::UnclosedBlock =>                                    rcode!(0002),
       Self::UnclosedFunctionCall =>                             rcode!(0003),
       Self::UnclosedFunctionSignature =>                        rcode!(0004),
@@ -204,31 +208,32 @@ impl Problem {
       Self::UnclosedStringLiteral =>                            rcode!(0006),
       Self::UnclosedList =>                                     rcode!(0007),
       Self::UnclosedMap =>                                      rcode!(0008),
+      Self::UnclosedCondition =>                                rcode!(0009),
 
-      // Functions
-      Self::InvalidParamOrder(..) =>                            rcode!(0009),
-      Self::MissingFunctionBody =>                              rcode!(0010),
-      Self::UnclosedFunctionBody =>                             rcode!(0011),
-      Self::InvalidParameter(_) =>                              rcode!(0012),
-      Self::DuplicateParameter(_) =>                            rcode!(0013),
-      Self::MultipleVariadicParams =>                           rcode!(0014),
+      // Functions (0021 - 0039)
+      Self::InvalidParamOrder(..) =>                            rcode!(0021),
+      Self::MissingFunctionBody =>                              rcode!(0022),
+      Self::UnclosedFunctionBody =>                             rcode!(0023),
+      Self::InvalidParameter(_) =>                              rcode!(0024),
+      Self::DuplicateParameter(_) =>                            rcode!(0025),
+      Self::MultipleVariadicParams =>                           rcode!(0026),
       
-      // Blocks
-      Self::DynamicKeyBlockMultiElement =>                      rcode!(0016),
-      Self::FunctionBodyBlockMultiElement =>                    rcode!(0017),
+      // Blocks (0040 - 0059)
+      Self::DynamicKeyBlockMultiElement =>                      rcode!(0040),
+      Self::FunctionBodyBlockMultiElement =>                    rcode!(0041),
 
-      // Accessors
-      Self::AnonValueAssignment =>                              rcode!(0018),
-      Self::MissingIdentifier =>                                rcode!(0019),
-      Self::InvalidIdentifier(_) =>                             rcode!(0020),
-      Self::AccessPathStartsWithIndex =>                        rcode!(0021),
-      Self::AccessPathStartsWithSlice =>                        rcode!(0022),
-      Self::InvalidSliceBound(_) =>                             rcode!(0023),
-      Self::NothingToPipe =>                                    rcode!(0024),
-      Self::DynamicDepth =>                                     rcode!(0025),
-      Self::DepthAssignment =>                                  rcode!(0026),
-      Self::InvalidDepthUsage =>                                rcode!(0027),
-      Self::FallibleOptionalArgAccess(_) =>                     rcode!(0028),
+      // Accessors (0060 - 0099)
+      Self::AnonValueAssignment =>                              rcode!(0060),
+      Self::MissingIdentifier =>                                rcode!(0061),
+      Self::InvalidIdentifier(_) =>                             rcode!(0062),
+      Self::AccessPathStartsWithIndex =>                        rcode!(0063),
+      Self::AccessPathStartsWithSlice =>                        rcode!(0064),
+      Self::InvalidSliceBound(_) =>                             rcode!(0065),
+      Self::NothingToPipe =>                                    rcode!(0066),
+      Self::FallibleOptionalArgAccess(_) =>                     rcode!(0067),
+      Self::DynamicDepth =>                                     rcode!(0068),
+      Self::DepthAssignment =>                                  rcode!(0069),
+      Self::InvalidDepthUsage =>                                rcode!(0070),
       
       // Static analysis errors (0100 - 0199)
       Self::ConstantReassignment(_) =>                          rcode!(0100),
@@ -238,9 +243,12 @@ impl Problem {
       Self::InvalidSink | Self::InvalidSinkOn(_) =>             rcode!(0130),
       Self::InvalidHint | Self::InvalidHintOn(_) =>             rcode!(0131),
 
-      // Keywords (0200 - 0249)
+      // Keywords and statements (0200 - 0249)
       Self::InvalidKeyword(_) =>                                rcode!(0200),
       Self::WeightNotAllowed =>                                 rcode!(0201),
+      Self::MissingRequireArgument =>                           rcode!(0202),
+      Self::InvalidRequireArgumentToken =>                      rcode!(0203),
+      Self::EmptyCondition =>                                   rcode!(0204),
 
       // Operators (0250 - 0299)
       Self::MissingOperand =>                                   rcode!(0250),
@@ -308,12 +316,16 @@ impl Problem {
       Self::MissingOperand => rmsg!("expected operand"),
       Self::MissingLeftOperand => rmsg!("expected left-hand operand"),
       Self::MissingRightOperand => rmsg!("expected right-hand operand"),
+      Self::MissingRequireArgument => rmsg!("missing argument for @require"),
+      Self::InvalidRequireArgumentToken => rmsg!("@require path should be a string literal"),
+      Self::EmptyCondition => rmsg!("condition cannot be empty"),
+      Self::UnclosedCondition => rmsg!("unclosed condition"),
     }
   }
   
   fn inline_message(&self) -> Option<String> {
     Some(match self {
-      Self::UnclosedBlock => rmsg!("no matching '}}' found"),
+      Self::UnclosedBlock => rmsg!("no matching '}' found"),
       Self::UnclosedStringLiteral => rmsg!("string literal needs closing delimiter"),
       Self::ExpectedToken(token) => rmsg!("expected '{}'", token),
       Self::MissingIdentifier => rmsg!("missing identifier"),
@@ -326,7 +338,7 @@ impl Problem {
       Self::UnclosedFunctionSignature => rmsg!("no matching ']' found"),
       Self::InvalidParamOrder(_, second) => rmsg!("{} is not valid in this position", second),
       Self::MissingFunctionBody => rmsg!("function body should follow"),
-      Self::UnclosedFunctionBody => rmsg!("no matching '}}' found"),
+      Self::UnclosedFunctionBody => rmsg!("no matching '}' found"),
       Self::InvalidParameter(_) => rmsg!("invalid parameter"),
       Self::DuplicateParameter(_) => rmsg!("rename parameter to something unique"),
       Self::MultipleVariadicParams => rmsg!("remove extra variadic parameter"),

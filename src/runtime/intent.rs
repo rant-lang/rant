@@ -93,7 +93,7 @@ pub enum Intent {
   /// Pops a value off the value stack and compares its truthiness against `on_truthiness`, and re-pushes the value.
   /// If they match, do nothing and continue.
   /// If they don't match, calls `gen_op_intent` and pushes the returned intent onto the current frame, then evaluates `rhs` using the `CallOperand` intent.
-  LogicShortCircuit { on_truthiness: bool, gen_op_intent: Box<dyn FnOnce() -> Intent>, rhs: Rc<Sequence> },
+  LogicShortCircuit { on_truthiness: bool, short_circuit_result: LogicShortCircuitHandling, gen_op_intent: Box<dyn FnOnce() -> Intent>, rhs: Rc<Sequence> },
   /// Pops two values, performs logical AND, and pushes the result.
   LogicAnd,
   /// Pops two values, performs logical OR, and pushes the result.
@@ -116,6 +116,10 @@ pub enum Intent {
   Less,
   /// Pops two values (RHS, LHS), calculates `LHS <= RHS`, and pushes the result.
   LessOrEqual,
+  /// If `index` is nonzero, pops a value off the value stack and checks its truthiness. 
+  /// If it's falsy, pushes the next condition (or fallback) to the call stack and re-pushes this intent with `index = index + 1`.
+  /// If it's truthy, pushes it to the value stack and exits. 
+  CheckCondition { conditions: Rc<Vec<(Rc<Sequence>, Rc<Sequence>)>>, fallback: Option<Rc<Sequence>>, index: usize },
 }
 
 impl Intent {
@@ -164,8 +168,18 @@ impl Intent {
       Self::LessOrEqual => "less_or_equal",
       Self::Greater => "greater",
       Self::GreaterOrEqual => "greater_or_equal",
+      Self::CheckCondition { .. } => "conditional",
     }
   }
+}
+
+/// Defines short-circuiting behaviors for logic operators.
+#[derive(Debug, Copy, Clone)]
+pub enum LogicShortCircuitHandling {
+  /// Pass through the LHS untouched.
+  Passthrough,
+  /// Use the specified boolean value.
+  OverrideWith(bool),
 }
 
 /// States for the `InvokePipeStep` intent.

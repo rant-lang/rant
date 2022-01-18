@@ -49,7 +49,7 @@ enum InfixOperator {
 impl InfixOperator {
 
   fn is_keyword_supported(kw_name: &str) -> bool {
-    matches!(kw_name, KW_AND | KW_OR | KW_NAND | KW_NOR | KW_EQ | KW_NEQ | KW_GT | KW_GE | KW_LT | KW_LE)
+    matches!(kw_name, KW_AND | KW_OR | KW_NAND | KW_NOR | KW_XOR | KW_EQ | KW_NEQ | KW_GT | KW_GE | KW_LT | KW_LE)
   }
 
   #[inline(always)]
@@ -150,6 +150,14 @@ enum SequenceParseMode {
   ///
   /// Breaks automatically or on EOF.
   SingleItem,
+  /// Parses an if-statement condition.
+  /// 
+  /// Breaks on `Colon`.
+  Condition,
+  /// Parses an if-else statement body.
+  /// 
+  /// Breaks on `RightBrace`.
+  ConditionalBody,
   /// Infix right-hand side
   InfixRhs,
 }
@@ -208,6 +216,10 @@ enum SequenceEndType {
   ParamDefaultValueSignatureEnd,
   /// Sequence terminated by infix operator of lower precedence
   Infix,
+  /// Condition was terminated by `Colon`.
+  ConditionEnd,
+  /// Conditional body was terminated by `RightBrace`.
+  ConditionalBodyEnd,
 }
 
 /// Used to track variable usages during compilation.
@@ -590,14 +602,203 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             // Boolean constants
             KW_TRUE => no_debug!(no_flags!(on {
               whitespace!(ignore both);
-              is_seq_text = true;
               Rst::Boolean(true)
             })),
             KW_FALSE => no_debug!(no_flags!(on {
               whitespace!(ignore both);
-              is_seq_text = true;
               Rst::Boolean(false)
             })),
+            KW_IF => {
+              let mut conditions = vec![];
+              let mut fallback = None;
+
+              whitespace!(allow);
+              whitespace!(ignore next);
+
+              // Parse main condition
+              let ParsedSequence {
+                sequence: cond_seq,
+                end_type: cond_end_type,
+                ..
+              } = self.parse_sequence_inner(SequenceParseMode::Condition, PREC_SEQUENCE)?;
+
+              match cond_end_type {
+                SequenceEndType::ConditionEnd => {},
+                SequenceEndType::ProgramEnd => {
+                  self.report_error(Problem::UnclosedCondition, &self.reader.last_token_span());
+                  return Err(())
+                },
+                _ => unreachable!()
+              }
+              
+              whitespace!(ignore next);
+              if !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
+                self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
+                continue
+              }
+              whitespace!(ignore next);
+
+              let ParsedSequence {
+                sequence: body_seq,
+                end_type: body_end_type,
+                is_text: body_is_text,
+                ..
+              } = self.parse_sequence(SequenceParseMode::ConditionalBody)?;
+
+              is_seq_text |= body_is_text;
+
+              match body_end_type {
+                SequenceEndType::ConditionalBodyEnd => {},
+                SequenceEndType::ProgramEnd => {
+                  self.report_error(Problem::UnclosedBlock, &self.reader.last_token_span());
+                  return Err(())
+                },
+                _ => unreachable!()
+              }
+
+              conditions.push((Rc::new(cond_seq), Rc::new(body_seq)));
+              
+              // Parse else-ifs
+              whitespace!(ignore next);              
+              while self.reader.eat_kw(KW_ELSEIF) {
+                whitespace!(ignore next);
+
+                let ParsedSequence {
+                  sequence: cond_seq,
+                  end_type: cond_end_type,
+                  ..
+                } = self.parse_sequence_inner(SequenceParseMode::Condition, PREC_SEQUENCE)?;
+  
+                match cond_end_type {
+                  SequenceEndType::ConditionEnd => {},
+                  SequenceEndType::ProgramEnd => {
+                    self.report_error(Problem::UnclosedCondition, &self.reader.last_token_span());
+                    return Err(())
+                  },
+                  _ => unreachable!()
+                }
+                
+                whitespace!(ignore next);
+                if !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
+                  self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
+                  continue
+                }
+                whitespace!(ignore next);
+  
+                let ParsedSequence {
+                  sequence: body_seq,
+                  end_type: body_end_type,
+                  is_text: body_is_text,
+                  ..
+                } = self.parse_sequence(SequenceParseMode::ConditionalBody)?;
+
+                is_seq_text |= body_is_text;
+  
+                match body_end_type {
+                  SequenceEndType::ConditionalBodyEnd => {},
+                  SequenceEndType::ProgramEnd => {
+                    self.report_error(Problem::UnclosedBlock, &self.reader.last_token_span());
+                    return Err(())
+                  },
+                  _ => unreachable!()
+                }
+
+                conditions.push((Rc::new(cond_seq), Rc::new(body_seq)));
+                whitespace!(ignore next);
+              }
+
+              // Parse else
+              whitespace!(ignore next);
+              if self.reader.eat_kw(KW_ELSE) {
+                whitespace!(ignore next);
+                if !self.reader.eat_where(|t| matches!(t, Some((RantToken::Colon, _)))) {
+                  self.report_error(Problem::ExpectedToken(":".to_owned()), &self.reader.last_token_span());
+                  continue
+                }
+                whitespace!(ignore next);
+                if !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
+                  self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
+                  continue
+                }
+                whitespace!(ignore next);
+
+                let ParsedSequence {
+                  sequence: body_seq,
+                  end_type: body_end_type,
+                  is_text: body_is_text,
+                  ..
+                } = self.parse_sequence(SequenceParseMode::ConditionalBody)?;
+
+                is_seq_text |= body_is_text;
+  
+                match body_end_type {
+                  SequenceEndType::ConditionalBodyEnd => {},
+                  SequenceEndType::ProgramEnd => {
+                    self.report_error(Problem::UnclosedBlock, &self.reader.last_token_span());
+                    return Err(())
+                  },
+                  _ => unreachable!()
+                }
+
+                fallback = Some(Rc::new(body_seq));
+              }
+
+              // Emit final conditional node
+              let node = Rst::Conditional {
+                conditions: Rc::new(conditions),
+                fallback,
+              };
+
+              emit!(node);
+            },
+            // @require statement
+            KW_REQUIRE => no_flags!({
+              whitespace!(ignore both);
+              whitespace!(ignore next);
+              if let Some((require_first_arg_token, require_first_arg_token_span)) = self.reader.next() {                
+                match require_first_arg_token {
+                  RantToken::StringLiteral(require_path) => {
+                    let node = Rst::Require {
+                      alias: None,
+                      path: require_path,
+                    };
+                    whitespace!(ignore next);
+                    emit!(node);
+                  },
+                  RantToken::Fragment => {
+                    let require_alias = self.reader.last_token_string();
+                    if !is_valid_ident(require_alias.as_str()) {
+                      self.report_error(Problem::InvalidIdentifier(require_alias.to_string()), &require_first_arg_token_span);
+                    }
+                    whitespace!(ignore next);
+                    if !self.reader.eat_where(|t| matches!(t, Some((RantToken::Colon, _)))) {
+                      self.report_error(Problem::ExpectedToken(":".to_owned()), &self.reader.last_token_span());
+                      continue
+                    }
+                    if let Some((require_path_token, require_path_token_span)) = self.reader.next_solid() {
+                      whitespace!(ignore next);
+                      match require_path_token {
+                        RantToken::StringLiteral(require_path) => {
+                          let node = Rst::Require {
+                            alias: Some(require_alias),
+                            path: require_path,
+                          };
+                          emit!(node);
+                        },
+                        _ => self.report_error(Problem::InvalidRequireArgumentToken, &require_path_token_span)
+                      }
+                    } else {
+                      self.report_error(Problem::MissingRequireArgument, &self.reader.last_token_span());
+                    }
+                  },
+                  _ => unexpected_token_error!()
+                }
+              } else {
+                self.report_error(Problem::MissingRequireArgument, &self.reader.last_token_span());
+                return Err(())
+              }
+            }),
+
             // Control flow
             KW_RETURN | KW_CONTINUE | KW_BREAK | KW_WEIGHT => {
               whitespace!(ignore both);
@@ -638,7 +839,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 next_infix_op: None,
               })
             },
-            other => self.report_error(Problem::InvalidKeyword(other.to_string()), &span),
+            _ => self.report_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &span),
           }          
         },
         
@@ -745,11 +946,20 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Ignore pending whitespace
           whitespace!(ignore prev);
           match mode {
+            SequenceParseMode::ConditionalBody => {
+              return Ok(ParsedSequence {
+                sequence: sequence.with_name_str("conditional body"),
+                end_type: SequenceEndType::ConditionalBodyEnd,
+                is_text: is_seq_text,
+                extras: None,
+                next_infix_op: None,
+              })
+            },
             SequenceParseMode::BlockElement => {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("block element"),
                 end_type: SequenceEndType::BlockEnd,
-                is_text: true,
+                is_text: is_seq_text,
                 extras: None,
                 next_infix_op: None,
               })
@@ -758,7 +968,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("function body"),
                 end_type: SequenceEndType::FunctionBodyEnd,
-                is_text: true,
+                is_text: is_seq_text,
                 extras: None,
                 next_infix_op: None,
               })
@@ -767,7 +977,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("dynamic key"),
                 end_type: SequenceEndType::DynamicKeyEnd,
-                is_text: true,
+                is_text: is_seq_text,
                 extras: None,
                 next_infix_op: None,
               })
@@ -994,10 +1204,17 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Colon can be either fragment or argument separator.
         Colon => no_flags!({
           match mode {
+            SequenceParseMode::Condition => return Ok(ParsedSequence {
+              sequence: sequence.with_name_str("condition"),
+              end_type: SequenceEndType::ConditionEnd,
+              is_text: is_seq_text,
+              extras: None,
+              next_infix_op: None,
+            }),
             SequenceParseMode::AnonFunctionExpr => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("anonymous function expression"),
               end_type: SequenceEndType::AnonFunctionExprToArgs,
-              is_text: true,
+              is_text: is_seq_text,
               extras: None,
               next_infix_op: None,
             }),
@@ -1054,70 +1271,89 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           return Err(())
         },
         token => {
+          // TODO: Make this end type something that isn't utterly stupid
           let mut op_end_type = SequenceEndType::Infix;
+
           // Check for infix operator
-          if let Some(mut op) = InfixOperator::from_token(&token) {
-            whitespace!(ignore both);
+          if let Some(mut next_op) = InfixOperator::from_token(&token) {
+            loop {
+              let op_precedence = next_op.precedence();
+
+              whitespace!(ignore both);
             
-            // Make sure LHS is not empty
-            if sequence.is_empty() {
-              self.report_error(Problem::MissingLeftOperand, &span);
-            }
-
-            let op_precedence = op.precedence();
-            // If the next operator has equal or higher precedence, replace the current sequence with the operation.
-            // The current sequence will then become the LHS, and the RHS is parsed according to the operator's precedence.
-            if op_precedence >= precedence {
-
-              let ParsedSequence {
-                sequence: rhs_seq,
-                next_infix_op: rhs_next_lower_infix_op,
-                is_text: rhs_is_text,
-                end_type: rhs_end_type,
-                ..
-              } = self.parse_sequence_inner(mode, op_precedence)?;
-
-              op_end_type = rhs_end_type;
-
-              // Make sure RHS is not empty
-              if rhs_seq.is_empty() {
-                self.report_error(Problem::MissingRightOperand, &span);
+              // Make sure LHS is not empty
+              if sequence.is_empty() {
+                self.report_error(Problem::MissingLeftOperand, &span);
               }
 
-              // Take the current sequence as the LHS
-              let lhs = Rc::new(sequence);
-              let rhs = Rc::new(rhs_seq);              
+              // If the next operator has equal or higher precedence, replace the current sequence with the operation.
+              // The current sequence will then become the LHS, and the RHS is parsed according to the operator's precedence.
+              if op_precedence >= precedence {
 
-              // Produce infix operation node
-              let op_node = match op {
-                InfixOperator::Add => Rst::Add(lhs, rhs),
-                InfixOperator::Subtract => Rst::Subtract(lhs, rhs),
-                InfixOperator::Multiply => Rst::Multiply(lhs, rhs),
-                InfixOperator::Divide => Rst::Divide(lhs, rhs),
-                InfixOperator::Modulo => Rst::Modulo(lhs, rhs),
-                InfixOperator::Power => Rst::Power(lhs, rhs),
-                InfixOperator::LogicAnd => Rst::LogicAnd(lhs, rhs),
-                InfixOperator::LogicOr => Rst::LogicOr(lhs, rhs),
-                InfixOperator::LogicNand => Rst::LogicNand(lhs, rhs),
-                InfixOperator::LogicNor => Rst::LogicNor(lhs, rhs),
-                InfixOperator::LogicXor => Rst::LogicXor(lhs, rhs),
-                InfixOperator::Equals => Rst::Equals(lhs, rhs),
-                InfixOperator::NotEquals => Rst::NotEquals(lhs, rhs),
-                InfixOperator::Greater => Rst::Greater(lhs, rhs),
-                InfixOperator::GreatOrEqual => Rst::GreaterOrEqual(lhs, rhs),
-                InfixOperator::Less => Rst::Less(lhs, rhs),
-                InfixOperator::LessOrEqual => Rst::LessOrEqual(lhs, rhs),
-              };
+                // Read RHS with higher precedence
+                let ParsedSequence {
+                  sequence: rhs_seq,
+                  next_infix_op: rhs_next_lower_infix_op,
+                  is_text: rhs_is_text,
+                  end_type: rhs_end_type,
+                  ..
+                } = self.parse_sequence_inner(mode, op_precedence)?;
 
-              // Replace the current sequence with the operation (containing the old sequence as LHS)
-              sequence = Sequence::one(op_node, &self.info);              
-              is_seq_text |= rhs_is_text;
-              
-              // If we got an operator back with the RHS sequence it means it's a lower precedence
-              // Fall through and return the operator with the updated sequence
-              if let Some(rhs_next_lower_infix_op) = rhs_next_lower_infix_op {
-                op = rhs_next_lower_infix_op;
+                op_end_type = rhs_end_type;
+
+                // Make sure RHS is not empty
+                if rhs_seq.is_empty() {
+                  self.report_error(Problem::MissingRightOperand, &span);
+                }
+
+                // Take the current sequence as the LHS
+                let lhs = Rc::new(sequence);
+                let rhs = Rc::new(rhs_seq);              
+
+                // Produce infix operation node
+                let op_node = match next_op {
+                  InfixOperator::Add => Rst::Add(lhs, rhs),
+                  InfixOperator::Subtract => Rst::Subtract(lhs, rhs),
+                  InfixOperator::Multiply => Rst::Multiply(lhs, rhs),
+                  InfixOperator::Divide => Rst::Divide(lhs, rhs),
+                  InfixOperator::Modulo => Rst::Modulo(lhs, rhs),
+                  InfixOperator::Power => Rst::Power(lhs, rhs),
+                  InfixOperator::LogicAnd => Rst::LogicAnd(lhs, rhs),
+                  InfixOperator::LogicOr => Rst::LogicOr(lhs, rhs),
+                  InfixOperator::LogicNand => Rst::LogicNand(lhs, rhs),
+                  InfixOperator::LogicNor => Rst::LogicNor(lhs, rhs),
+                  InfixOperator::LogicXor => Rst::LogicXor(lhs, rhs),
+                  InfixOperator::Equals => Rst::Equals(lhs, rhs),
+                  InfixOperator::NotEquals => Rst::NotEquals(lhs, rhs),
+                  InfixOperator::Greater => Rst::Greater(lhs, rhs),
+                  InfixOperator::GreatOrEqual => Rst::GreaterOrEqual(lhs, rhs),
+                  InfixOperator::Less => Rst::Less(lhs, rhs),
+                  InfixOperator::LessOrEqual => Rst::LessOrEqual(lhs, rhs),
+                };
+
+                // Replace current sequence with operation (containing old sequence as LHS)
+                sequence = Sequence::one(op_node, &self.info);              
+                is_seq_text |= rhs_is_text;
+                
+                // Check if RHS sequence signaled a lower precedence operator was read
+                // It might not be lower than the current context precedence,
+                // so we'll loop back and check that.
+                if let Some(rhs_next_lower_infix_op) = rhs_next_lower_infix_op {
+                  next_op = rhs_next_lower_infix_op;
+                  continue
+                  // TODO: high-to-low precedence operations, like the "- 2" in {1 + 2 * 3 - 2}, get ignored. Why?
+                } else {
+                  // Since there's no more operators it means we're done reading, so return the sequence.
+                  return Ok(ParsedSequence {
+                    sequence,
+                    end_type: op_end_type,
+                    is_text: is_seq_text,
+                    extras: None,
+                    next_infix_op: None,
+                  })
+                }
               }
+              break
             }
 
             // If the next operator has *lower* precedence, stop reading and return current sequence to the upper parser.
@@ -1128,7 +1364,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               end_type: op_end_type,
               is_text: is_seq_text,
               extras: None,
-              next_infix_op: Some(op),
+              next_infix_op: Some(next_op),
             })
           } else {
             match token {
