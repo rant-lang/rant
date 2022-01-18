@@ -26,6 +26,8 @@
   * Less than or equal: `@le`
   * Greater than: `@gt`
   * Greater than or equal to: `@ge`
+- Added stdlib functions:
+  - `[assert-not]`
 
 ### Changes
 * Anonymous accessor values now must be surrounded by a block.

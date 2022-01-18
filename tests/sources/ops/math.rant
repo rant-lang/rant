@@ -3,4 +3,5 @@
 [assert-eq: 1 + 2 * 3 - 2; 5]
 [assert-eq: 1 + 2 * 3 ** 2 - 2; 17]
 [assert-eq: 10 % 4; 2]
-[assert-eq: @neg 4 * 4; -16]
+[assert-eq: @neg 3 * 4 * -4; 48]
+[assert-eq: @neg 3 * -4 * @neg 4; -48]

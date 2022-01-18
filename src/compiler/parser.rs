@@ -26,13 +26,15 @@ const PREC_DISJUNCTIVE: usize = 1;
 const PREC_SEQUENCE: usize = 0;
 
 #[derive(Copy, Clone, PartialEq)]
-enum InfixOperator {
+enum OrderedOperator {
   Add,
   Subtract,
   Multiply,
   Divide,
   Modulo,
   Power,
+  Negate,
+  LogicNot,
   LogicAnd,
   LogicOr,
   LogicNand,
@@ -46,14 +48,29 @@ enum InfixOperator {
   LessOrEqual,
 }
 
-impl InfixOperator {
+#[derive(Copy, Clone, PartialEq)]
+enum OrderedOperatorType {
+  Prefix,
+  Infix,
+}
 
+impl OrderedOperator {
+
+  #[inline]
   fn is_keyword_supported(kw_name: &str) -> bool {
-    matches!(kw_name, KW_AND | KW_OR | KW_NAND | KW_NOR | KW_XOR | KW_EQ | KW_NEQ | KW_GT | KW_GE | KW_LT | KW_LE)
+    matches!(kw_name, KW_NEG | KW_NOT | KW_AND | KW_OR | KW_NAND | KW_NOR | KW_XOR | KW_EQ | KW_NEQ | KW_GT | KW_GE | KW_LT | KW_LE)
+  }
+
+  #[inline]
+  fn op_type(&self) -> OrderedOperatorType {
+    match self {
+      Self::Negate | Self::LogicNot => OrderedOperatorType::Prefix,
+      _ => OrderedOperatorType::Infix,
+    }
   }
 
   #[inline(always)]
-  fn from_token(token: &RantToken) -> Option<InfixOperator> {
+  fn from_token(token: &RantToken) -> Option<OrderedOperator> {
     Some(match token {
       Plus => Self::Add,
       Minus => Self::Subtract,
@@ -62,6 +79,8 @@ impl InfixOperator {
       Percent => Self::Modulo,
       DoubleStar => Self::Power,
       Keyword(kw) if kw.is_valid => match kw.name.as_str() {
+        KW_NEG => Self::Negate,
+        KW_NOT => Self::LogicNot,
         KW_AND => Self::LogicAnd,
         KW_OR => Self::LogicOr,
         KW_NAND => Self::LogicNand,
@@ -82,6 +101,8 @@ impl InfixOperator {
   #[inline(always)]
   fn precedence(&self) -> usize {
     match self {
+      Self::Negate =>       PREC_PREFIX,
+      Self::LogicNot =>     PREC_PREFIX,
       Self::Power =>        PREC_EXPONENTIAL,
       Self::Multiply =>     PREC_MULTIPLICATIVE,
       Self::Divide =>       PREC_MULTIPLICATIVE,
@@ -213,7 +234,7 @@ enum SequenceEndType {
   /// Parameter default value was terminated by `RightBracket`, indicating the end of the signature was reached..
   ParamDefaultValueSignatureEnd,
   /// Sequence terminated by infix operator of lower precedence
-  Infix,
+  Operator,
   /// Condition was terminated by `Colon`.
   ConditionEnd,
   /// Conditional body was terminated by `RightBrace`.
@@ -279,7 +300,7 @@ struct ParsedSequence {
   end_type: SequenceEndType,
   is_text: bool,
   extras: Option<ParsedSequenceExtras>,
-  next_infix_op: Option<InfixOperator>,
+  next_infix_op: Option<OrderedOperator>,
 }
 
 /// Contains information about a successfully parsed block.
@@ -567,55 +588,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
 
         // Prefix keyword
-        Keyword(KeywordInfo { name: kw, is_valid: is_kw_valid }) if is_kw_valid && !InfixOperator::is_keyword_supported(kw.as_str()) => {
+        Keyword(KeywordInfo { name: kw, is_valid: is_kw_valid }) if is_kw_valid && !OrderedOperator::is_keyword_supported(kw.as_str()) => {
           let kwstr = kw.as_str();
-          match kwstr {
-            // Logical NOT
-            KW_NOT => no_flags!({
-              whitespace!(ignore both);
-              let ParsedSequence {
-                sequence: operand_seq,
-                end_type: operand_end_type,
-                ..            
-              } = self.parse_sequence_inner(mode, PREC_SEQUENCE)?;
-
-              if operand_seq.is_empty() {
-                self.report_error(Problem::MissingOperand, &span);
-              }
-
-              emit!(Rst::LogicNot(Rc::new(operand_seq)));
-              return Ok(ParsedSequence {
-                sequence,
-                end_type: operand_end_type,
-                is_text: is_seq_text,
-                extras: None,
-                next_infix_op: None,
-              })
-            }),
-            // Negation
-            // TODO: Make @neg and @not have the highest possible precedence
-            KW_NEG => {
-              whitespace!(allow);
-              self.reader.skip_ws();
-              let ParsedSequence {
-                sequence: operand_seq,
-                end_type: operand_end_type,
-                ..            
-              } = self.parse_sequence_inner(mode, PREC_SEQUENCE)?;
-
-              if operand_seq.is_empty() {
-                self.report_error(Problem::MissingOperand, &span);
-              }
-
-              emit!(Rst::Negate(Rc::new(operand_seq)));
-              return Ok(ParsedSequence {
-                sequence,
-                end_type: operand_end_type,
-                is_text: is_seq_text,
-                extras: None,
-                next_infix_op: None,
-              })
-            },
+          match kwstr {            
             // Boolean constants
             KW_TRUE => no_debug!(no_flags!(on {
               whitespace!(ignore both);
@@ -1297,89 +1272,144 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           return Err(())
         },
         token => {
-          // TODO: Make this end type something that isn't utterly stupid
-          let mut op_end_type = SequenceEndType::Infix;
+          let mut op_end_type = SequenceEndType::Operator;
 
-          // Check for infix operator
-          if let Some(mut next_op) = InfixOperator::from_token(&token) {
+          // Check for ordered operator
+          if let Some(mut next_op) = OrderedOperator::from_token(&token) {
             loop {
+              
               let op_precedence = next_op.precedence();
+              let op_type = next_op.op_type();
+              match op_type {
+                // Check for prefix operator
+                OrderedOperatorType::Prefix => {
+                  // Read operand for prefix op
+                  let ParsedSequence {
+                    sequence: operand_seq,
+                    next_infix_op: operand_next_lower_infix_op,
+                    is_text: operand_is_text,
+                    end_type: operand_end_type,
+                    ..
+                  } = self.parse_sequence_inner(mode, op_precedence)?;
 
-              whitespace!(ignore both);
-            
-              // Make sure LHS is not empty
-              if sequence.is_empty() {
-                self.report_error(Problem::MissingLeftOperand, &span);
-              }
+                  op_end_type = operand_end_type;
+                  is_seq_text |= operand_is_text;
 
-              // If the next operator has equal or higher precedence, replace the current sequence with the operation.
-              // The current sequence will then become the LHS, and the RHS is parsed according to the operator's precedence.
-              if op_precedence >= precedence {
+                  // Make sure operand is not empty
+                  if operand_seq.is_empty() {
+                    self.report_error(Problem::MissingOperand, &span);
+                  }
 
-                // Read RHS with higher precedence
-                let ParsedSequence {
-                  sequence: rhs_seq,
-                  next_infix_op: rhs_next_lower_infix_op,
-                  is_text: rhs_is_text,
-                  end_type: rhs_end_type,
-                  ..
-                } = self.parse_sequence_inner(mode, op_precedence)?;
+                  let operand = Rc::new(operand_seq);
 
-                op_end_type = rhs_end_type;
+                  let prefix_op_node = match next_op {
+                    OrderedOperator::Negate => {
+                      whitespace!(allow);
+                      Rst::Negate(operand)
+                    },
+                    OrderedOperator::LogicNot => Rst::LogicNot(operand),
+                    _ => unreachable!()
+                  };
+                  whitespace!(ignore prev);
+                  emit!(prefix_op_node);
 
-                // Make sure RHS is not empty
-                if rhs_seq.is_empty() {
-                  self.report_error(Problem::MissingRightOperand, &span);
+                  // Check if operand sequence signaled a lower precedence operator was read
+                  // It might not be lower than the current context precedence,
+                  // so we'll loop back and check that.
+                  if let Some(operand_next_lower_infix_op) = operand_next_lower_infix_op {
+                    next_op = operand_next_lower_infix_op;
+                    continue
+                  } else {
+                    // Since there's no more operators it means we're done reading, so return the sequence.
+                    return Ok(ParsedSequence {
+                      sequence,
+                      end_type: op_end_type,
+                      is_text: is_seq_text,
+                      extras: None,
+                      next_infix_op: None,
+                    })
+                  }
+                },
+                // Check for infix operator
+                OrderedOperatorType::Infix => {
+                  whitespace!(ignore both);
+                  // Make sure LHS is not empty
+                  if sequence.is_empty() {
+                    self.report_error(Problem::MissingLeftOperand, &span);
+                  }
+                  
+                  // If this operator has lower precedence, stop reading the sequence.
+                  if op_precedence < precedence {
+                    break
+                  }
+
+                  // If the next operator has equal or higher precedence, replace the current sequence with the operation.
+                  // The current sequence will then become the LHS, and the RHS is parsed according to the operator's precedence.
+
+                  // Read RHS with higher precedence
+                  let ParsedSequence {
+                    sequence: rhs_seq,
+                    next_infix_op: rhs_next_lower_infix_op,
+                    is_text: rhs_is_text,
+                    end_type: rhs_end_type,
+                    ..
+                  } = self.parse_sequence_inner(mode, op_precedence)?;
+
+                  op_end_type = rhs_end_type;
+
+                  // Make sure RHS is not empty
+                  if rhs_seq.is_empty() {
+                    self.report_error(Problem::MissingRightOperand, &span);
+                  }
+
+                  // Take the current sequence as the LHS
+                  let lhs = Rc::new(sequence);
+                  let rhs = Rc::new(rhs_seq);              
+
+                  // Produce infix operation node
+                  let op_node = match next_op {
+                    OrderedOperator::Add => Rst::Add(lhs, rhs),
+                    OrderedOperator::Subtract => Rst::Subtract(lhs, rhs),
+                    OrderedOperator::Multiply => Rst::Multiply(lhs, rhs),
+                    OrderedOperator::Divide => Rst::Divide(lhs, rhs),
+                    OrderedOperator::Modulo => Rst::Modulo(lhs, rhs),
+                    OrderedOperator::Power => Rst::Power(lhs, rhs),
+                    OrderedOperator::LogicAnd => Rst::LogicAnd(lhs, rhs),
+                    OrderedOperator::LogicOr => Rst::LogicOr(lhs, rhs),
+                    OrderedOperator::LogicNand => Rst::LogicNand(lhs, rhs),
+                    OrderedOperator::LogicNor => Rst::LogicNor(lhs, rhs),
+                    OrderedOperator::LogicXor => Rst::LogicXor(lhs, rhs),
+                    OrderedOperator::Equals => Rst::Equals(lhs, rhs),
+                    OrderedOperator::NotEquals => Rst::NotEquals(lhs, rhs),
+                    OrderedOperator::Greater => Rst::Greater(lhs, rhs),
+                    OrderedOperator::GreatOrEqual => Rst::GreaterOrEqual(lhs, rhs),
+                    OrderedOperator::Less => Rst::Less(lhs, rhs),
+                    OrderedOperator::LessOrEqual => Rst::LessOrEqual(lhs, rhs),
+                    _ => unreachable!()
+                  };
+
+                  // Replace current sequence with operation (containing old sequence as LHS)
+                  sequence = Sequence::one(op_node, &self.info);              
+                  is_seq_text |= rhs_is_text;
+                  
+                  // Check if RHS sequence signaled a lower precedence operator was read
+                  // It might not be lower than the current context precedence,
+                  // so we'll loop back and check that.
+                  if let Some(rhs_next_lower_infix_op) = rhs_next_lower_infix_op {
+                    next_op = rhs_next_lower_infix_op;
+                    continue
+                  } else {
+                    // Since there's no more operators it means we're done reading, so return the sequence.
+                    return Ok(ParsedSequence {
+                      sequence,
+                      end_type: op_end_type,
+                      is_text: is_seq_text,
+                      extras: None,
+                      next_infix_op: None,
+                    })
+                  }
                 }
-
-                // Take the current sequence as the LHS
-                let lhs = Rc::new(sequence);
-                let rhs = Rc::new(rhs_seq);              
-
-                // Produce infix operation node
-                let op_node = match next_op {
-                  InfixOperator::Add => Rst::Add(lhs, rhs),
-                  InfixOperator::Subtract => Rst::Subtract(lhs, rhs),
-                  InfixOperator::Multiply => Rst::Multiply(lhs, rhs),
-                  InfixOperator::Divide => Rst::Divide(lhs, rhs),
-                  InfixOperator::Modulo => Rst::Modulo(lhs, rhs),
-                  InfixOperator::Power => Rst::Power(lhs, rhs),
-                  InfixOperator::LogicAnd => Rst::LogicAnd(lhs, rhs),
-                  InfixOperator::LogicOr => Rst::LogicOr(lhs, rhs),
-                  InfixOperator::LogicNand => Rst::LogicNand(lhs, rhs),
-                  InfixOperator::LogicNor => Rst::LogicNor(lhs, rhs),
-                  InfixOperator::LogicXor => Rst::LogicXor(lhs, rhs),
-                  InfixOperator::Equals => Rst::Equals(lhs, rhs),
-                  InfixOperator::NotEquals => Rst::NotEquals(lhs, rhs),
-                  InfixOperator::Greater => Rst::Greater(lhs, rhs),
-                  InfixOperator::GreatOrEqual => Rst::GreaterOrEqual(lhs, rhs),
-                  InfixOperator::Less => Rst::Less(lhs, rhs),
-                  InfixOperator::LessOrEqual => Rst::LessOrEqual(lhs, rhs),
-                };
-
-                // Replace current sequence with operation (containing old sequence as LHS)
-                sequence = Sequence::one(op_node, &self.info);              
-                is_seq_text |= rhs_is_text;
-                
-                // Check if RHS sequence signaled a lower precedence operator was read
-                // It might not be lower than the current context precedence,
-                // so we'll loop back and check that.
-                if let Some(rhs_next_lower_infix_op) = rhs_next_lower_infix_op {
-                  next_op = rhs_next_lower_infix_op;
-                  continue
-                  // TODO: high-to-low precedence operations, like the "- 2" in {1 + 2 * 3 - 2}, get ignored. Why?
-                } else {
-                  // Since there's no more operators it means we're done reading, so return the sequence.
-                  return Ok(ParsedSequence {
-                    sequence,
-                    end_type: op_end_type,
-                    is_text: is_seq_text,
-                    extras: None,
-                    next_infix_op: None,
-                  })
-                }
               }
-              break
             }
 
             // If the next operator has *lower* precedence, stop reading and return current sequence to the upper parser.

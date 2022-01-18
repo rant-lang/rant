@@ -1,4 +1,4 @@
 [assert: @false @nor @false]
-[assert: @not @true @nor @false]
-[assert: @not @false @nor @true]
-[assert: @not @true @nor @true]
+[assert-not: @true @nor @false]
+[assert-not: @false @nor @true]
+[assert-not: @true @nor @true]
