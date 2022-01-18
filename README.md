@@ -28,11 +28,6 @@ Rant is the result of a long-standing desire for an all-in-one data templating t
 
 Rant 4 is the next leap forward in achieving this goal: the syntax, standard library, and interpreter have all been completely reimagined from the ground up.
 
-
-### Use integrated or standalone
-
-Whether you want to integrate Rant directly into a product or use it as a standalone tool to assist with writing, Rant has a place in any part of your workflow.
-
 ## Features
 
 🧰 **Painless API** <br/> 
@@ -73,6 +68,9 @@ Sharing code between Rant programs is trivial. Just write your module script and
 
 📚 **Rant Standard Library** <br/> 
 A comprehensive standard library provides the tools needed to quickly iterate on your ideas.
+
+🛠 **Use integrated or standalone** <br/>
+Whether you want to integrate Rant directly into a product or use it as a standalone tool to assist with writing, Rant has a place in any part of your workflow.
 
 ## Getting started
 
