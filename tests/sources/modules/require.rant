@@ -1,2 +1,2 @@
-[require:tests/sources/modules/test-module]
+@require "tests/sources/modules/test-module"
 [test-module/test |> assert-eq: 42]

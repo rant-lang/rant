@@ -1,0 +1,9 @@
+[assert: @true @xor @false]
+[assert: @false @xor @true]
+[assert: @not @true @xor @true]
+[assert: @not @false @xor @false]
+
+[assert: 1 @xor 0]
+[assert: 0 @xor 1]
+[assert: @not 1 @xor 1]
+[assert: @not 0 @xor 0]

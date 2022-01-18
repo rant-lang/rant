@@ -1,0 +1,4 @@
+[assert-eq: @not @true; @false]
+[assert-eq: @not @false; @true]
+[assert-eq: @not 0; @true]
+[assert-eq: @not 1; @false]

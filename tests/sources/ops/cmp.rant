@@ -1,0 +1,18 @@
+[assert: 1 @eq 1]
+[assert: @not 1 @eq 2]
+[assert: 1 @neq 2]
+[assert: @not 1 @neq 1]
+
+[assert: 1 @lt 2]
+[assert: @not 2 @lt 1]
+
+[assert: 1 @le 1]
+[assert: 1 @le 2]
+[assert: @not 2 @le 1]
+
+[assert: 2 @gt 1]
+[assert: @not 1 @gt 2]
+
+[assert: 1 @ge 1]
+[assert: 2 @ge 1]
+[assert: @not 1 @ge 2]

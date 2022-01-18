@@ -1,0 +1,3 @@
+[assert-eq: @if @true: {
+  123
+}; 123]

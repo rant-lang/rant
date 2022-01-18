@@ -1,0 +1,27 @@
+# Setup
+<$lhs-reads = 0; $rhs-reads = 0; $lhs; $rhs>
+
+[%get-lhs] { 
+  <lhs-reads = <lhs-reads> + 1>
+  <lhs>
+}
+
+[%get-rhs] {
+  <rhs-reads = <rhs-reads> + 1>
+  <rhs>
+}
+
+# Test @false @nand @true
+<lhs = @false; rhs = @true>
+[nop: [get-lhs] @nand [get-rhs]]
+[assert-eq: <lhs-reads>; 1]
+[assert-eq: <rhs-reads>; 0]
+
+# Reset stats
+<lhs-reads = 0; rhs-reads = 0>
+
+# Test @true @nand @true
+<lhs = @true; rhs = @true>
+[nop: [get-lhs] @nand [get-rhs]]
+[assert-eq: <lhs-reads>; 1]
+[assert-eq: <rhs-reads>; 1]

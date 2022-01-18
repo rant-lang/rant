@@ -1,8 +1,8 @@
 {
   <$a=0>
   [$^next-number] {
-    <$val=<a>>
-    <a=[add:<a>;1]>
+    <$val = <a>>
+    <a = <a> + 1>
     <val>
   }
 }

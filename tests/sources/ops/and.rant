@@ -1,0 +1,9 @@
+[assert-eq: @true @and @true; @true]
+[assert-eq: @false @and @true; @false]
+[assert-eq: @true @and @false; @false]
+[assert-eq: @false @and @false; @false]
+
+[assert-eq: 1 @and 2; 2]
+[assert-eq: 0 @and 2; 0]
+[assert-eq: 1 @and 0; 0]
+[assert-eq: "" @and 0; ""]

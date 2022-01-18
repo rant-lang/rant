@@ -1,8 +1,8 @@
-<$test=foo>
+<@text $test=foo>
 {
-  <$test=bar>
+  <@text $test=bar>
   {
-    <$test=baz>
+    <@text $test=baz>
     <^^test> <^test> <test>
   }
 }

@@ -1,0 +1,9 @@
+<%a = 3>
+
+[assert-eq: @if <a> @eq 1: {
+  <>
+} @elseif <a> @eq 2: {
+  <>
+} @else: {
+  123
+}; 123]

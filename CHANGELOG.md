@@ -28,6 +28,7 @@
   * Greater than or equal to: `@ge`
 
 ### Changes
+* Anonymous accessor values now must be surrounded by a block.
 * Rant is now relicensed under MIT and Apache 2.0!
 * Update `FromRant` impl for `bool` to coerce from any RantValue type according to truthiness rules
 * Renamed stdlib functions:

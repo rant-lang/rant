@@ -294,7 +294,7 @@ fn func_percolation() {
 fn anon_getter() {
   test_rant_file!(
     "sources/anonymous/anon_getter.rant",
-    "foo bar"
+    "foobar"
   );
 }
 
@@ -310,7 +310,7 @@ fn dynamic_anon_getter() {
 fn anon_setter() {
   test_rant_file!(
     "sources/anonymous/anon_setter.rant",
-    "baz qux"
+    "bazqux"
   );
 }
 
@@ -350,7 +350,7 @@ fn function_piping() {
 fn function_piping_callback() {
   test_rant_file!(
     "sources/func/function_piping_callback.rant",
-    "foo bar"
+    "foobar"
   )
 }
 
@@ -706,4 +706,84 @@ fn range_forward_step_indivisible() {
 #[test]
 fn range_reverse_step_indivisible() {
   test_rant_file!("sources/range/range_reverse_step_indivisible.rant");
+}
+
+#[test]
+fn branch_if() {
+  test_rant_file!("sources/branch/if.rant")
+}
+
+#[test]
+fn branch_if_else() {
+  test_rant_file!("sources/branch/if-else.rant")
+}
+
+#[test]
+fn branch_if_elseif() {
+  test_rant_file!("sources/branch/if-elseif.rant")
+}
+
+#[test]
+fn branch_if_elseif_else() {
+  test_rant_file!("sources/branch/if-elseif-else.rant")
+}
+
+#[test]
+fn ops_and() {
+  test_rant_file!("sources/ops/and.rant")
+}
+
+#[test]
+fn ops_and_short_circuit() {
+  test_rant_file!("sources/ops/and_short_circuit.rant")
+}
+
+#[test]
+fn ops_cmp() {
+  test_rant_file!("sources/ops/cmp.rant")
+}
+
+#[test]
+fn ops_math() {
+  test_rant_file!("sources/ops/math.rant")
+}
+
+#[test]
+fn ops_nand() {
+  test_rant_file!("sources/ops/nand.rant")
+}
+
+#[test]
+fn ops_nand_short_circuit() {
+  test_rant_file!("sources/ops/nand_short_circuit.rant")
+}
+
+#[test]
+fn ops_nor() {
+  test_rant_file!("sources/ops/nor.rant")
+}
+
+#[test]
+fn ops_nor_short_circuit() {
+  test_rant_file!("sources/ops/nor_short_circuit.rant")
+}
+
+#[test]
+fn ops_not() {
+  test_rant_file!("sources/ops/not.rant")
+}
+
+#[test]
+fn ops_or() {
+  test_rant_file!("sources/ops/or.rant")
+}
+
+#[test]
+fn ops_or_short_circuit() {
+  test_rant_file!("sources/ops/or_short_circuit.rant")
+}
+
+#[test]
+fn ops_xor() {
+  test_rant_file!("sources/ops/xor.rant")
 }
