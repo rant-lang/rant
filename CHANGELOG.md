@@ -1,6 +1,8 @@
 # Changelog
 
-## 4.0.0-alpha.24 (unreleased)
+## 4.0.0-alpha.25 (unreleased)
+
+## 4.0.0-alpha.24
 
 ### New
 * Added `@require` statements. These take *static* module paths. You can still use `[require]` if you need to import modules dynamically.
