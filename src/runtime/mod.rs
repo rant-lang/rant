@@ -30,6 +30,7 @@ pub struct VM<'rant> {
   val_stack: SmallVec<[RantValue; VALUE_STACK_INLINE_COUNT]>,
   call_stack: CallStack<Intent>,
   resolver: Resolver,
+  // TODO: Store unwind states in call stack
   unwinds: SmallVec<[UnwindState; 1]>,
 }
 
@@ -77,37 +78,6 @@ macro_rules! runtime_error {
       stack_trace: None,
     })
   };
-}
-
-/// Defines variable write modes for setter intents.
-/// Used by function definitions to control conditional definition behavior.
-#[derive(Debug, Copy, Clone)]
-pub enum VarWriteMode {
-  /// Only set existing variables.
-  SetOnly,
-  /// Defines and sets a variable.
-  Define,
-  /// Defines and sets a new constant.
-  DefineConst,
-}
-
-#[derive(Debug)]
-enum SetterKey<'a> {
-  Index(i64),
-  Slice(Slice),
-  KeyRef(&'a str),
-  KeyString(InternalString),
-}
-
-/// Describes where a setter gets its RHS value.
-#[derive(Debug)]
-pub enum SetterValueSource {
-  /// Setter RHS is evaluated from an expression.
-  FromExpression(Rc<Sequence>),
-  /// Setter RHS is a value.
-  FromValue(RantValue),
-  /// Setter RHS was already consumed.
-  Consumed
 }
 
 pub struct UnwindState {
@@ -1676,7 +1646,7 @@ impl<'rant> VM<'rant> {
             }
           )?;
         },
-        BlockAction::PipedElement { elem_func, pipe_func } => {
+        BlockAction::MutateElement { elem_func, mutator_func: pipe_func } => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
 
           // Call the pipe function

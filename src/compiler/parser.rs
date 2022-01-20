@@ -2165,50 +2165,47 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
       self.reader.skip_ws();
 
+      // Parse the first part of the path
+
       // Check for certain index/slice forms and disallow them
-      match self.try_read_signed_int() {
-        Ok(Some(_)) => {
-          let span = self.reader.last_token_span();
-          self.reader.skip_ws();
-          if self.reader.eat_where(|t| matches!(t, Some((Colon, ..)))) {
-            self.report_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
-          } else {
-            self.report_error(Problem::AccessPathStartsWithIndex, &span);
-          }
-        },
-        Ok(None) => {
-          // Parse the first part of the path
-          match self.reader.next() {
-            // The first part of the path may only be a variable name (for now)
-            Some((Fragment, span)) => {
-              let varname = Identifier::new(self.reader.last_token_string());
-              if is_valid_ident(varname.as_str()) {
-                idparts.push(AccessPathComponent::Name(varname));
-              } else {
-                self.report_error(Problem::InvalidIdentifier(varname.to_string()), &span);
-              }
-            },
-            // An expression can also be used to provide the variable
-            Some((LeftBrace, _)) => {
-              let dynamic_key_expr = self.parse_dynamic_expr(false)?;
-              idparts.push(AccessPathComponent::DynamicKey(Rc::new(dynamic_key_expr)));
-            },
-            // TODO: Check for dynamic slices here too!
-            // First path part can't be a slice
-            Some((Colon, span)) => {
-              let _ = self.try_read_signed_int();
-              self.report_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
-            },
-            Some((.., span)) => {
-              self.report_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span);
-            },
-            None => {
-              self.report_error(Problem::MissingIdentifier, &start_span);
-              return Err(())
+      if let Some(_) = self.try_read_signed_int() {
+        let span = self.reader.last_token_span();
+        self.reader.skip_ws();
+        if self.reader.eat_where(|t| matches!(t, Some((Colon, ..)))) {
+          self.report_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
+        } else {
+          self.report_error(Problem::AccessPathStartsWithIndex, &span);
+        }
+      } else {        
+        match self.reader.next() {
+          // The first part of the path may only be a variable name (for now)
+          Some((Fragment, span)) => {
+            let varname = Identifier::new(self.reader.last_token_string());
+            if is_valid_ident(varname.as_str()) {
+              idparts.push(AccessPathComponent::Name(varname));
+            } else {
+              self.report_error(Problem::InvalidIdentifier(varname.to_string()), &span);
             }
+          },
+          // An expression can also be used to provide the variable
+          Some((LeftBrace, _)) => {
+            let dynamic_key_expr = self.parse_dynamic_expr(false)?;
+            idparts.push(AccessPathComponent::DynamicKey(Rc::new(dynamic_key_expr)));
+          },
+          // TODO: Check for dynamic slices here too!
+          // First path part can't be a slice
+          Some((Colon, span)) => {
+            let _ = self.try_read_signed_int();
+            self.report_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
+          },
+          Some((.., span)) => {
+            self.report_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span);
+          },
+          None => {
+            self.report_error(Problem::MissingIdentifier, &start_span);
+            return Err(())
           }
-        },
-        _ => {}
+        }
       }
     }
     

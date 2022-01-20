@@ -99,7 +99,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     num_fmt_decimal_sep as "num-fmt-decimal-sep",
 
     // Attribute functions
-    if_ as "if", elseif as "elseif", else_ as "else", mksel, rep, sel, sep, pipe,
+    if_ as "if", elseif as "elseif", else_ as "else", mksel, rep, sel, sep, mut_ as "mut",
 
     // Attribute frame stack functions
     push_attrs as "push-attrs", pop_attrs as "pop-attrs", count_attrs as "count-attrs", reset_attrs as "reset-attrs",

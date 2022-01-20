@@ -21,8 +21,8 @@ pub struct Resolver {
 pub enum BlockAction {
   /// Run a sequence from an element.
   Element(Rc<Sequence>),
-  /// Call the pipe function and pass in the current element as a callback.
-  PipedElement { elem_func: RantFunctionRef, pipe_func: RantFunctionRef },
+  /// Call the mutator function and pass in the current element as a callback.
+  MutateElement { elem_func: RantFunctionRef, mutator_func: RantFunctionRef },
   /// Run the separator.
   Separator(RantValue),
 }
@@ -135,8 +135,8 @@ impl BlockState {
 
       let next_elem = Rc::clone(&self.elements[next_index].main);
 
-      // If the pipe function is set, generate piped elements
-      if let Some(pipe_func) = self.attrs.pipe.as_ref() {
+      // If the mutator function is set, generate mutated elements
+      if let Some(mutator_func) = self.attrs.mutator.as_ref() {
         let elem_func = RantFunction {
           captured_vars: vec![],
           min_arg_count: 0,
@@ -149,8 +149,8 @@ impl BlockState {
             StackFrameFlavor::BlockElement 
           })
         };
-        return Ok(Some(BlockAction::PipedElement {
-          pipe_func: Rc::clone(pipe_func),
+        return Ok(Some(BlockAction::MutateElement {
+          mutator_func: Rc::clone(mutator_func),
           elem_func: Rc::new(elem_func),
         }))
       }
@@ -188,8 +188,8 @@ impl BlockState {
   }
 
   #[inline]
-  pub fn is_piped(&self) -> bool {
-    self.attrs.pipe.is_some()
+  pub fn has_mutator(&self) -> bool {
+    self.attrs.mutator.is_some()
   }
 
   /// Indicates whether the block has finished and should return.
@@ -382,8 +382,8 @@ pub struct AttributeFrame {
   pub separator: RantValue,
   /// Active selector
   pub selector: Option<SelectorRef>,
-  /// Pipe function
-  pub pipe: Option<RantFunctionRef>,
+  /// Mutator function
+  pub mutator: Option<RantFunctionRef>,
 }
 
 impl AttributeFrame {
@@ -430,7 +430,7 @@ impl Default for AttributeFrame {
       reps: Reps::Once,
       separator: RantValue::Empty,
       selector: None,
-      pipe: None,
+      mutator: None,
     }
   }
 }

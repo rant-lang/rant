@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
-use crate::lang::*;
+use crate::{lang::*, InternalString};
 use crate::{RantFunctionRef, RantList, RantMap, RantValue};
 
-use super::{RuntimeResult, SetterValueSource, VM, VarWriteMode, resolver::Weights};
+use super::{RuntimeResult, VM, resolver::Weights};
 
 /// Actions that can be queued on a stack frame that are performed before the frame runs.
 ///
@@ -222,4 +222,35 @@ pub enum InvokePipeStepState {
     temporal_state: TemporalSpreadState,
     args: Vec<RantValue>,
   }
+}
+
+/// Defines variable write modes for setter intents.
+/// Used by function definitions to control conditional definition behavior.
+#[derive(Debug, Copy, Clone)]
+pub enum VarWriteMode {
+  /// Only set existing variables.
+  SetOnly,
+  /// Defines and sets a variable.
+  Define,
+  /// Defines and sets a new constant.
+  DefineConst,
+}
+
+#[derive(Debug)]
+pub enum SetterKey<'a> {
+  Index(i64),
+  Slice(Slice),
+  KeyRef(&'a str),
+  KeyString(InternalString),
+}
+
+/// Describes where a setter gets its RHS value.
+#[derive(Debug)]
+pub enum SetterValueSource {
+  /// Setter RHS is evaluated from an expression.
+  FromExpression(Rc<Sequence>),
+  /// Setter RHS is a value.
+  FromValue(RantValue),
+  /// Setter RHS was already consumed.
+  Consumed
 }

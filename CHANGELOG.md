@@ -6,6 +6,8 @@
 * Added compiler errors when int/float literals are out of range
 
 ### Changes
+* Renamed stdlib functions:
+  * `[pipe]` &rarr; `[mut]`
 
 ### Removed
 

@@ -36,7 +36,6 @@ No getting lost in configuration hell. Integrating Rant into your project only t
 
 💻 **Cross-platform** <br/> 
 Write once, run anywhere! The runtime works the same across Windows, Mac, Linux, and WebAssembly.
-The internal RNG can be manually seeded to produce repeatable outputs.
 
 🖨 **Templating that does more** <br/>
 Rant is all about "printing": each lexical scope has an output to print (append values) to, which then prints itself to the parent output, and so on.
@@ -52,6 +51,7 @@ Unlike older Rant versions that could only generate strings, Rant 4 can output a
 Rant is made with random generation in mind as a major use-case. 
 
 Make use of a wide array of built-in utilities for generating random numbers, strings, booleans, lists, list subsets, and much more for all your randomization needs. 
+The internal RNG can be manually seeded to produce repeatable outputs.
 
 🔱 **Branching and beyond** <br/> 
 Augment regular control flow behavior with a multitude of configuration options for iterative, randomized, and weighted branch selection.
