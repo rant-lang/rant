@@ -310,8 +310,6 @@ enum VarRole {
   FallibleOptionalArgument,
   /// Pipeval from a piped call.
   PipeValue,
-  /// Aggregate variable for an aggregator.
-  Aggregate,
 }
 
 /// Returns a range that encompasses both input ranges.
@@ -2468,26 +2466,26 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
       self.var_stack.push_layer();
 
-      // Check for aggregator
-      let aggregator = if self.reader.eat_kw(KW_EDIT) {
+      // Check for @edit
+      let modifier = if self.reader.eat_kw(KW_EDIT) {
         self.reader.skip_ws();
-        let aggvar = if self.reader.eat(RantToken::Colon) {
-          None // No aggregate variable
+        let input_id = if self.reader.eat(RantToken::Colon) {
+          None // No input variable
         } else {
-          // Get the name of the aggregate variable
-          let aggvar = self.parse_ident()?;
-          let aggvar_span = self.reader.last_token_span();
+          // Get the name of the input variable
+          let input_id = self.parse_ident()?;
+          let input_id_span = self.reader.last_token_span();
           self.reader.skip_ws();
           if !self.reader.eat(RantToken::Colon) {
             self.report_expected_token_error(":", &self.reader.last_token_span());
           }
-          self.var_stack.define(aggvar.clone(), VarStats::new(VarRole::Aggregate, aggvar_span, true));
-          Some(aggvar)
+          self.var_stack.define(input_id.clone(), VarStats::new(VarRole::Normal, input_id_span, true));
+          Some(input_id)
         };        
         self.reader.skip_ws();
 
         Some(OutputModifierSig {
-          input_var: aggvar
+          input_var: input_id
         })
       } else {
         None
@@ -2519,7 +2517,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         } else {
           None
         },
-        output_modifier: aggregator,
+        output_modifier: modifier,
       });
       
       match end_type {
@@ -2698,7 +2696,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     for (name, role, span) in unused_vars {
       match role {
         VarRole::Normal => self.report_warning(Problem::UnusedVariable(name), &span),
-        VarRole::Aggregate => self.report_warning(Problem::UnusedAggregate(name), &span),
         VarRole::Argument | VarRole::FallibleOptionalArgument => self.report_warning(Problem::UnusedParameter(name), &span),
         VarRole::Function => self.report_warning(Problem::UnusedFunction(name), &span),
         // Ignore any other roles

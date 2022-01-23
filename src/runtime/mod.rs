@@ -1634,9 +1634,9 @@ impl<'rant> VM<'rant> {
         BlockAction::Element(elem) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           
-          // Check for aggregator
-          if let Some(aggregator) = &elem.output_modifier {
-            let aggregate = self.cur_frame_mut().render_and_reset_output();
+          // Check for output modifier
+          if let Some(modifier) = &elem.output_modifier {
+            let modifier_input = self.cur_frame_mut().render_and_reset_output();
 
             // Push the next element
             self.push_frame_flavored(
@@ -1648,9 +1648,9 @@ impl<'rant> VM<'rant> {
               }
             )?;
 
-            // Define the aggregate variable
-            if let Some(aggvar) = &aggregator.input_var {
-              self.def_var_value(aggvar.as_str(), AccessPathKind::Local, aggregate, true)?;
+            // Define the input variable
+            if let Some(input_id) = &modifier.input_var {
+              self.def_var_value(input_id.as_str(), AccessPathKind::Local, modifier_input, true)?;
             }
           } else {
             // Push the next element
@@ -1667,15 +1667,15 @@ impl<'rant> VM<'rant> {
         BlockAction::MutateElement { elem, elem_func, mutator_func } => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
 
-          if let Some(aggregator) = &elem.output_modifier {
-            let aggregate = self.cur_frame_mut().render_and_reset_output();
+          if let Some(modifier) = &elem.output_modifier {
+            let input_var = self.cur_frame_mut().render_and_reset_output();
 
             // Call the mutator function
             self.call_func(mutator_func, vec![RantValue::Function(elem_func)], true)?;
 
-            // Define the aggregate variable
-            if let Some(aggvar) = &aggregator.input_var {
-              self.def_var_value(aggvar.as_str(), AccessPathKind::Local, aggregate, true)?;
+            // Define the input variable
+            if let Some(input_id) = &modifier.input_var {
+              self.def_var_value(input_id.as_str(), AccessPathKind::Local, input_id, true)?;
             }
           } else {
             // Call the mutator function

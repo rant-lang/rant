@@ -457,7 +457,7 @@ impl Clone for BlockWeight {
   }
 }
 
-/// Signature information for an aggregator.
+/// Signature information for an output modifier.
 #[derive(Debug, Clone)]
 pub struct OutputModifierSig {
   pub input_var: Option<Identifier>

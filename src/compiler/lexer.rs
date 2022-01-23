@@ -20,7 +20,7 @@ pub const KW_FALSE: &str = "false";
 // Hinting keywords
 pub const KW_TEXT: &str = "text";
 
-// Aggregator keywords
+// Output modifier keywords
 pub const KW_EDIT: &str = "edit";
 
 // Infix operator keywords

@@ -155,7 +155,6 @@ pub enum Problem {
   InvalidHint,
   NothingToPipe,
   UnusedVariable(String),
-  UnusedAggregate(String),
   UnusedParameter(String),
   UnusedFunction(String),
   EmptyFunctionBody(String),
@@ -261,7 +260,6 @@ impl Problem {
       
       // Common warnings (1000 - 1099)
       Self::UnusedVariable(_) =>                                rcode!(1000),
-      Self::UnusedAggregate(_) =>                               rcode!(1001),
       Self::UnusedParameter(_) =>                               rcode!(1002),
       Self::UnusedFunction(_) =>                                rcode!(1003),
       Self::EmptyFunctionBody(_) =>                             rcode!(1004),
@@ -297,7 +295,6 @@ impl Problem {
       Self::DuplicateParameter(pname) => rmsg!("duplicate parameter '{}' in function signature", pname),
       Self::MultipleVariadicParams => rmsg!("multiple variadic parameters are not allowed"),
       Self::UnusedVariable(vname) => rmsg!("variable '{}' is defined but never used", vname),
-      Self::UnusedAggregate(vname) => rmsg!("aggregate variable '{}' is defined but never used; consider removing", vname),
       Self::UnusedParameter(pname) => rmsg!("parameter '{}' is never used", pname),
       Self::UnusedFunction(fname) => rmsg!("function '{}' is defined but never used", fname),
       Self::EmptyFunctionBody(fname) => rmsg!("function '{}' is empty", fname),

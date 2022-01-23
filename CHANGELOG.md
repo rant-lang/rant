@@ -4,7 +4,7 @@
 
 ### New
 * Added compiler errors when int/float literals are out of range
-* Added aggregators: apply recursive functions to your output, iteratively!
+* Added `@edit`: apply recursive functions to your output, iteratively!
 
 ### Changes
 * Renamed stdlib functions:
@@ -15,6 +15,7 @@
 ### Fixes
 * Fixed fallible optional parameters not generating warnings when unused
 * Fixed minimum int value not being parsed correctly
+* Fixed conditional bodies not working like standard blocks
 
 
 ## 4.0.0-alpha.24
