@@ -1,0 +1,5 @@
+[%fac: n] {
+  [rep: <n>] 1 { @edit x: <x> * [step] }
+}
+
+[rep: 10] [sep: \n] { [fac: [step]] }
