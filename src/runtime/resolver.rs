@@ -1,5 +1,5 @@
 use std::{cell::RefCell, error::Error, fmt::Display, mem, ops::Index, rc::Rc};
-use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionRef, RantValue, ValueError, lang::{Block, BlockElement, Sequence}, rng::RantRng, runtime_error};
+use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionRef, RantValue, ValueError, lang::{Block, BlockElement}, rng::RantRng, runtime_error};
 use smallvec::SmallVec;
 use super::{IntoRuntimeResult, RuntimeError, RuntimeErrorType, RuntimeResult, StackFrameFlavor};
 

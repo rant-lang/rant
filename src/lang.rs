@@ -1,6 +1,6 @@
 //! Contains Rant's syntax tree implementation and supporting data structures.
 
-use std::{collections::HashMap, fmt::Display, ops::{Deref, DerefMut, Range}, rc::Rc};
+use std::{collections::HashMap, fmt::Display, ops::{Deref, DerefMut}, rc::Rc};
 use crate::{RantProgramInfo, InternalString, RantValue, RantValueType};
 
 pub(crate) const PIPE_VALUE_NAME: &str = "~PIPE";
@@ -423,8 +423,8 @@ pub struct BlockElement {
   pub main: Rc<Sequence>,
   /// The weight of the element.
   pub weight: Option<BlockWeight>,
-  /// Aggregator signature associated with the element sequence.
-  pub aggregator: Option<AggregatorSig>,
+  /// Output modifier signature associated with the element sequence.
+  pub output_modifier: Option<OutputModifierSig>,
 }
 
 impl Clone for BlockElement {
@@ -433,7 +433,7 @@ impl Clone for BlockElement {
     Self {
       main: Rc::clone(&self.main),
       weight: self.weight.clone(),
-      aggregator: self.aggregator.clone(),
+      output_modifier: self.output_modifier.clone(),
     }
   }
 }
@@ -459,7 +459,7 @@ impl Clone for BlockWeight {
 
 /// Signature information for an aggregator.
 #[derive(Debug, Clone)]
-pub struct AggregatorSig {
+pub struct OutputModifierSig {
   pub input_var: Option<Identifier>
 }
 
@@ -796,7 +796,7 @@ pub enum Rst {
   /// Logical NAND
   LogicNand(Rc<Sequence>, Rc<Sequence>),
   /// Conditional branch
-  Conditional { conditions: Rc<Vec<(Rc<Sequence>, Rc<Sequence>)>>, fallback: Option<Rc<Sequence>> },
+  Conditional { conditions: Rc<Vec<(Rc<Sequence>, Rc<Block>)>>, fallback: Option<Rc<Block>> },
   /// Provides debug information about the next sequence element
   DebugCursor(DebugInfo),
   /// Require statement

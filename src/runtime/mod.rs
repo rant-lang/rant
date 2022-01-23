@@ -839,7 +839,7 @@ impl<'rant> VM<'rant> {
             let prev_cond_result = self.pop_val()?.to_bool();
             if prev_cond_result {
               // Condition was met; run the body
-              self.push_frame(Rc::clone(&conditions[index - 1].1), true)?;
+              self.pre_push_block(&conditions[index - 1].1)?;
               return Ok(true)
             }
 
@@ -853,7 +853,7 @@ impl<'rant> VM<'rant> {
             } else {
               // All conditions have been checked
               if let Some(fallback) = fallback {
-                self.push_frame(fallback, true)?;
+                self.pre_push_block(&fallback)?;
                 return Ok(true)
               }
             }
@@ -1267,7 +1267,6 @@ impl<'rant> VM<'rant> {
           }
         },
         Rst::Conditional { conditions, fallback } => {
-          self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::CheckCondition{ conditions: Rc::clone(conditions), fallback: fallback.as_ref().map(Rc::clone), index: 0 });
           return Ok(true)
         },
@@ -1636,7 +1635,7 @@ impl<'rant> VM<'rant> {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           
           // Check for aggregator
-          if let Some(aggregator) = &elem.aggregator {
+          if let Some(aggregator) = &elem.output_modifier {
             let aggregate = self.cur_frame_mut().render_and_reset_output();
 
             // Push the next element
@@ -1668,7 +1667,7 @@ impl<'rant> VM<'rant> {
         BlockAction::MutateElement { elem, elem_func, mutator_func } => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
 
-          if let Some(aggregator) = &elem.aggregator {
+          if let Some(aggregator) = &elem.output_modifier {
             let aggregate = self.cur_frame_mut().render_and_reset_output();
 
             // Call the mutator function

@@ -176,10 +176,6 @@ enum SequenceParseMode {
   /// 
   /// Breaks on `Colon`.
   Condition,
-  /// Parses an if-else statement body.
-  /// 
-  /// Breaks on `RightBrace`.
-  ConditionalBody,
   /// Infix right-hand side
   InfixRhs,
 }
@@ -238,8 +234,6 @@ enum SequenceEndType {
   Operator,
   /// Condition was terminated by `Colon`.
   ConditionEnd,
-  /// Conditional body was terminated by `RightBrace`.
-  ConditionalBodyEnd,
   /// Anonymous value block was terminated by `RightBrace`.
   AnonymousValueEnd,
 }
@@ -366,6 +360,12 @@ struct ParsedParameter {
   param: Parameter,
   span: Range<usize>,
   is_auto_hinted: bool
+}
+
+/// Contains information about a successfully parsed conditional.
+struct ParsedConditional {
+  node: Rst,
+  is_auto_hinted: bool,
 }
 
 /// A parser that turns Rant code into an RST (Rant Syntax Tree).
@@ -645,147 +645,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               Rst::Boolean(false)
             })),
             KW_IF => {
-              let mut conditions = vec![];
-              let mut fallback = None;
+              whitespace!(allow);              
+              let ParsedConditional {
+                node: cond_node,
+                is_auto_hinted: cond_auto_hinted,
+              } = self.parse_conditional(false)?;
 
-              whitespace!(allow);
-              whitespace!(ignore next);
-
-              // Parse main condition
-              let ParsedSequence {
-                sequence: cond_seq,
-                end_type: cond_end_type,
-                ..
-              } = self.parse_sequence_inner(SequenceParseMode::Condition, PREC_SEQUENCE)?;
-
-              match cond_end_type {
-                SequenceEndType::ConditionEnd => {},
-                SequenceEndType::ProgramEnd => {
-                  self.report_error(Problem::UnclosedCondition, &self.reader.last_token_span());
-                  return Err(())
-                },
-                _ => unreachable!()
-              }
-              
-              whitespace!(ignore next);
-              if !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
-                self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
-                continue
-              }
-              whitespace!(ignore next);
-
-              let ParsedSequence {
-                sequence: body_seq,
-                end_type: body_end_type,
-                is_text: body_is_text,
-                ..
-              } = self.parse_sequence(SequenceParseMode::ConditionalBody)?;
-
-              is_seq_text |= body_is_text;
-
-              match body_end_type {
-                SequenceEndType::ConditionalBodyEnd => {},
-                SequenceEndType::ProgramEnd => {
-                  self.report_error(Problem::UnclosedBlock, &self.reader.last_token_span());
-                  return Err(())
-                },
-                _ => unreachable!()
-              }
-
-              conditions.push((Rc::new(cond_seq), Rc::new(body_seq)));
-              
-              // Parse else-ifs
-              whitespace!(ignore next);              
-              while self.reader.eat_kw(KW_ELSEIF) {
-                whitespace!(ignore next);
-
-                let ParsedSequence {
-                  sequence: cond_seq,
-                  end_type: cond_end_type,
-                  ..
-                } = self.parse_sequence_inner(SequenceParseMode::Condition, PREC_SEQUENCE)?;
-  
-                match cond_end_type {
-                  SequenceEndType::ConditionEnd => {},
-                  SequenceEndType::ProgramEnd => {
-                    self.report_error(Problem::UnclosedCondition, &self.reader.last_token_span());
-                    return Err(())
-                  },
-                  _ => unreachable!()
-                }
-                
-                whitespace!(ignore next);
-                if !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
-                  self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
-                  continue
-                }
-                whitespace!(ignore next);
-  
-                let ParsedSequence {
-                  sequence: body_seq,
-                  end_type: body_end_type,
-                  is_text: body_is_text,
-                  ..
-                } = self.parse_sequence(SequenceParseMode::ConditionalBody)?;
-
-                is_seq_text |= body_is_text;
-  
-                match body_end_type {
-                  SequenceEndType::ConditionalBodyEnd => {},
-                  SequenceEndType::ProgramEnd => {
-                    self.report_error(Problem::UnclosedBlock, &self.reader.last_token_span());
-                    return Err(())
-                  },
-                  _ => unreachable!()
-                }
-
-                conditions.push((Rc::new(cond_seq), Rc::new(body_seq)));
-                whitespace!(ignore next);
-              }
-
-              // Parse else
-              whitespace!(ignore next);
-              if self.reader.eat_kw(KW_ELSE) {
-                whitespace!(ignore next);
-                if !self.reader.eat_where(|t| matches!(t, Some((RantToken::Colon, _)))) {
-                  self.report_error(Problem::ExpectedToken(":".to_owned()), &self.reader.last_token_span());
-                  continue
-                }
-                whitespace!(ignore next);
-                if !self.reader.eat_where(|t| matches!(t, Some((RantToken::LeftBrace, _)))) {
-                  self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
-                  continue
-                }
-                whitespace!(ignore next);
-
-                let ParsedSequence {
-                  sequence: body_seq,
-                  end_type: body_end_type,
-                  is_text: body_is_text,
-                  ..
-                } = self.parse_sequence(SequenceParseMode::ConditionalBody)?;
-
-                is_seq_text |= body_is_text;
-  
-                match body_end_type {
-                  SequenceEndType::ConditionalBodyEnd => {},
-                  SequenceEndType::ProgramEnd => {
-                    self.report_error(Problem::UnclosedBlock, &self.reader.last_token_span());
-                    return Err(())
-                  },
-                  _ => unreachable!()
-                }
-
-                fallback = Some(Rc::new(body_seq));
-              }
-
-              // Emit final conditional node
-              let node = Rst::Conditional {
-                conditions: Rc::new(conditions),
-                fallback,
-              };
-
-              emit!(node);
+              is_seq_text |= cond_auto_hinted;
+              emit!(cond_node);
             },
             // @require statement
             KW_REQUIRE => no_flags!({
@@ -986,15 +853,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("anonymous accessor value"),
                 end_type: SequenceEndType::AnonymousValueEnd,
-                is_text: is_seq_text,
-                extras: None,
-                next_infix_op: None,
-              })
-            },
-            SequenceParseMode::ConditionalBody => {
-              return Ok(ParsedSequence {
-                sequence: sequence.with_name_str("conditional body"),
-                end_type: SequenceEndType::ConditionalBodyEnd,
                 is_text: is_seq_text,
                 extras: None,
                 next_infix_op: None,
@@ -1526,6 +1384,110 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       is_text: is_seq_text,
       extras: None,
       next_infix_op: None,
+    })
+  }
+
+  #[inline]
+  fn parse_conditional(&mut self, expect_opening_if: bool) -> ParseResult<ParsedConditional> {
+    let mut conditions = vec![];
+    let mut fallback = None;
+    let mut is_auto_hinted = false;
+
+    if expect_opening_if && !self.reader.eat_kw(KW_IF) {
+      self.report_expected_token_error("@if", &self.reader.last_token_span());
+    }
+
+    self.reader.skip_ws();
+
+    // Parse main condition
+    let ParsedSequence {
+      sequence: cond_seq,
+      end_type: cond_end_type,
+      ..
+    } = self.parse_sequence_inner(SequenceParseMode::Condition, PREC_SEQUENCE)?;
+
+    match cond_end_type {
+      SequenceEndType::ConditionEnd => {},
+      SequenceEndType::ProgramEnd => {
+        self.report_error(Problem::UnclosedCondition, &self.reader.last_token_span());
+        return Err(())
+      },
+      _ => unreachable!()
+    }
+
+    self.reader.skip_ws();
+
+    let ParsedBlock {
+      auto_hint: body_auto_hint,
+      block: body_block,
+    } = self.parse_block(true)?;
+
+    is_auto_hinted |= body_auto_hint;
+
+    conditions.push((Rc::new(cond_seq), Rc::new(body_block)));
+    
+    // Parse else-ifs
+    self.reader.skip_ws();            
+    while self.reader.eat_kw(KW_ELSEIF) {
+      self.reader.skip_ws();
+
+      let ParsedSequence {
+        sequence: cond_seq,
+        end_type: cond_end_type,
+        ..
+      } = self.parse_sequence_inner(SequenceParseMode::Condition, PREC_SEQUENCE)?;
+
+      match cond_end_type {
+        SequenceEndType::ConditionEnd => {},
+        SequenceEndType::ProgramEnd => {
+          self.report_error(Problem::UnclosedCondition, &self.reader.last_token_span());
+          return Err(())
+        },
+        _ => unreachable!()
+      }
+
+      self.reader.skip_ws();
+
+      let ParsedBlock {
+        auto_hint: body_auto_hint,
+        block: body_block,
+      } = self.parse_block(true)?;
+
+      is_auto_hinted |= body_auto_hint;
+
+      conditions.push((Rc::new(cond_seq), Rc::new(body_block)));
+      self.reader.skip_ws();
+    }
+
+    // Parse else
+    self.reader.skip_ws();
+    if self.reader.eat_kw(KW_ELSE) {
+      self.reader.skip_ws();
+      if !self.reader.eat_where(|t| matches!(t, Some((RantToken::Colon, _)))) {
+        self.report_error(Problem::ExpectedToken(":".to_owned()), &self.reader.last_token_span());
+      }
+      
+      self.reader.skip_ws();
+
+      let ParsedBlock {
+        auto_hint: body_auto_hint,
+        block: body_block,
+      } = self.parse_block(true)?;
+
+      is_auto_hinted |= body_auto_hint;
+
+      fallback = Some(Rc::new(body_block));
+    }
+
+    // Emit final conditional node
+    let node = Rst::Conditional {
+      conditions: Rc::new(conditions),
+      fallback,
+    };
+
+    Ok(ParsedConditional {
+      node,
+      is_auto_hinted,
     })
   }
   
@@ -2524,7 +2486,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         };        
         self.reader.skip_ws();
 
-        Some(AggregatorSig {
+        Some(OutputModifierSig {
           input_var: aggvar
         })
       } else {
@@ -2557,7 +2519,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         } else {
           None
         },
-        aggregator,
+        output_modifier: aggregator,
       });
       
       match end_type {

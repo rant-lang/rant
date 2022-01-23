@@ -119,7 +119,7 @@ pub enum Intent {
   /// If `index` is nonzero, pops a value off the value stack and checks its truthiness. 
   /// If it's falsy, pushes the next condition (or fallback) to the call stack and re-pushes this intent with `index = index + 1`.
   /// If it's truthy, pushes it to the value stack and exits. 
-  CheckCondition { conditions: Rc<Vec<(Rc<Sequence>, Rc<Sequence>)>>, fallback: Option<Rc<Sequence>>, index: usize },
+  CheckCondition { conditions: Rc<Vec<(Rc<Sequence>, Rc<Block>)>>, fallback: Option<Rc<Block>>, index: usize },
 }
 
 impl Intent {
