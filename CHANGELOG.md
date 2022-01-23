@@ -5,6 +5,7 @@
 ### New
 * Added compiler errors when int/float literals are out of range
 * Added `@edit`: apply recursive functions to your output, iteratively!
+* Pipeval (`[]`) is now supported in access paths without needing to nest it in a dynamic key
 
 ### Changes
 * Renamed stdlib functions:
@@ -13,6 +14,7 @@
 ### Removed
 
 ### Fixes
+* Fixed pipeval being unhintable
 * Fixed fallible optional parameters not generating warnings when unused
 * Fixed minimum int value not being parsed correctly
 * Fixed conditional bodies not working like standard blocks

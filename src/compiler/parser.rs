@@ -802,7 +802,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
 
         // Pipe value
-        PipeValue => no_flags!({
+        PipeValue => {
           if let Some(pipeval) = self.var_stack.get_mut(PIPE_VALUE_NAME) {
             emit!(Rst::PipeValue);
             pipeval.add_read(false);
@@ -816,7 +816,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           } else {
             self.report_error(Problem::NothingToPipe, &span);
           }
-        }),
+        },
         
         // Block element delimiter (when in block parsing mode)
         VertBar => no_flags!({
@@ -2166,6 +2166,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               self.report_error(Problem::InvalidIdentifier(varname.to_string()), &span);
             }
           },
+          // Pipeval can be directly accessed here too
+          Some((PipeValue, _span)) => {
+            idparts.push(AccessPathComponent::PipeValue);
+          }
           // An expression can also be used to provide the variable
           Some((LeftBrace, _)) => {
             let dynamic_key_expr = self.parse_dynamic_expr(false)?;
@@ -2250,6 +2254,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   self.report_error(Problem::InvalidIdentifier(varname.to_string()), &span);
                 }
               },
+              // Pipeval
+              Some((PipeValue, _span)) => {
+                idparts.push(AccessPathComponent::PipeValue);
+              }
               // Full- or to-slice
               Some((Colon, _)) => {
                 self.reader.skip_ws();

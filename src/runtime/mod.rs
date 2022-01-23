@@ -1438,7 +1438,7 @@ impl<'rant> VM<'rant> {
         setter_target = Some(dynamic_values.next().unwrap());
         None
       },
-      _ => unreachable!()
+      other => runtime_error!(RuntimeErrorType::InternalError, format!("setter key unsupported: '{:?}'; the access path was probably miscompiled", other))
     };
 
     // Evaluate the path
@@ -1475,15 +1475,22 @@ impl<'rant> VM<'rant> {
               SetterKey::Index(index)
             },
             key_val => {
-              let key = InternalString::from(key_val.to_string());
-              SetterKey::KeyString(key)
+              SetterKey::KeyString(InternalString::from(key_val.to_string()))
             }
+          }
+        },
+        // Pipeval
+        AccessPathComponent::PipeValue => {
+          let pipeval = self.get_var_value(PIPE_VALUE_NAME, AccessPathKind::Local, false)?;
+          match pipeval {
+            RantValue::Int(i) => SetterKey::Index(i),
+            key_val => SetterKey::KeyString(InternalString::from(key_val.to_string()))
           }
         },
         // Anonymous value (not allowed)
         AccessPathComponent::AnonymousValue(_) => {
           runtime_error!(RuntimeErrorType::InvalidOperation, "anonymous values may only appear as the first component in an access path")
-        }
+        },
       })
     }
 
@@ -1541,6 +1548,9 @@ impl<'rant> VM<'rant> {
         Some(AccessPathComponent::AnonymousValue(_)) => {
           dynamic_keys.next().unwrap()
         },
+        Some(AccessPathComponent::PipeValue) => {
+          self.get_var_value(PIPE_VALUE_NAME, AccessPathKind::Local, false)?
+        }
         _ => unreachable!()
     };
 
@@ -1585,6 +1595,24 @@ impl<'rant> VM<'rant> {
             Err(bad_bound_type) => runtime_error!(RuntimeErrorType::SliceError(SliceError::UnsupportedSliceBoundType(bad_bound_type))),
           };
           getter_value = getter_value.slice_get(&static_slice).into_runtime_result()?;
+        },
+        // Pipeval
+        AccessPathComponent::PipeValue => {
+          let pipeval = self.get_var_value(PIPE_VALUE_NAME, AccessPathKind::Local, false)?;
+          match pipeval {
+            RantValue::Int(index) => {
+              getter_value = match getter_value.index_get(index) {
+                Ok(val) => val,
+                Err(err) => runtime_error!(RuntimeErrorType::IndexError(err))
+              }
+            },
+            key_val => {
+              getter_value = match getter_value.key_get(key_val.to_string().as_str()) {
+                Ok(val) => val,
+                Err(err) => runtime_error!(RuntimeErrorType::KeyError(err))
+              };
+            }
+          }
         },
         // Anonymous value (not allowed)
         AccessPathComponent::AnonymousValue(_) => {
@@ -1668,14 +1696,14 @@ impl<'rant> VM<'rant> {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
 
           if let Some(modifier) = &elem.output_modifier {
-            let input_var = self.cur_frame_mut().render_and_reset_output();
+            let input_value = self.cur_frame_mut().render_and_reset_output();
 
             // Call the mutator function
             self.call_func(mutator_func, vec![RantValue::Function(elem_func)], true)?;
 
             // Define the input variable
             if let Some(input_id) = &modifier.input_var {
-              self.def_var_value(input_id.as_str(), AccessPathKind::Local, input_id, true)?;
+              self.def_var_value(input_id.as_str(), AccessPathKind::Local, input_value, true)?;
             }
           } else {
             // Call the mutator function

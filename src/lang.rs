@@ -177,16 +177,19 @@ pub enum AccessPathComponent {
   DynamicKey(Rc<Sequence>),
   /// Anonymous value
   AnonymousValue(Rc<Sequence>),
+  /// Pipeval
+  PipeValue,
 }
 
 impl Display for AccessPathComponent {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      AccessPathComponent::Name(name) => write!(f, "{}", name),
-      AccessPathComponent::Index(i) => write!(f, "{}", i),
-      AccessPathComponent::Slice(slice_expr) => write!(f, "{}", slice_expr),
-      AccessPathComponent::DynamicKey(expr) => write!(f, "{{{}...}}", expr.name().map(|name| name.as_str()).unwrap_or("")),
-      AccessPathComponent::AnonymousValue(expr) => write!(f, "!{{{}...}}", expr.name().map(|name| name.as_str()).unwrap_or("")),
+      Self::Name(name) => write!(f, "{}", name),
+      Self::Index(i) => write!(f, "{}", i),
+      Self::Slice(slice_expr) => write!(f, "{}", slice_expr),
+      Self::DynamicKey(expr) => write!(f, "{{{}...}}", expr.name().map(|name| name.as_str()).unwrap_or("")),
+      Self::AnonymousValue(expr) => write!(f, "!{{{}...}}", expr.name().map(|name| name.as_str()).unwrap_or("")),
+      Self::PipeValue => write!(f, "[]"),
     }
   }
 }
@@ -249,19 +252,7 @@ impl AccessPath {
   /// Determines whether the access path points to a variable.
   #[inline]
   pub fn is_variable(&self) -> bool {
-    self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::Name(..)) | Some(AccessPathComponent::DynamicKey(..)))
-  }
-
-  /// If the path is a static variable with no child access, returns the name of the variable; otherwise, `None`.
-  #[inline]
-  pub fn static_variable(&self) -> Option<&str> {
-    if self.len() == 1 {
-      if let Some(AccessPathComponent::Name(name)) = self.first() {
-        return Some(name.as_str())
-      }
-    }
-
-    None
+    self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::Name(..) | AccessPathComponent::DynamicKey(..) | AccessPathComponent::PipeValue))
   }
 
   /// Gets the kind access path this is.
@@ -295,11 +286,14 @@ impl AccessPath {
   /// If the path statically accesses a variable, returns the name of the variable accessed; otherwise, returns `None`.
   #[inline]
   pub fn var_name(&self) -> Option<Identifier> {
-    if let Some(AccessPathComponent::Name(id)) = self.first() {
-      Some(id.clone())
-    } else {
-      None
+    if let Some(first) = self.first() {
+      return Some(match first {
+        AccessPathComponent::Name(id) => id.clone(),
+        AccessPathComponent::PipeValue => Identifier::from(PIPE_VALUE_NAME),
+        _ => return None
+      })
     }
+    None
   }
 }
 
