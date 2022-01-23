@@ -390,16 +390,19 @@ impl DerefMut for Sequence {
 pub struct Block {
   /// Determines whether the block uses weights.
   pub is_weighted: bool,
+  /// Determines the protection level of the block.
+  pub protection: Option<BlockProtection>,
   /// The elements associated with the block.
   pub elements: Rc<Vec<Rc<BlockElement>>>
 }
 
 impl Block {
   /// Creates a new block.
-  pub fn new(is_weighted: bool, elements: Vec<Rc<BlockElement>>) -> Self {
+  pub fn new(is_weighted: bool, protection: Option<BlockProtection>, elements: Vec<Rc<BlockElement>>) -> Self {
     Block {
       is_weighted,
-      elements: Rc::new(elements)
+      protection,
+      elements: Rc::new(elements),
     }
   }
   
@@ -408,6 +411,12 @@ impl Block {
   pub fn len(&self) -> usize {
     self.elements.len()
   }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum BlockProtection {
+  Outer,
+  Inner,
 }
 
 /// A single element of a regular block.

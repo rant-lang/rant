@@ -6,6 +6,7 @@
 * Added compiler errors when int/float literals are out of range
 * Added `@edit`: apply recursive functions to your output, iteratively!
 * Pipeval (`[]`) is now supported in access paths without needing to nest it in a dynamic key
+* Added protected blocks
 
 ### Changes
 * Renamed stdlib functions:

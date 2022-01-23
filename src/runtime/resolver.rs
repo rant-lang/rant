@@ -1,5 +1,5 @@
 use std::{cell::RefCell, error::Error, fmt::Display, mem, ops::Index, rc::Rc};
-use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionRef, RantValue, ValueError, lang::{Block, BlockElement}, rng::RantRng, runtime_error};
+use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionRef, RantValue, ValueError, lang::{Block, BlockElement, BlockProtection}, rng::RantRng, runtime_error};
 use smallvec::SmallVec;
 use super::{IntoRuntimeResult, RuntimeError, RuntimeErrorType, RuntimeResult, StackFrameFlavor};
 
@@ -105,6 +105,8 @@ pub struct BlockState {
   total_steps: usize,
   /// Indicates whether the previous step was eligible to be followed by a separator.
   prev_step_separated: bool,
+  /// Protection level of the block.
+  protection: Option<BlockProtection>,
 }
 
 impl BlockState {
@@ -254,8 +256,22 @@ impl Resolver {
 impl Resolver {
   /// Adds a new block state to the block stack.
   #[inline]
-  pub fn push_block(&mut self, block: &Block, weights: Option<Weights>) {
-    let attrs = self.take_attrs();
+  pub fn push_block(&mut self, block: &Block, weights: Option<Weights>) -> RuntimeResult<()> {
+    let attrs = match block.protection {
+      Some(protection) => match protection {
+        BlockProtection::Outer => {
+          self.push_attrs()?;
+          self.take_attrs()
+        },
+        BlockProtection::Inner => {
+          let attrs = self.take_attrs();
+          self.push_attrs()?;
+          attrs
+        },
+      }
+      None => self.take_attrs()
+    };
+
     let state = BlockState {
       elements: Rc::clone(&block.elements),
       weights,
@@ -264,9 +280,11 @@ impl Resolver {
       attrs,
       prev_step_separated: false,
       force_stop: false,
+      protection: block.protection,
     };
     // Since blocks are associated with call stack frames, there is no need to check the stack size here
     self.block_stack.push(state);
+    Ok(())
   }
 
   /// Gets the current size of the resolver's block stack.
@@ -278,7 +296,17 @@ impl Resolver {
   /// Removes the active block state from the block stack.
   #[inline]
   pub fn pop_block(&mut self) -> Option<BlockState> {
-    self.block_stack.pop()
+    let state = self.block_stack.pop();
+
+    if let Some(protection) = state.as_ref().map(|s| s.protection).flatten() {
+      match protection {
+        BlockProtection::Inner | BlockProtection::Outer => {
+          self.pop_attrs();
+        },
+      }
+    }
+
+    state
   }
 
   /// Gets a reference to the active block state.

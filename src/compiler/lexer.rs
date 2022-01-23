@@ -179,6 +179,10 @@ pub enum RantToken {
   #[token("@", priority = 1)]
   At,
 
+  /// `@@`
+  #[token("@@", priority = 2)]
+  DoubleAt,
+
   /// Keyword, e.g. `@return`
   #[regex(r"@[a-z0-9_-]+", parse_keyword, priority = 2, ignore(case))]
   Keyword(KeywordInfo),

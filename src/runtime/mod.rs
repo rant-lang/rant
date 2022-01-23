@@ -1752,7 +1752,7 @@ impl<'rant> VM<'rant> {
   #[inline]
   pub fn push_block(&mut self, block: &Block, weights: Option<Weights>) -> RuntimeResult<()> {
     // Push a new state onto the block stack
-    self.resolver.push_block(block, weights);
+    self.resolver.push_block(block, weights)?;
 
     // Check the block to make sure it actually does something.
     // If the block has some skip condition, it will automatically remove it, and this method will have no net effect.

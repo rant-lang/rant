@@ -335,6 +335,12 @@ struct ParsedSequence {
   next_infix_op: Option<OrderedOperator>,
 }
 
+#[derive(Copy, Clone, PartialEq)]
+enum BlockParseMode {
+  NeedsStart,
+  StartParsed(Option<BlockProtection>),
+}
+
 /// Contains information about a successfully parsed block.
 struct ParsedBlock {
   auto_hint: bool,
@@ -747,7 +753,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Block start
         LeftBrace => {
           // Read in the entire block
-          let parsed_block = self.parse_block(false)?;
+          let parsed_block = self.parse_block(BlockParseMode::StartParsed(None))?;
 
           // Decide what to do with previous whitespace
           match next_print_flag {                        
@@ -886,19 +892,84 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             _ => unexpected_token_error!()
           }
         }),
+
+        // Inner-protected block
+        DoubleAt => {
+          match self.reader.next_solid() {
+            Some((LeftBrace, _)) => {
+              // Read in the entire block
+              let parsed_block = self.parse_block(BlockParseMode::StartParsed(Some(BlockProtection::Inner)))?;
+
+              // Decide what to do with previous whitespace
+              match next_print_flag {                        
+                // If hinted, allow pending whitespace
+                PrintFlag::Hint => {
+                  whitespace!(allow);
+                  is_seq_text = true;
+                },
+                
+                // If sinked, delete pending whitespace
+                PrintFlag::Sink => whitespace!(ignore both),
+                
+                // If no flag, infer from block contents
+                PrintFlag::None => {
+                  if parsed_block.auto_hint {
+                    whitespace!(allow);
+                    is_seq_text = true;
+                  } else {
+                    whitespace!(ignore both)
+                  }
+                }
+              }
+              
+              emit!(Rst::Block(Rc::new(parsed_block.block)));
+            },
+            _ => self.report_expected_token_error("{", &self.reader.last_token_span())
+          }
+        }
         
-        // Map initializer
-        At => no_flags!(on {
+        // Map initializer or protected block
+        At => {
           match self.reader.next_solid() {
             Some((LeftParen, _)) => {
-              self.parse_collection_initializer(CollectionInitKind::Map, &span)?
+              no_flags!();
+              emit!(self.parse_collection_initializer(CollectionInitKind::Map, &span)?)
             },
+            Some((LeftBrace, _)) => {
+              // Read in the entire block
+              let parsed_block = self.parse_block(BlockParseMode::StartParsed(Some(BlockProtection::Outer)))?;
+
+              // Decide what to do with previous whitespace
+              match next_print_flag {                        
+                // If hinted, allow pending whitespace
+                PrintFlag::Hint => {
+                  whitespace!(allow);
+                  is_seq_text = true;
+                },
+                
+                // If sinked, delete pending whitespace
+                PrintFlag::Sink => whitespace!(ignore both),
+                
+                // If no flag, infer from block contents
+                PrintFlag::None => {
+                  if parsed_block.auto_hint {
+                    whitespace!(allow);
+                    is_seq_text = true;
+                  } else {
+                    whitespace!(ignore both)
+                  }
+                }
+              }
+              
+              emit!(Rst::Block(Rc::new(parsed_block.block)));
+            }
             _ => {
-              self.report_error(Problem::ExpectedToken("(".to_owned()), &self.reader.last_token_span());
-              Rst::EmptyValue
+              // TODO: Use a more descriptive error here
+              self.report_unexpected_last_token_error();
+              emit!(Rst::EmptyValue);
             },
           }
-        }),
+        },
         
         // List initializer
         LeftParen => no_flags!(on {
@@ -1418,7 +1489,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     let ParsedBlock {
       auto_hint: body_auto_hint,
       block: body_block,
-    } = self.parse_block(true)?;
+    } = self.parse_block(BlockParseMode::NeedsStart)?;
 
     is_auto_hinted |= body_auto_hint;
 
@@ -1449,7 +1520,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       let ParsedBlock {
         auto_hint: body_auto_hint,
         block: body_block,
-      } = self.parse_block(true)?;
+      } = self.parse_block(BlockParseMode::NeedsStart)?;
 
       is_auto_hinted |= body_auto_hint;
 
@@ -1470,7 +1541,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       let ParsedBlock {
         auto_hint: body_auto_hint,
         block: body_block,
-      } = self.parse_block(true)?;
+      } = self.parse_block(BlockParseMode::NeedsStart)?;
 
       is_auto_hinted |= body_auto_hint;
 
@@ -2454,11 +2525,27 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
     
   /// Parses a standard (attribute-consuming) block.
-  fn parse_block(&mut self, expect_opening_brace: bool) -> ParseResult<ParsedBlock> {
-    if expect_opening_brace && !self.reader.eat_where(|t| matches!(t, Some((LeftBrace, _)))) {
-      self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
-      return Err(())
-    }
+  fn parse_block(&mut self, parse_mode: BlockParseMode) -> ParseResult<ParsedBlock> {
+    let protection = match parse_mode {
+      BlockParseMode::NeedsStart => {
+        self.reader.skip_ws();
+        let protection = if self.reader.eat(RantToken::At) {
+          Some(BlockProtection::Outer)
+        } else if self.reader.eat(RantToken::DoubleAt) {
+          Some(BlockProtection::Inner)
+        } else {
+          None
+        };
+
+        if !self.reader.eat_where(|t| matches!(t, Some((LeftBrace, _)))) {
+          self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
+          return Err(())
+        }
+
+        protection
+      },
+      BlockParseMode::StartParsed(protection) => protection,
+    };
     
     // Get position of starting brace for error reporting
     let start_pos = self.reader.last_token_pos();
@@ -2547,7 +2634,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
     
     Ok(ParsedBlock {
-      block: Block::new(is_weighted, elements),
+      block: Block::new(is_weighted, protection, elements),
       auto_hint
     })
   }
