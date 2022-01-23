@@ -84,21 +84,6 @@ pub(crate) fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn push_attrs(vm: &mut VM, _: ()) -> RantStdResult {
-  vm.resolver_mut().push_attrs()?;
-  Ok(())
-}
-
-pub(crate) fn pop_attrs(vm: &mut VM, _: ()) -> RantStdResult {
-  vm.resolver_mut().pop_attrs();
-  Ok(())
-}
-
-pub(crate) fn count_attrs(vm: &mut VM, _: ()) -> RantStdResult {
-  vm.resolver_mut().count_attrs();
-  Ok(())
-}
-
 pub(crate) fn reset_attrs(vm: &mut VM, _: ()) -> RantStdResult {
   vm.resolver_mut().reset_attrs();
   Ok(())

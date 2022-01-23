@@ -102,7 +102,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     if_ as "if", elseif as "elseif", else_ as "else", mksel, rep, sel, sep, mut_ as "mut",
 
     // Attribute frame stack functions
-    push_attrs as "push-attrs", pop_attrs as "pop-attrs", count_attrs as "count-attrs", reset_attrs as "reset-attrs",
+    reset_attrs as "reset-attrs",
 
     // Block state functions
     step, step_index as "step-index", step_count as "step-count",

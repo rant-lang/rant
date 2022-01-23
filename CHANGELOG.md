@@ -20,6 +20,12 @@
   * `[shuffle]` &rarr; `[shuffle-self]`
   * `[shuffled]` &rarr; `[shuffle]`
 
+## Removed
+* Removed stdlib functions:
+  * `[push-attrs]`
+  * `[pop-attrs]`
+  * `[count-attrs]`
+
 ## 4.0.0-alpha.25
 
 (1/23/2022)
