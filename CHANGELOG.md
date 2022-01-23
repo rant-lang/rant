@@ -4,6 +4,7 @@
 
 ### New
 * Added compiler errors when int/float literals are out of range
+* Added aggregators: apply recursive functions to your output, iteratively!
 
 ### Changes
 * Renamed stdlib functions:
