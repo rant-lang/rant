@@ -1,8 +1,24 @@
 # Changelog
 
-## 4.0.0-alpha.26
+## 4.0.0-alpha.26 (unreleased)
 
+## New
+* Added stdlib functions:
+  * `[augment]`
+  * `[augment-self]`
+  * `[augment-thru]`
+  * `[sort-thru]`
+  * `[sift-thru]`
+  * `[shuffle-thru]`
 
+## Changes
+* Renamed stdlib functions:
+  * `[sort]` &rarr; `[sort-self]`
+  * `[sorted]` &rarr; `[sort]`
+  * `[sift]` &rarr; `[sift-self]`
+  * `[sifted]` &rarr; `[sift]`
+  * `[shuffle]` &rarr; `[shuffle-self]`
+  * `[shuffled]` &rarr; `[shuffle]`
 
 ## 4.0.0-alpha.25
 

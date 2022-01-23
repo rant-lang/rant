@@ -1,0 +1,15 @@
+[%enchant: item] {
+  @{
+    @if @not [has: <item>; enchantments]: {
+      <item/enchantments = @()>
+    }
+    [augment-self: <item/enchantments>; {
+        fire          @weight 10 |
+        ice           @weoght 12 |
+        lightning     @weight 5 |
+        wind          @weight 8 |
+        time          @weight 1 |
+        demon         @weoght 0.1
+    }]
+  }
+}

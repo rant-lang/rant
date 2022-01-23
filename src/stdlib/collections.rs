@@ -294,7 +294,28 @@ pub(crate) fn sum(vm: &mut VM, list: RantListRef) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn shuffled(vm: &mut VM, list: RantListRef) -> RantStdResult {
+pub(crate) fn shuffle_self(vm: &mut VM, list: RantListRef) -> RantStdResult {
+  let mut list = list.borrow_mut();
+  if list.is_empty() {
+    return Ok(())
+  }
+
+  let n = list.len();
+  let rng = vm.rng();
+  for i in 0..n {
+    list.swap(i, rng.next_usize(n));
+  }
+  Ok(())
+}
+
+pub(crate) fn shuffle_thru(vm: &mut VM, list: RantListRef) -> RantStdResult {
+  let list_ref_clone = Rc::clone(&list);
+  shuffle(vm, list);
+  vm.cur_frame_mut().write_value(RantValue::List(list_ref_clone));
+  Ok(())
+}
+
+pub(crate) fn shuffle(vm: &mut VM, list: RantListRef) -> RantStdResult {
   let mut list = list.borrow().clone();
   if list.is_empty() {
     return Ok(());
@@ -351,6 +372,38 @@ pub(crate) fn assoc(vm: &mut VM, (keys, values): (RantListRef, RantListRef)) -> 
   Ok(())
 }
 
+pub(crate) fn augment_self(vm: &mut VM, (to_map, from_map): (RantMapRef, RantMapRef)) -> RantStdResult {
+  for (key, val) in from_map.borrow().raw_pairs_internal() {
+    let orig_val = to_map.borrow().get(key).map(|v| v.as_ref().clone());
+    if let Some(orig_val) = orig_val {
+      to_map.borrow_mut().raw_set(key, orig_val.concat(val.clone()));
+    } else {
+      to_map.borrow_mut().raw_set(key, val.clone());
+    }
+  }
+
+  Ok(())
+}
+
+pub(crate) fn augment_thru(vm: &mut VM, (to_map, from_map): (RantMapRef, RantMapRef)) -> RantStdResult {
+  let map_ref_clone = Rc::clone(&to_map);
+  augment_self(vm, (to_map, from_map))?;
+  vm.cur_frame_mut().write_value(RantValue::Map(map_ref_clone));
+  Ok(())
+}
+
+pub(crate) fn augment(vm: &mut VM, (to_map, from_map): (RantMapRef, RantMapRef)) -> RantStdResult {
+  for (key, val) in from_map.borrow().raw_pairs_internal() {
+    let orig_val = to_map.borrow().get(key).map(|v| v.as_ref().clone());
+    if let Some(orig_val) = orig_val {
+      to_map.borrow_mut().raw_set(key, orig_val.concat(val.clone()));
+    } else {
+      to_map.borrow_mut().raw_set(key, val.clone());
+    }
+  }
+  Ok(())
+}
+
 pub(crate) fn translate(vm: &mut VM, (list, map): (RantListRef, RantMapRef)) -> RantStdResult {
   let list = list.borrow();
   let map = map.borrow();
@@ -376,7 +429,7 @@ pub(crate) fn list_pop(vm: &mut VM, list: RantListRef) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn sift(vm: &mut VM, (list, size): (RantListRef, usize)) -> RantStdResult {
+pub(crate) fn sift_self(vm: &mut VM, (list, size): (RantListRef, usize)) -> RantStdResult {
   let mut list = list.borrow_mut();
   if list.len() <= size {
     return Ok(())
@@ -391,7 +444,14 @@ pub(crate) fn sift(vm: &mut VM, (list, size): (RantListRef, usize)) -> RantStdRe
   Ok(())
 }
 
-pub(crate) fn sifted(vm: &mut VM, (list, size): (RantListRef, usize)) -> RantStdResult {
+pub(crate) fn sift_thru(vm: &mut VM, (list, size): (RantListRef, usize)) -> RantStdResult {
+  let list_ref_clone = Rc::clone(&list);
+  sift(vm, (list, size))?;
+  vm.cur_frame_mut().write_value(RantValue::List(list_ref_clone));
+  Ok(())
+}
+
+pub(crate) fn sift(vm: &mut VM, (list, size): (RantListRef, usize)) -> RantStdResult {
   let mut list = list.borrow().clone();
 
   let rng = vm.rng();
@@ -523,30 +583,23 @@ pub(crate) fn take(vm: &mut VM, (collection, pos): (RantValue, RantValue)) -> Ra
   Ok(())
 }
 
-pub(crate) fn sort(vm: &mut VM, list: RantListRef) -> RantStdResult {
+pub(crate) fn sort_self(vm: &mut VM, list: RantListRef) -> RantStdResult {
   let mut list = list.borrow_mut();
   list.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
   Ok(())
 }
 
-pub(crate) fn sorted(vm: &mut VM, list: RantListRef) -> RantStdResult {
-  let mut list_copy = list.borrow().clone();
-  list_copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
-  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list_copy))));
+pub(crate) fn sort_thru(vm: &mut VM, list: RantListRef) -> RantStdResult {
+  let list_ref_clone = Rc::clone(&list);
+  sort_self(vm, list)?;
+  vm.cur_frame_mut().write_value(RantValue::List(list_ref_clone));
   Ok(())
 }
 
-pub(crate) fn shuffle(vm: &mut VM, list: RantListRef) -> RantStdResult {
-  let mut list = list.borrow_mut();
-  if list.is_empty() {
-    return Ok(())
-  }
-
-  let n = list.len();
-  let rng = vm.rng();
-  for i in 0..n {
-    list.swap(i, rng.next_usize(n));
-  }
+pub(crate) fn sort(vm: &mut VM, list: RantListRef) -> RantStdResult {
+  let mut list_copy = list.borrow().clone();
+  list_copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list_copy))));
   Ok(())
 }
 
