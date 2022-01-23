@@ -260,6 +260,35 @@ struct VarStats {
 
 impl VarStats {
   #[inline]
+  fn new(role: VarRole, def_span: Range<usize>, is_const: bool) -> Self {
+    Self {
+      role,
+      def_span,
+      is_const,
+      has_fallible_read: false,
+      is_auto_hinted: false,
+      reads: 0,
+      writes: 0,
+    }
+  }
+
+  #[inline]
+  fn with_auto_hint(self) -> Self {
+    Self {
+      is_auto_hinted: true,
+      .. self
+    }
+  }
+
+  #[inline]
+  fn with_fallible_read(self) -> Self {
+    Self {
+      has_fallible_read: true,
+      .. self
+    }
+  }
+
+  #[inline]
   fn add_write(&mut self) {
     self.writes += 1;
   }
@@ -287,6 +316,8 @@ enum VarRole {
   FallibleOptionalArgument,
   /// Pipeval from a piped call.
   PipeValue,
+  /// Aggregate variable for an aggregator.
+  Aggregate,
 }
 
 /// Returns a range that encompasses both input ranges.
@@ -404,13 +435,18 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   
   /// Emits an "unexpected token" error for the most recently read token.
   #[inline]
-  fn unexpected_last_token_error(&mut self) {
+  fn report_unexpected_last_token_error(&mut self) {
     self.report_error(Problem::UnexpectedToken(self.reader.last_token_string().to_string()), &self.reader.last_token_span())
   }
 
   #[inline]
-  fn unexpected_token_error(&mut self, span: &Range<usize>) {
+  fn report_unexpected_token_error(&mut self, span: &Range<usize>) {
     self.report_error(Problem::UnexpectedToken(self.source[span.start .. span.end].to_string()), span)
+  }
+
+  #[inline]
+  fn report_expected_token_error(&mut self, expected: &str, span: &Range<usize>) {
+    self.report_error(Problem::ExpectedToken(expected.to_owned()), span);
   }
 
   /// Parses a sequence of items with a new variable scope. Items are individual elements of a Rant program (fragments, blocks, function calls, etc.)
@@ -424,7 +460,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
   
   /// Inner logic of `parse_sequence()`. Intended to be wrapped in other specialized sequence-parsing functions.
-  #[inline(always)]
   fn parse_sequence_inner(&mut self, mode: SequenceParseMode, precedence: usize) -> ParseResult<ParsedSequence> {
     let mut sequence = Sequence::empty(&self.info);
     let mut next_print_flag = PrintFlag::None;
@@ -1562,7 +1597,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             Some((RightParen, _)) => break,
             // Soft error on anything weird
             Some(_) => {
-              self.unexpected_last_token_error();
+              self.report_unexpected_last_token_error();
               MapKeyExpr::Static(self.reader.last_token_string())
             },
             // Hard error on EOF
@@ -1931,15 +1966,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               } = if is_piped {
                 self.var_stack.push_layer();
                 // Track pipe value inside arguement scope
-                let pipeval_stats = VarStats {
-                  writes: 1,
-                  reads: 0,
-                  def_span: Default::default(), // we'll never need this anyway
-                  is_const: true,
-                  is_auto_hinted: false,
-                  has_fallible_read: false,
-                  role: VarRole::PipeValue,
-                };
+                let pipeval_stats = VarStats::new(VarRole::PipeValue, Default::default(), true);
                 self.var_stack.define(Identifier::from(PIPE_VALUE_NAME), pipeval_stats);
                 let parsed_arg_expr = self.parse_sequence_inner(SequenceParseMode::FunctionArg, PREC_SEQUENCE)?;
                 is_pipeval_used |= self.var_stack.get(PIPE_VALUE_NAME).unwrap().reads > 0;
@@ -2000,15 +2027,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           } = if is_piped {
             self.var_stack.push_layer();
             // Track pipe value inside anonymous function access scope
-            let pipeval_stats = VarStats {
-              writes: 1,
-              reads: 0,
-              def_span: Default::default(), // we'll never need this anyway
-              is_const: true,
-              is_auto_hinted: false,
-              has_fallible_read: false,
-              role: VarRole::PipeValue,
-            };
+            let pipeval_stats = VarStats::new(VarRole::PipeValue, Default::default(), true);
             self.var_stack.define(Identifier::from(PIPE_VALUE_NAME), pipeval_stats);
             let seq = self.parse_sequence_inner(SequenceParseMode::AnonFunctionExpr, PREC_SEQUENCE)?;
             is_pipeval_used |= self.var_stack.get(PIPE_VALUE_NAME).unwrap().reads > 0;
@@ -2060,7 +2079,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 is_piped = true;
               }
               _ => {
-                self.unexpected_last_token_error();
+                self.report_unexpected_last_token_error();
                 return Err(())
               }
             }
@@ -2168,7 +2187,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       // Parse the first part of the path
 
       // Check for certain index/slice forms and disallow them
-      if let Some(_) = self.try_read_signed_int() {
+      if let Ok(Some(_)) = self.try_read_signed_int() {
         let span = self.reader.last_token_span();
         self.reader.skip_ws();
         if self.reader.eat_where(|t| matches!(t, Some((Colon, ..)))) {
@@ -2466,7 +2485,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     Ok((parse_out, capture_set.drain().collect()))
   }
     
-  /// Parses a block.
+  /// Parses a standard (attribute-consuming) block.
   fn parse_block(&mut self, expect_opening_brace: bool) -> ParseResult<ParsedBlock> {
     if expect_opening_brace && !self.reader.eat_where(|t| matches!(t, Some((LeftBrace, _)))) {
       self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
@@ -2483,17 +2502,49 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     let mut elements = vec![];
     
     loop {
+      self.reader.skip_ws();
+
+      self.var_stack.push_layer();
+
+      // Check for aggregator
+      let aggregator = if self.reader.eat_kw(KW_EDIT) {
+        self.reader.skip_ws();
+        let aggvar = if self.reader.eat(RantToken::Colon) {
+          None // No aggregate variable
+        } else {
+          // Get the name of the aggregate variable
+          let aggvar = self.parse_ident()?;
+          let aggvar_span = self.reader.last_token_span();
+          self.reader.skip_ws();
+          if !self.reader.eat(RantToken::Colon) {
+            self.report_expected_token_error(":", &self.reader.last_token_span());
+          }
+          self.var_stack.define(aggvar.clone(), VarStats::new(VarRole::Aggregate, aggvar_span, true));
+          Some(aggvar)
+        };        
+        self.reader.skip_ws();
+
+        Some(AggregatorSig {
+          input_var: aggvar
+        })
+      } else {
+        None
+      };
+
       let ParsedSequence { 
         sequence, 
         end_type, 
         is_text, 
         extras ,
         ..
-      } = self.parse_sequence(SequenceParseMode::BlockElement)?;
+      } = self.parse_sequence_inner(SequenceParseMode::BlockElement, PREC_SEQUENCE)?;
+
+      self.analyze_top_vars();
+      self.var_stack.pop_layer();
       
       auto_hint |= is_text;
 
-      let element = BlockElement {
+      let element = Rc::new(BlockElement {
         main: Rc::new(sequence),
         weight: if let Some(ParsedSequenceExtras::WeightedBlockElement { weight_expr }) = extras {
           is_weighted = true;
@@ -2506,7 +2557,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         } else {
           None
         },
-      };
+        aggregator,
+      });
       
       match end_type {
         SequenceEndType::BlockDelim => {
@@ -2544,7 +2596,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           Ok(Identifier::new(idstr))
         },
         _ => {
-          self.unexpected_last_token_error();
+          self.report_unexpected_last_token_error();
           Err(())
         }
       }
@@ -2684,6 +2736,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     for (name, role, span) in unused_vars {
       match role {
         VarRole::Normal => self.report_warning(Problem::UnusedVariable(name), &span),
+        VarRole::Aggregate => self.report_warning(Problem::UnusedAggregate(name), &span),
         VarRole::Argument | VarRole::FallibleOptionalArgument => self.report_warning(Problem::UnusedParameter(name), &span),
         VarRole::Function => self.report_warning(Problem::UnusedFunction(name), &span),
         // Ignore any other roles
@@ -2731,7 +2784,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
       // Error on @text when accessor isn't a definition
       if !is_def && is_auto_hinted_def {
-        self.unexpected_token_error(&auto_hint_span);
+        self.report_unexpected_token_error(&auto_hint_span);
       }
 
       let access_start_span = self.reader.last_token_span();
@@ -2802,7 +2855,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             },
             // Ran into something we don't support
             _ => {
-              self.unexpected_last_token_error();
+              self.report_unexpected_last_token_error();
               return Err(())
             }
           }
@@ -2923,7 +2976,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             },
             // Anything else is an error
             _ => {
-              self.unexpected_last_token_error();
+              self.report_unexpected_last_token_error();
               return Err(())
             }
           }

@@ -20,6 +20,9 @@ pub const KW_FALSE: &str = "false";
 // Hinting keywords
 pub const KW_TEXT: &str = "text";
 
+// Aggregator keywords
+pub const KW_EDIT: &str = "edit";
+
 // Infix operator keywords
 pub const KW_AND: &str = "and";
 pub const KW_OR: &str = "or";
@@ -39,7 +42,7 @@ pub fn is_valid_keyword_name(kw_name: &str) -> bool {
   matches!(kw_name, 
     KW_REQUIRE |
     KW_RETURN | KW_BREAK | KW_CONTINUE | KW_WEIGHT | KW_IF | KW_ELSEIF | KW_ELSE |
-    KW_TRUE | KW_FALSE | KW_TEXT | 
+    KW_TRUE | KW_FALSE | KW_TEXT | KW_EDIT |
     KW_AND | KW_OR | KW_NEG | KW_NOT | KW_NAND | KW_NOR | KW_XOR | 
     KW_EQ | KW_NEQ | KW_GT | KW_GE | KW_LT | KW_LE
   )

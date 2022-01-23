@@ -22,8 +22,8 @@ pub enum Intent {
   BreakLast,
   /// Pops a map off the stack and loads it as a module with the specified name.
   ImportLastAsModule { module_name: String, descope: usize },
-  /// Check if the active block is finished and either continue the block or pop the state from the stack
-  CheckBlock,
+  /// Check if the current block is finished and either continue the block or pop the state from the stack
+  TickCurrentBlock,
   /// Pop a value off the stack and assign it to an existing variable.
   SetVar { vname: Identifier, access_kind: AccessPathKind, },
   /// Pop a value off the stack and assign it to a new variable.
@@ -126,7 +126,7 @@ impl Intent {
   pub(crate) fn name(&self) -> &'static str {
     match self {
       Self::PrintLast => "print",
-      Self::CheckBlock => "check_block",
+      Self::TickCurrentBlock => "check_block",
       Self::SetVar { .. } => "set_var",
       Self::DefVar { .. } => "def_var",
       Self::BuildDynamicGetter { .. } => "build_dyn_getter",

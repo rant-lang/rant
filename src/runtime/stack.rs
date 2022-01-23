@@ -458,6 +458,13 @@ impl<I> StackFrame<I> {
     &mut self.output
   }
 
+  #[inline]
+  pub fn render_and_reset_output(&mut self) -> RantValue {
+    let mut other = OutputWriter::new(Some(&self.output));
+    std::mem::swap(&mut self.output, &mut other);
+    other.render_value()
+  }
+
   #[inline(always)]
   pub fn origin(&self) -> &Rc<RantProgramInfo> {
     &self.origin

@@ -391,30 +391,21 @@ impl DerefMut for Sequence {
   }
 }
 
-/// A block is a set of zero or more distinct Rant code snippets.
+/// A block is an ordered collection of one or more Rant expressions.
 #[derive(Debug)]
 pub struct Block {
   /// Determines whether the block uses weights.
   pub is_weighted: bool,
   /// The elements associated with the block.
-  pub elements: Rc<Vec<BlockElement>>
+  pub elements: Rc<Vec<Rc<BlockElement>>>
 }
 
 impl Block {
   /// Creates a new block.
-  pub fn new(is_weighted: bool, elements: Vec<BlockElement>) -> Self {
+  pub fn new(is_weighted: bool, elements: Vec<Rc<BlockElement>>) -> Self {
     Block {
       is_weighted,
       elements: Rc::new(elements)
-    }
-  }
-
-  /// Creates a copy of the block with the same elements in reverse order.
-  #[inline]
-  pub fn reversed(&self) -> Self {
-    Self {
-      elements: Rc::new(self.elements.iter().rev().cloned().collect()),
-      .. *self
     }
   }
   
@@ -432,6 +423,8 @@ pub struct BlockElement {
   pub main: Rc<Sequence>,
   /// The weight of the element.
   pub weight: Option<BlockWeight>,
+  /// Aggregator signature associated with the element sequence.
+  pub aggregator: Option<AggregatorSig>,
 }
 
 impl Clone for BlockElement {
@@ -439,7 +432,8 @@ impl Clone for BlockElement {
   fn clone(&self) -> Self {
     Self {
       main: Rc::clone(&self.main),
-      weight: self.weight.clone()
+      weight: self.weight.clone(),
+      aggregator: self.aggregator.clone(),
     }
   }
 }
@@ -461,6 +455,12 @@ impl Clone for BlockWeight {
       BlockWeight::Constant(c) => Self::Constant(*c),
     }
   }
+}
+
+/// Signature information for an aggregator.
+#[derive(Debug, Clone)]
+pub struct AggregatorSig {
+  pub input_var: Option<Identifier>
 }
 
 /// Describes the arity requirements of a function parameter.
@@ -704,24 +704,6 @@ pub enum MapKeyExpr {
   Dynamic(Rc<Sequence>),
   /// Map key is evaluated at compile time from an identifier.
   Static(InternalString),
-}
-
-pub trait RstTrace {
-  fn span(&self) -> Range<usize>;
-  fn find(&self, range: &Range<usize>) -> Option<RstLeaf>;
-}
-
-/// Leaf data provided by an AST search.
-pub enum RstLeaf<'a> {
-  Node(&'a RstNode),
-  Identifier(&'a Identifier),
-  Other(&'a dyn RstTrace),
-}
-
-#[derive(Debug)]
-pub struct RstNode {
-  span: Range<usize>,
-  node: Rst,
 }
 
 /// Rant Syntax Tree

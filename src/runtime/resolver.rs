@@ -9,7 +9,7 @@ pub type SelectorRef = Rc<RefCell<Selector>>;
 const MAX_ATTR_FRAMES: usize = 255;
 const BLOCK_STACK_INLINE_COUNT: usize = 4;
 
-/// Manages block execution behavior ("resolution").
+/// Manages block selection and execution behavior.
 pub struct Resolver {
   rng: Rc<RantRng>,
   base_attrs: AttributeFrame,
@@ -20,9 +20,9 @@ pub struct Resolver {
 /// Emitted by the resolver to indicate the current action performed by a block.
 pub enum BlockAction {
   /// Run a sequence from an element.
-  Element(Rc<Sequence>),
+  Element(Rc<BlockElement>),
   /// Call the mutator function and pass in the current element as a callback.
-  MutateElement { elem_func: RantFunctionRef, mutator_func: RantFunctionRef },
+  MutateElement { elem: Rc<BlockElement>, elem_func: RantFunctionRef, mutator_func: RantFunctionRef },
   /// Run the separator.
   Separator(RantValue),
 }
@@ -92,7 +92,7 @@ impl Index<usize> for Weights {
 #[derive(Debug)]
 pub struct BlockState {
   /// The elements of the block.
-  elements: Rc<Vec<BlockElement>>,
+  elements: Rc<Vec<Rc<BlockElement>>>,
   /// Element weights associated with the block
   weights: Option<Weights>,
   /// Flag to short-circuit the block
@@ -133,7 +133,8 @@ impl BlockState {
         |sel| sel.borrow_mut().select(self.elements.len(), rng)
       )?;
 
-      let next_elem = Rc::clone(&self.elements[next_index].main);
+      let next_elem = Rc::clone(&self.elements[next_index]);
+      let next_elem_seq = Rc::clone(&next_elem.main);
 
       // If the mutator function is set, generate mutated elements
       if let Some(mutator_func) = self.attrs.mutator.as_ref() {
@@ -142,7 +143,7 @@ impl BlockState {
           min_arg_count: 0,
           vararg_start_index: 0,
           params: Rc::new(vec![]),
-          body: RantFunctionInterface::User(next_elem),
+          body: RantFunctionInterface::User(next_elem_seq),
           flavor: Some(if self.is_repeater() { 
             StackFrameFlavor::RepeaterElement 
           } else { 
@@ -150,6 +151,7 @@ impl BlockState {
           })
         };
         return Ok(Some(BlockAction::MutateElement {
+          elem: next_elem,
           mutator_func: Rc::clone(mutator_func),
           elem_func: Rc::new(elem_func),
         }))

@@ -183,8 +183,8 @@ impl<'rant> VM<'rant> {
           self.interrupt_repeater(Some(val), false)?;
           return Ok(true)
         },
-        Intent::CheckBlock => {            
-          self.check_block()?;
+        Intent::TickCurrentBlock => {            
+          self.tick_current_block()?;
         },
         Intent::BuildWeightedBlock { block, mut weights, mut pop_next_weight } => {
           while weights.len() < block.elements.len() {
@@ -1604,16 +1604,16 @@ impl<'rant> VM<'rant> {
   }
 
   /// Checks for an active block and attempts to iterate it. If a valid element is returned, it is pushed onto the call stack.
-  pub fn check_block(&mut self) -> RuntimeResult<()> {
+  pub fn tick_current_block(&mut self) -> RuntimeResult<()> {
     let mut is_repeater = false;
 
     let rng = self.rng_clone();
     
-    // Check if there's an active block and try to iterate it
+    // Get the active block from the resolver
     let next_element = if let Some(state) = self.resolver.active_block_mut() {
       is_repeater = state.is_repeater();
       
-      // Get the next element
+      // Request the next element to run for this block
       if let Some(element) = state.next_element(rng.as_ref()).into_runtime_result()? {
         Some(element)
       } else {
@@ -1627,30 +1627,61 @@ impl<'rant> VM<'rant> {
     };
 
     // Push frame for next block element, if available
-    // TODO: Consider moving BlockAction handler into Resolver
     if let Some(element) = next_element {  
       // Tell the calling frame to check the block status once the separator returns
-      self.cur_frame_mut().push_intent(Intent::CheckBlock);
+      self.cur_frame_mut().push_intent(Intent::TickCurrentBlock);
 
       match element {
-        BlockAction::Element(elem_seq) => {
+        BlockAction::Element(elem) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
+          
+          // Check for aggregator
+          if let Some(aggregator) = &elem.aggregator {
+            let aggregate = self.cur_frame_mut().render_and_reset_output();
 
-          // Push the next element
-          self.push_frame_flavored(
-            Rc::clone(&elem_seq), 
-            if is_repeater { 
-              StackFrameFlavor::RepeaterElement 
-            } else { 
-              StackFrameFlavor::BlockElement
+            // Push the next element
+            self.push_frame_flavored(
+              Rc::clone(&elem.main), 
+              if is_repeater { 
+                StackFrameFlavor::RepeaterElement 
+              } else { 
+                StackFrameFlavor::BlockElement
+              }
+            )?;
+
+            // Define the aggregate variable
+            if let Some(aggvar) = &aggregator.input_var {
+              self.def_var_value(aggvar.as_str(), AccessPathKind::Local, aggregate, true)?;
             }
-          )?;
+          } else {
+            // Push the next element
+            self.push_frame_flavored(
+              Rc::clone(&elem.main), 
+              if is_repeater { 
+                StackFrameFlavor::RepeaterElement 
+              } else { 
+                StackFrameFlavor::BlockElement
+              }
+            )?;
+          }
         },
-        BlockAction::MutateElement { elem_func, mutator_func: pipe_func } => {
+        BlockAction::MutateElement { elem, elem_func, mutator_func } => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
 
-          // Call the pipe function
-          self.call_func(pipe_func, vec![RantValue::Function(elem_func)], true)?;
+          if let Some(aggregator) = &elem.aggregator {
+            let aggregate = self.cur_frame_mut().render_and_reset_output();
+
+            // Call the mutator function
+            self.call_func(mutator_func, vec![RantValue::Function(elem_func)], true)?;
+
+            // Define the aggregate variable
+            if let Some(aggvar) = &aggregator.input_var {
+              self.def_var_value(aggvar.as_str(), AccessPathKind::Local, aggregate, true)?;
+            }
+          } else {
+            // Call the mutator function
+            self.call_func(mutator_func, vec![RantValue::Function(elem_func)], true)?;
+          }
         },
         BlockAction::Separator(separator) => {
           match separator {
@@ -1698,7 +1729,7 @@ impl<'rant> VM<'rant> {
 
     // Check the block to make sure it actually does something.
     // If the block has some skip condition, it will automatically remove it, and this method will have no net effect.
-    self.check_block()?;
+    self.tick_current_block()?;
 
     Ok(())
   }
