@@ -1,6 +1,12 @@
 # Changelog
 
-## 4.0.0-alpha.25 (unreleased)
+## 4.0.0-alpha.26
+
+
+
+## 4.0.0-alpha.25
+
+(1/23/2022)
 
 ### New
 * Added compiler errors when int/float literals are out of range
@@ -11,8 +17,6 @@
 ### Changes
 * Renamed stdlib functions:
   * `[pipe]` &rarr; `[mut]`
-
-### Removed
 
 ### Fixes
 * Fixed pipeval being unhintable
