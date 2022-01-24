@@ -1048,7 +1048,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Variable access start
-        LeftAngle => no_flags!({
+        LeftAngle => {
           let ParsedAccessor {
             nodes,
             is_auto_hinted
@@ -1073,7 +1073,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
             emit!(node);
           }
-        }),
+        },
         
         // Variable access end
         RightAngle => no_flags!({
@@ -1201,11 +1201,15 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Verbatim string literals
-        StringLiteral(s) => no_flags!(on {
+        StringLiteral(s) => {
           whitespace!(allow);
-          is_seq_text = true;
-          Rst::Fragment(s)
-        }),
+          if next_print_flag == PrintFlag::Sink {
+            whitespace!(ignore next);
+          } else {
+            is_seq_text = true;
+          }
+          emit!(Rst::Fragment(s))
+        },
         
         // Colon can be either fragment or argument separator.
         Colon => no_flags!({

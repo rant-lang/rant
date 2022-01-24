@@ -12,6 +12,7 @@
   * `[shuffle-thru]`
 
 ## Changes
+* Hints/sinks on string literals are allowed
 * Renamed stdlib functions:
   * `[sort]` &rarr; `[sort-self]`
   * `[sorted]` &rarr; `[sort]`
@@ -27,6 +28,7 @@
   * `[count-attrs]`
 
 ## Fixes
+* Fixed hints/sinks being rejected on accessors
 * Fixed key setters accidentally tripping constant reassignment error
 
 ## 4.0.0-alpha.25

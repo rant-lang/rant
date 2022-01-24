@@ -116,5 +116,10 @@
 
 [rep: 10][sep: \n]
 {
-  [gen-sword |> cat: <[]/name>\n; "  - Enchantments: " <[]/enchantments ? none>\n; "  - Weight: " [stat-num-str: <[]/weight>]\n; "  - Damage: " [stat-num-str: <[]/damage>]]
+  [gen-sword |> cat: 
+    <[]/name>\n;
+    ~"  - Enchantments: " <[]/enchantments ? none>\n; 
+    ~"  - Weight: " [stat-num-str: <[]/weight>]\n; 
+    ~"  - Damage: " [stat-num-str: <[]/damage>]
+  ]
 }
