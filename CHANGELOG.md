@@ -26,6 +26,9 @@
   * `[pop-attrs]`
   * `[count-attrs]`
 
+## Fixes
+* Fixed key setters accidentally tripping constant reassignment error
+
 ## 4.0.0-alpha.25
 
 (1/23/2022)

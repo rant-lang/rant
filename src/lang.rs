@@ -249,7 +249,7 @@ impl AccessPath {
     matches!(self.first(), Some(AccessPathComponent::AnonymousValue(..)))
   }
 
-  /// Determines whether the access path points to a variable.
+  /// Determines whether the access path targets a variable.
   #[inline]
   pub fn is_variable(&self) -> bool {
     self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::Name(..) | AccessPathComponent::DynamicKey(..) | AccessPathComponent::PipeValue))

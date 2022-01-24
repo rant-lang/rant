@@ -1,15 +1,88 @@
-[%enchant: item] {
+[%enchant-item: item] {
   @{
     @if @not [has: <item>; enchantments]: {
       <item/enchantments = @()>
     }
-    [augment-self: <item/enchantments>; {
-        fire          @weight 10 |
-        ice           @weoght 12 |
-        lightning     @weight 5 |
-        wind          @weight 8 |
-        time          @weight 1 |
-        demon         @weoght 0.1
-    }]
+    <$dmg-bonus = 0; $wt-bonus = 0>
+
+    # Apply enchantment
+    [augment-self: <item/enchantments>; @({{
+        fire        <dmg-bonus = 2>                   @weight 10 |
+        ice         <dmg-bonus = 1>                   @weight 12 |
+        lightning   <dmg-bonus = 3>                   @weight 5 |
+        wind        <dmg-bonus = 1; wt-bonus = -1>    @weight 8 |
+        time                                          @weight 2 |
+        demon       <dmg-bonus = 12>                  @weight 0.1
+    }} = 1)]
+
+    # Apply bonus damage from enchantment
+    [augment-self: <item>; @(damage = <dmg-bonus>; weight = <wt-bonus>)]
   }
 }
+
+[%name-sword: item] {
+  @{
+    {
+      {
+        {Big|Great|Iron|Gleaming|Shiny|Long|Battle|Standard|War{|time}|{Knight's|Warrior's}}
+        |
+        {Boring|Ordinary|Average|Common|Standard} @weight [len: <item/enchantments ? "">] @eq 0
+      } @weight [either: <item/enchantments?>; 1; 3]
+      |
+      {Horrible|Terrible|Hell|Damned|Banished|Fate|Cryptid|Headless|Risen} @weight <item/enchantments/demon ? 0>
+      |
+      {Blazing|Hot|Flaming|Fiery|Ember|Lava|Magma|Sun|Smoldering|Smoking|{Red|White}-hot} @weight <item/enchantments/fire ? 0>
+      |
+      {Roaring|Freezing|Bitter|Sub-zero|Frosty|Frigid} @weight <item/enchantments/ice ? 0>
+      |
+      {Whistling|Howling|Flighted|Airborne|Gusting|Tornadic|Soaring} @weight <item/enchantments/wind ? 0>
+      |
+      {Century|Early|Late|Speedy|Slow-motion|Midnight} @weight <item/enchantments/time ? 0>
+    }\s
+    {
+      {Sword|Cutter|Blade|Cutlass|Broadsword|Scimitar|Machete|Katana|Greatsword @weight <item/weight> * 0.7}
+      |
+      {Sunbeam|Heatstroke|Sun|Burninator|Crucible|Flame|Nuclear Fuel Rod @weight 0.01} @weight <item/enchantments/fire ? 0>
+      |
+      {Glacier|Blizzard|Snowstorm|Icicle|Freezer|Coldsnap|Flash Freeze|Avalanche} @weight <item/enchantments/ice ? 0>
+      |
+      {Hurricane|Leafblower|Windstorm|Tornado|Twister|Gale|{Wing|Feather}} @weight <item/enchantments/wind ? 0>
+      |
+      {Nightmare|Apocalypse|Temptress|Demon|Summoner|Ritual|Tragedy|Horseman} @weight <item/enchantments/demon ? 0>
+      |
+      {Clockstopper|Sundial} @weight <item/enchantments/time ? 0>
+    }
+  }
+  { @edit name: <item/name = <name>> }
+}
+
+[%gen-base-sword-stats] {
+  <
+    %weight = [randf: 0.1; 10];
+    %damage = <weight> / 16.0 + [randf: 1; 10];
+  >
+  @(
+    weight = <weight>;
+    damage = <damage>;
+  )
+}
+
+[%gen-sword] {
+  # Generate the base stats for the sword
+  <%sword = [gen-base-sword-stats]>
+
+  # Enchant it
+  @if [maybe: 0.9]: { 
+    [rep: {1 @weight 10 | 2 @weight 3 | 3 @weight 1}] {
+      [enchant-item: <sword>]
+    }
+  }
+
+  # Name it
+  [name-sword: <sword>]
+
+  # Return the sword to the caller
+  <sword>
+}
+
+[rep: 10][sep: \n]{[gen-sword]}

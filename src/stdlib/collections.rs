@@ -310,7 +310,7 @@ pub(crate) fn shuffle_self(vm: &mut VM, list: RantListRef) -> RantStdResult {
 
 pub(crate) fn shuffle_thru(vm: &mut VM, list: RantListRef) -> RantStdResult {
   let list_ref_clone = Rc::clone(&list);
-  shuffle(vm, list);
+  shuffle(vm, list)?;
   vm.cur_frame_mut().write_value(RantValue::List(list_ref_clone));
   Ok(())
 }

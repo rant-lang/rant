@@ -3003,7 +3003,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 self.report_error(Problem::AnonValueAssignment, &setter_span);
               }
 
-              self.track_variable_access(&var_path, true, false, &setter_span, None);
+              self.track_variable_access(&var_path, var_path.is_variable(), false, &setter_span, None);
               add_accessor!(Rst::Set(Rc::new(var_path), Rc::new(setter_rhs_expr)));
 
               // Assignment is not valid if we're using depth operator
