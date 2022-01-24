@@ -11,8 +11,8 @@
         ice         <dmg-bonus = 1>                   @weight 12 |
         lightning   <dmg-bonus = 3>                   @weight 5 |
         wind        <dmg-bonus = 1; wt-bonus = -1>    @weight 8 |
-        time                                          @weight 2 |
-        demon       <dmg-bonus = 12>                  @weight 0.1
+        time                                          @weight 3 |
+        demon       <dmg-bonus = 12>                  @weight 1
     }} = 1)]
 
     # Apply bonus damage from enchantment
@@ -24,23 +24,25 @@
   @{
     {
       {
-        {Big|Great|Iron|Gleaming|Shiny|Long|Battle|Standard|War{|time}|{Knight's|Warrior's}}
+        {Big|Great|Iron|Gleaming|Shiny|Long|Battle|Standard|War{|time}|{Knight's|Warrior's}|Vengeful}
         |
-        {Boring|Ordinary|Average|Common|Standard} @weight [len: <item/enchantments ? "">] @eq 0
+        {Masterful|Godly|Last|Amazing|Holy|Fearful|Abundant} @weight {[len: <item/enchantments ? "">] - 2} * 10
+        |
+        {Boring|Ordinary|Average|Common|Standard} @weight @not <item/enchantments?>
       } @weight [either: <item/enchantments?>; 1; 3]
       |
-      {Horrible|Terrible|Hell|Damned|Banished|Fate|Cryptid|Headless|Risen} @weight <item/enchantments/demon ? 0>
+      {Horrible|Terrible|Hell|Damned|Banished|Fate|Cryptid|Headless|Risen|Punished|Devil's} @weight <item/enchantments/demon ? 0> * 3
       |
       {Blazing|Hot|Flaming|Fiery|Ember|Lava|Magma|Sun|Smoldering|Smoking|{Red|White}-hot} @weight <item/enchantments/fire ? 0>
       |
-      {Roaring|Freezing|Bitter|Sub-zero|Frosty|Frigid} @weight <item/enchantments/ice ? 0>
+      {Roaring|Freezing|Bitter|Sub-zero|Frosty|Frigid|Winter} @weight <item/enchantments/ice ? 0>
       |
       {Whistling|Howling|Flighted|Airborne|Gusting|Tornadic|Soaring} @weight <item/enchantments/wind ? 0>
       |
       {Century|Early|Late|Speedy|Slow-motion|Midnight} @weight <item/enchantments/time ? 0>
     }\s
     {
-      {Sword|Cutter|Blade|Cutlass|Broadsword|Scimitar|Machete|Katana|Greatsword @weight <item/weight> * 0.7}
+      {{Sword|Cutter|Blade}|{Smasher|Slicer|Dicer|Cutter-Upper}|Cutlass|Broadsword|Scimitar|Machete|Katana|Greatsword @weight <item/weight> * 0.7}
       |
       {Sunbeam|Heatstroke|Sun|Burninator|Crucible|Flame|Nuclear Fuel Rod @weight 0.01} @weight <item/enchantments/fire ? 0>
       |
@@ -48,10 +50,17 @@
       |
       {Hurricane|Leafblower|Windstorm|Tornado|Twister|Gale|{Wing|Feather}} @weight <item/enchantments/wind ? 0>
       |
-      {Nightmare|Apocalypse|Temptress|Demon|Summoner|Ritual|Tragedy|Horseman} @weight <item/enchantments/demon ? 0>
+      {
+        {Nightmare|Apocalypse|Temptress|Devil|Summoner|Ritual|Tragedy|Horseman}
+        |
+        {Lake of Fire|{Flames|Fires} of Hell|{Soul|Sin|Sinner}-{Burner|Melter|Smelter}} @weight <item/enchantments/fire ? 0> * 10
+      } @weight <item/enchantments/demon ? 0>
       |
       {Clockstopper|Sundial} @weight <item/enchantments/time ? 0>
     }
+  }
+  @if <item/damage> @gt 10 @and [maybe: 0.3]: {
+    \s\({Hardened|Extra|Special Edition}\)
   }
   { @edit name: <item/name = <name>> }
 }
@@ -85,4 +94,12 @@
   <sword>
 }
 
-[rep: 10][sep: \n]{[gen-sword]}
+[%stat-num-str: n] {
+  [num-fmt-precision: 2]
+  ""<n>
+}
+
+[rep: 10][sep: \n]
+{
+  [gen-sword |> cat: <[]/name>\n; "  - Enchantments: " <[]/enchantments ? none>\n; "  - Weight: " [stat-num-str: <[]/weight>]\n; "  - Damage: " [stat-num-str: <[]/damage>]]
+}
