@@ -176,6 +176,7 @@ pub enum Problem {
   InvalidRequireArgumentToken,
   EmptyCondition,
   UnclosedCondition,
+  InvalidShorthandVariable,
 }
 
 macro_rules! rmsg {
@@ -237,6 +238,7 @@ impl Problem {
       Self::DynamicDepth =>                                     rcode!(0068),
       Self::DepthAssignment =>                                  rcode!(0069),
       Self::InvalidDepthUsage =>                                rcode!(0070),
+      Self::InvalidShorthandVariable =>                         rcode!(0071),
       
       // Static analysis errors (0100 - 0199)
       Self::ConstantReassignment(_) =>                          rcode!(0100),
@@ -325,6 +327,7 @@ impl Problem {
       Self::UnclosedCondition => rmsg!("unclosed condition; expected ':'"),
       Self::IntegerLiteralOutOfRange => rmsg!("integer literal is out of range for the `int` type; consider changing it (or if applicable, using a string instead)"),
       Self::FloatLiteralOutOfRange => rmsg!("float literal is out of range for the `float` type; consider changing it (or if applicable, using a string instead)"),
+      Self::InvalidShorthandVariable => rmsg!("invalid shorthand; only variable getters are supported")
     }
   }
   

@@ -1579,7 +1579,52 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           let key_expr = match self.reader.next_solid() {
             // Allow blocks as dynamic keys
             Some((LeftBrace, _)) => {
-              MapKeyExpr::Dynamic(Rc::new(self.parse_dynamic_expr(false)?))
+              Some(MapKeyExpr::Dynamic(Rc::new(self.parse_dynamic_expr(false)?)))
+            },
+            // Allow getters as shorthands for both a key AND value, ONLY IF they target a variable
+            Some((LeftAngle, _)) => {
+              let start_span = self.reader.last_token_span();
+              let ParsedAccessor {
+                nodes: mut accessor_nodes,
+                ..
+              } = self.parse_accessor()?;
+              let end_span = self.reader.last_token_span();
+              let accessor_span = super_range(&start_span, &end_span);
+
+              self.reader.skip_ws();
+              
+              // Ignore the separator since that's usually handled by the value sequence parser
+              self.reader.eat(RantToken::Semicolon);
+
+              if accessor_nodes.len() != 1 {
+                self.report_error(Problem::InvalidShorthandVariable, &accessor_span);
+                continue
+              }
+
+              let accessor = accessor_nodes.drain(..).next();
+              match accessor {
+                Some(Rst::Get(getter_path, getter_fallback)) => {
+                  let mut is_valid_shorthand = false;
+                  if getter_path.is_variable() {
+                    if let Some(getter_var_name) = getter_path.var_name().as_ref().map(|v| v.as_str()) {
+                      is_valid_shorthand = true;
+                      let key = InternalString::from(getter_var_name);
+                      let value_seq = Sequence::one(Rst::Get(getter_path, getter_fallback), &self.info);
+                      pairs.push((MapKeyExpr::Static(key), Rc::new(value_seq)));
+                    }
+                  }
+                  
+                  if !is_valid_shorthand {
+                    self.report_error(Problem::InvalidShorthandVariable, &accessor_span);
+                  }
+
+                  continue
+                },
+                _ => {
+                  self.report_error(Problem::InvalidShorthandVariable, &accessor_span);
+                  None
+                }
+              }
             },
             // Allow fragments as keys if they are valid identifiers
             Some((Fragment, span)) => {
@@ -1587,18 +1632,18 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               if !is_valid_ident(key.as_str()) {
                 self.report_error(Problem::InvalidIdentifier(key.to_string()), &span);
               }
-              MapKeyExpr::Static(key)
+              Some(MapKeyExpr::Static(key))
             },
             // Allow string literals as static keys
             Some((StringLiteral(s), _)) => {
-              MapKeyExpr::Static(s)
+              Some(MapKeyExpr::Static(s))
             },
             // End of map
             Some((RightParen, _)) => break,
             // Soft error on anything weird
             Some(_) => {
               self.report_unexpected_last_token_error();
-              MapKeyExpr::Static(self.reader.last_token_string())
+              None
             },
             // Hard error on EOF
             None => {
@@ -1619,19 +1664,21 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             .. 
           } = self.parse_sequence(SequenceParseMode::CollectionInit)?;
           
-          match value_expr_end {
-            SequenceEndType::CollectionInitDelim => {
-              pairs.push((key_expr, Rc::new(value_expr)));
-            },
-            SequenceEndType::CollectionInitEnd => {
-              pairs.push((key_expr, Rc::new(value_expr)));
-              break
-            },
-            SequenceEndType::ProgramEnd => {
-              self.report_error(Problem::UnclosedMap, &super_range(start_span, &self.reader.last_token_span()));
-              return Err(())
-            },
-            _ => unreachable!()
+          if let Some(key_expr) = key_expr {
+            match value_expr_end {
+              SequenceEndType::CollectionInitDelim => {
+                pairs.push((key_expr, Rc::new(value_expr)));
+              },
+              SequenceEndType::CollectionInitEnd => {
+                pairs.push((key_expr, Rc::new(value_expr)));
+                break
+              },
+              SequenceEndType::ProgramEnd => {
+                self.report_error(Problem::UnclosedMap, &super_range(start_span, &self.reader.last_token_span()));
+                return Err(())
+              },
+              _ => unreachable!()
+            }
           }
         }
         

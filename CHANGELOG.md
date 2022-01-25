@@ -3,6 +3,7 @@
 ## 4.0.0-alpha.26 (unreleased)
 
 ## New
+* Added map initializer shorthands; specify both a key and value with a single variable getter
 * Added stdlib functions:
   * `[augment]`
   * `[augment-self]`
