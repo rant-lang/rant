@@ -249,7 +249,7 @@ impl AccessPath {
     matches!(self.first(), Some(AccessPathComponent::AnonymousValue(..)))
   }
 
-  /// Determines whether the access path targets a variable.
+  /// Determines whether the access path targets just a variable.
   #[inline]
   pub fn is_variable(&self) -> bool {
     self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::Name(..) | AccessPathComponent::DynamicKey(..) | AccessPathComponent::PipeValue))
@@ -416,7 +416,6 @@ impl Block {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum BlockProtection {
   Outer,
-  Inner,
 }
 
 /// A single element of a regular block.

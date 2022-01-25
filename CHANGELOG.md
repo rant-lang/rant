@@ -22,6 +22,7 @@
   * `[shuffled]` &rarr; `[shuffle]`
 
 ## Removed
+* Removed inner-protected blocks
 * Removed stdlib functions:
   * `[push-attrs]`
   * `[pop-attrs]`

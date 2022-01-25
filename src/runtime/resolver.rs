@@ -263,11 +263,6 @@ impl Resolver {
           self.push_attrs()?;
           self.take_attrs()
         },
-        BlockProtection::Inner => {
-          let attrs = self.take_attrs();
-          self.push_attrs()?;
-          attrs
-        },
       }
       None => self.take_attrs()
     };
@@ -300,7 +295,7 @@ impl Resolver {
 
     if let Some(protection) = state.as_ref().map(|s| s.protection).flatten() {
       match protection {
-        BlockProtection::Inner | BlockProtection::Outer => {
+        BlockProtection::Outer => {
           self.pop_attrs();
         },
       }

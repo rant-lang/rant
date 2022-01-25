@@ -892,41 +892,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             _ => unexpected_token_error!()
           }
         }),
-
-        // Inner-protected block
-        DoubleAt => {
-          match self.reader.next_solid() {
-            Some((LeftBrace, _)) => {
-              // Read in the entire block
-              let parsed_block = self.parse_block(BlockParseMode::StartParsed(Some(BlockProtection::Inner)))?;
-
-              // Decide what to do with previous whitespace
-              match next_print_flag {                        
-                // If hinted, allow pending whitespace
-                PrintFlag::Hint => {
-                  whitespace!(allow);
-                  is_seq_text = true;
-                },
-                
-                // If sinked, delete pending whitespace
-                PrintFlag::Sink => whitespace!(ignore both),
-                
-                // If no flag, infer from block contents
-                PrintFlag::None => {
-                  if parsed_block.auto_hint {
-                    whitespace!(allow);
-                    is_seq_text = true;
-                  } else {
-                    whitespace!(ignore both)
-                  }
-                }
-              }
-              
-              emit!(Rst::Block(Rc::new(parsed_block.block)));
-            },
-            _ => self.report_expected_token_error("{", &self.reader.last_token_span())
-          }
-        }
         
         // Map initializer or protected block
         At => {
@@ -2535,8 +2500,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         self.reader.skip_ws();
         let protection = if self.reader.eat(RantToken::At) {
           Some(BlockProtection::Outer)
-        } else if self.reader.eat(RantToken::DoubleAt) {
-          Some(BlockProtection::Inner)
         } else {
           None
         };
