@@ -1,5 +1,5 @@
 use std::{cell::RefCell, error::Error, fmt::Display, mem, ops::Index, rc::Rc};
-use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionRef, RantValue, ValueError, lang::{Block, BlockElement, BlockProtection}, rng::RantRng, runtime_error};
+use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionHandle, RantValue, ValueError, lang::{Block, BlockElement, BlockProtection}, rng::RantRng, runtime_error};
 use smallvec::SmallVec;
 use super::{IntoRuntimeResult, RuntimeError, RuntimeErrorType, RuntimeResult, StackFrameFlavor};
 
@@ -22,7 +22,7 @@ pub enum BlockAction {
   /// Run a sequence from an element.
   Element(Rc<BlockElement>),
   /// Call the mutator function and pass in the current element as a callback.
-  MutateElement { elem: Rc<BlockElement>, elem_func: RantFunctionRef, mutator_func: RantFunctionRef },
+  MutateElement { elem: Rc<BlockElement>, elem_func: RantFunctionHandle, mutator_func: RantFunctionHandle },
   /// Run the separator.
   Separator(RantValue),
 }
@@ -408,7 +408,7 @@ pub struct AttributeFrame {
   /// Active selector
   pub selector: Option<SelectorRef>,
   /// Mutator function
-  pub mutator: Option<RantFunctionRef>,
+  pub mutator: Option<RantFunctionHandle>,
 }
 
 impl AttributeFrame {

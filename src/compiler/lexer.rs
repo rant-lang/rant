@@ -139,6 +139,10 @@ pub enum RantToken {
   #[token(":")]
   Colon,
 
+  /// `::`
+  #[token("::")]
+  DoubleColon,
+
   /// `**`
   #[token("**")]
   DoubleStar,

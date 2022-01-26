@@ -180,14 +180,6 @@ enum SequenceParseMode {
   InfixRhs,
 }
 
-/// What type of collection initializer to parse?
-enum CollectionInitKind {
-  /// Parse a list
-  List,
-  /// Parse a map
-  Map
-}
-
 /// Indicates what kind of token terminated a sequence read.
 enum SequenceEndType {
   /// Top-level program sequence was terminated by end-of-file.
@@ -896,10 +888,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Map initializer or protected block
         At => {
           match self.reader.next_solid() {
-            Some((LeftParen, _)) => {
-              no_flags!();
-              emit!(self.parse_collection_initializer(CollectionInitKind::Map, &span)?)
-            },
             Some((LeftBrace, _)) => {
               // Read in the entire block
               let parsed_block = self.parse_block(BlockParseMode::StartParsed(Some(BlockProtection::Outer)))?;
@@ -936,9 +924,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           }
         },
         
-        // List initializer
+        // Group or collection initializer
         LeftParen => no_flags!(on {
-          self.parse_collection_initializer(CollectionInitKind::List, &span)?
+          self.parse_group_or_collection_init(&span)?
         }),
         
         // Collection init termination
@@ -1529,163 +1517,215 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     })
   }
   
-  /// Parses a list/map initializer.
-  fn parse_collection_initializer(&mut self, kind: CollectionInitKind, start_span: &Range<usize>) -> ParseResult<Rst> {
-    match kind {
-      CollectionInitKind::List => {
-        self.reader.skip_ws();
-        
-        // Exit early on empty list
-        if self.reader.eat_where(|token| matches!(token, Some((RightParen, ..)))) {
-          return Ok(Rst::ListInit(Rc::new(vec![])))
-        }
-        
-        let mut sequences = vec![];
-        
-        loop {
-          self.reader.skip_ws();
-          
-          let ParsedSequence { sequence, end_type: seq_end, .. } = self.parse_sequence(SequenceParseMode::CollectionInit)?;
-          
-          match seq_end {
-            SequenceEndType::CollectionInitDelim => {
-              sequences.push(Rc::new(sequence));
-            },
-            SequenceEndType::CollectionInitEnd => {
-              sequences.push(Rc::new(sequence));
-              break
-            },
-            SequenceEndType::ProgramEnd => {
-              self.report_error(Problem::UnclosedList, &super_range(start_span, &self.reader.last_token_span()));
-              return Err(())
-            },
-            _ => unreachable!()
+  /// Parses a group or list/map/tuple initializer.
+  fn parse_group_or_collection_init(&mut self, start_span: &Range<usize>) -> ParseResult<Rst> {
+    self.reader.skip_ws();
+    let collection_type_token_info = self.reader.take_where(|t| matches!(t, Some((RantToken::Colon | RantToken::DoubleColon, ..))));
+    self.reader.skip_ws();
+
+    if let Some((collection_type_token, _)) = collection_type_token_info {
+      match collection_type_token {
+        // Is it a list?
+        RantToken::Colon => {
+          // Exit early on empty list
+          if self.reader.eat_where(|token| matches!(token, Some((RightParen, ..)))) {
+            return Ok(Rst::ListInit(Rc::new(vec![])))
           }
-        }
-
-        // To allow trailing semicolons, remove the last element if its sequence is empty
-        if let Some(seq) = sequences.last() {
-          if seq.is_empty() {
-            sequences.pop();
-          }
-        }
-
-        Ok(Rst::ListInit(Rc::new(sequences)))
-      },
-      CollectionInitKind::Map => {
-        let mut pairs = vec![];
-        
-        loop {
-          let key_expr = match self.reader.next_solid() {
-            // Allow blocks as dynamic keys
-            Some((LeftBrace, _)) => {
-              Some(MapKeyExpr::Dynamic(Rc::new(self.parse_dynamic_expr(false)?)))
-            },
-            // Allow getters as shorthands for both a key AND value, ONLY IF they target a variable
-            Some((LeftAngle, _)) => {
-              let start_span = self.reader.last_token_span();
-              let ParsedAccessor {
-                nodes: mut accessor_nodes,
-                ..
-              } = self.parse_accessor()?;
-              let end_span = self.reader.last_token_span();
-              let accessor_span = super_range(&start_span, &end_span);
-
-              self.reader.skip_ws();
-              
-              // Ignore the separator since that's usually handled by the value sequence parser
-              self.reader.eat(RantToken::Semicolon);
-
-              if accessor_nodes.len() != 1 {
-                self.report_error(Problem::InvalidShorthandVariable, &accessor_span);
-                continue
-              }
-
-              let accessor = accessor_nodes.drain(..).next();
-              match accessor {
-                Some(Rst::Get(getter_path, getter_fallback)) => {
-                  let mut is_valid_shorthand = false;
-                  if getter_path.is_variable() {
-                    if let Some(getter_var_name) = getter_path.var_name().as_ref().map(|v| v.as_str()) {
-                      is_valid_shorthand = true;
-                      let key = InternalString::from(getter_var_name);
-                      let value_seq = Sequence::one(Rst::Get(getter_path, getter_fallback), &self.info);
-                      pairs.push((MapKeyExpr::Static(key), Rc::new(value_seq)));
-                    }
-                  }
-                  
-                  if !is_valid_shorthand {
-                    self.report_error(Problem::InvalidShorthandVariable, &accessor_span);
-                  }
-
-                  continue
-                },
-                _ => {
-                  self.report_error(Problem::InvalidShorthandVariable, &accessor_span);
-                  None
-                }
-              }
-            },
-            // Allow fragments as keys if they are valid identifiers
-            Some((Fragment, span)) => {
-              let key = self.reader.last_token_string();
-              if !is_valid_ident(key.as_str()) {
-                self.report_error(Problem::InvalidIdentifier(key.to_string()), &span);
-              }
-              Some(MapKeyExpr::Static(key))
-            },
-            // Allow string literals as static keys
-            Some((StringLiteral(s), _)) => {
-              Some(MapKeyExpr::Static(s))
-            },
-            // End of map
-            Some((RightParen, _)) => break,
-            // Soft error on anything weird
-            Some(_) => {
-              self.report_unexpected_last_token_error();
-              None
-            },
-            // Hard error on EOF
-            None => {
-              self.report_error(Problem::UnclosedMap, &super_range(start_span, &self.reader.last_token_span()));
-              return Err(())
-            }
-          };
           
-          self.reader.skip_ws();
-          if !self.reader.eat_where(|tok| matches!(tok, Some((Equals, ..)))) {
-            self.report_error(Problem::ExpectedToken("=".to_owned()), &self.reader.last_token_span());
-            return Err(())
-          }
-          self.reader.skip_ws();
-          let ParsedSequence { 
-            sequence: value_expr, 
-            end_type: value_expr_end, 
-            .. 
-          } = self.parse_sequence(SequenceParseMode::CollectionInit)?;
+          let mut sequences = vec![];
           
-          if let Some(key_expr) = key_expr {
-            match value_expr_end {
+          loop {
+            self.reader.skip_ws();
+            
+            let ParsedSequence { sequence, end_type: seq_end, .. } = self.parse_sequence(SequenceParseMode::CollectionInit)?;
+            
+            match seq_end {
               SequenceEndType::CollectionInitDelim => {
-                pairs.push((key_expr, Rc::new(value_expr)));
+                sequences.push(Rc::new(sequence));
               },
               SequenceEndType::CollectionInitEnd => {
-                pairs.push((key_expr, Rc::new(value_expr)));
+                sequences.push(Rc::new(sequence));
                 break
               },
               SequenceEndType::ProgramEnd => {
-                self.report_error(Problem::UnclosedMap, &super_range(start_span, &self.reader.last_token_span()));
+                self.report_error(Problem::UnclosedList, &super_range(start_span, &self.reader.last_token_span()));
                 return Err(())
               },
               _ => unreachable!()
             }
           }
-        }
+
+          // To allow trailing semicolons, remove the last element if its sequence is empty
+          if let Some(seq) = sequences.last() {
+            if seq.is_empty() {
+              sequences.pop();
+            }
+          }
+
+          Ok(Rst::ListInit(Rc::new(sequences)))
+        },
+        // Is it a map?
+        RantToken::DoubleColon => {
+          let mut pairs = vec![];
         
-        Ok(Rst::MapInit(Rc::new(pairs)))
-      },
+          loop {
+            let key_expr = match self.reader.next_solid() {
+              // Allow blocks as dynamic keys
+              Some((LeftBrace, _)) => {
+                Some(MapKeyExpr::Dynamic(Rc::new(self.parse_dynamic_expr(false)?)))
+              },
+              // Allow getters as shorthands for both a key AND value, ONLY IF they target a variable
+              Some((LeftAngle, _)) => {
+                let start_span = self.reader.last_token_span();
+                let ParsedAccessor {
+                  nodes: mut accessor_nodes,
+                  ..
+                } = self.parse_accessor()?;
+                let end_span = self.reader.last_token_span();
+                let accessor_span = super_range(&start_span, &end_span);
+
+                self.reader.skip_ws();
+                
+                // Ignore the separator since that's usually handled by the value sequence parser
+                self.reader.eat(RantToken::Semicolon);
+
+                if accessor_nodes.len() != 1 {
+                  self.report_error(Problem::InvalidShorthandVariable, &accessor_span);
+                  continue
+                }
+
+                let accessor = accessor_nodes.drain(..).next();
+                match accessor {
+                  Some(Rst::Get(getter_path, getter_fallback)) => {
+                    let mut is_valid_shorthand = false;
+                    if getter_path.is_variable() {
+                      if let Some(getter_var_name) = getter_path.var_name().as_ref().map(|v| v.as_str()) {
+                        is_valid_shorthand = true;
+                        let key = InternalString::from(getter_var_name);
+                        let value_seq = Sequence::one(Rst::Get(getter_path, getter_fallback), &self.info);
+                        pairs.push((MapKeyExpr::Static(key), Rc::new(value_seq)));
+                      }
+                    }
+                    
+                    if !is_valid_shorthand {
+                      self.report_error(Problem::InvalidShorthandVariable, &accessor_span);
+                    }
+
+                    continue
+                  },
+                  _ => {
+                    self.report_error(Problem::InvalidShorthandVariable, &accessor_span);
+                    None
+                  }
+                }
+              },
+              // Allow fragments as keys if they are valid identifiers
+              Some((Fragment, span)) => {
+                let key = self.reader.last_token_string();
+                if !is_valid_ident(key.as_str()) {
+                  self.report_error(Problem::InvalidIdentifier(key.to_string()), &span);
+                }
+                Some(MapKeyExpr::Static(key))
+              },
+              // Allow string literals as static keys
+              Some((StringLiteral(s), _)) => {
+                Some(MapKeyExpr::Static(s))
+              },
+              // End of map
+              Some((RightParen, _)) => break,
+              // Soft error on anything weird
+              Some(_) => {
+                self.report_unexpected_last_token_error();
+                None
+              },
+              // Hard error on EOF
+              None => {
+                self.report_error(Problem::UnclosedMap, &super_range(start_span, &self.reader.last_token_span()));
+                return Err(())
+              }
+            };
+            
+            self.reader.skip_ws();
+            if !self.reader.eat_where(|tok| matches!(tok, Some((Equals, ..)))) {
+              self.report_error(Problem::ExpectedToken("=".to_owned()), &self.reader.last_token_span());
+              return Err(())
+            }
+            self.reader.skip_ws();
+            let ParsedSequence { 
+              sequence: value_expr, 
+              end_type: value_expr_end, 
+              .. 
+            } = self.parse_sequence(SequenceParseMode::CollectionInit)?;
+            
+            if let Some(key_expr) = key_expr {
+              match value_expr_end {
+                SequenceEndType::CollectionInitDelim => {
+                  pairs.push((key_expr, Rc::new(value_expr)));
+                },
+                SequenceEndType::CollectionInitEnd => {
+                  pairs.push((key_expr, Rc::new(value_expr)));
+                  break
+                },
+                SequenceEndType::ProgramEnd => {
+                  self.report_error(Problem::UnclosedMap, &super_range(start_span, &self.reader.last_token_span()));
+                  return Err(())
+                },
+                _ => unreachable!()
+              }
+            }
+          }
+          
+          Ok(Rst::MapInit(Rc::new(pairs)))
+        },
+        _ => unreachable!()
+      }
+    } else {
+      // If we end up here, it's either a tuple or expression group
+      let mut sequences = vec![];
+
+      loop {
+        self.reader.skip_ws();
+        
+        let ParsedSequence { sequence, end_type: seq_end, .. } = self.parse_sequence(SequenceParseMode::CollectionInit)?;
+        
+        match seq_end {
+          SequenceEndType::CollectionInitDelim => {
+            sequences.push(Rc::new(sequence));
+          },
+          SequenceEndType::CollectionInitEnd => {
+            // If this was the only element, it's either an empty tuple or a group
+            if sequences.is_empty() {
+              // If the sequence we just read is empty, exit loop and generate an (empty) tuple
+              if sequence.is_empty() {
+                break
+              }
+              return Ok(Rst::Sequence(Rc::new(sequence)))
+            }
+            sequences.push(Rc::new(sequence));
+            break
+          },
+          SequenceEndType::ProgramEnd => {
+            // If this was the first element, we won't know whether it's a tuple yet, so give a more general error
+            if sequences.len() == 0 {
+              self.report_error(Problem::UnclosedParens, &super_range(start_span, &self.reader.last_token_span()));
+            } else {
+              self.report_error(Problem::UnclosedTuple, &super_range(start_span, &self.reader.last_token_span()));
+            }
+            return Err(())
+          },
+          _ => unreachable!()
+        }
+      }
+
+      // To allow trailing semicolons, remove the last element if its sequence is empty
+      if let Some(seq) = sequences.last() {
+        if seq.is_empty() {
+          sequences.pop();
+        }
+      }
+
+      Ok(Rst::TupleInit(Rc::new(sequences)))
     }
-    
   }
   
   fn parse_func_params(&mut self, start_span: &Range<usize>) -> ParseResult<Vec<ParsedParameter>> {
@@ -2318,7 +2358,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                       self.report_error(Problem::InvalidSliceBound(token), &self.reader.last_token_span());
                     },
                     None => {
-                      self.report_error(Problem::UnclosedVariableAccess, &super_range(&start_span, &self.reader.last_token_span()));
+                      self.report_error(Problem::UnclosedAccessor, &super_range(&start_span, &self.reader.last_token_span()));
                       return Err(())
                     }
                   }
@@ -2371,7 +2411,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                         self.report_error(Problem::InvalidSliceBound(token), &self.reader.last_token_span());
                       },
                       None => {
-                        self.report_error(Problem::UnclosedVariableAccess, &super_range(&start_span, &self.reader.last_token_span()));
+                        self.report_error(Problem::UnclosedAccessor, &super_range(&start_span, &self.reader.last_token_span()));
                         return Err(())
                       }
                     }
@@ -2409,7 +2449,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                           self.report_error(Problem::InvalidSliceBound(token), &self.reader.last_token_span());
                         },
                         None => {
-                          self.report_error(Problem::UnclosedVariableAccess, &super_range(&start_span, &self.reader.last_token_span()));
+                          self.report_error(Problem::UnclosedAccessor, &super_range(&start_span, &self.reader.last_token_span()));
                           return Err(())
                         }
                       }
@@ -2915,7 +2955,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   break 'read
                 },
                 SequenceEndType::ProgramEnd => {
-                  self.report_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+                  self.report_error(Problem::UnclosedAccessor, &self.reader.last_token_span());
                   return Err(())
                 },
                 _ => unreachable!()
@@ -2928,7 +2968,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           }
         } else {
-          self.report_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+          self.report_error(Problem::UnclosedAccessor, &self.reader.last_token_span());
           return Err(())
         }
       } else {
@@ -2996,7 +3036,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 SequenceEndType::AccessorFallbackValueToEnd => break 'read,
                 // Error
                 SequenceEndType::ProgramEnd => {
-                  self.report_error(Problem::UnclosedVariableAccess, &cur_token_span);
+                  self.report_error(Problem::UnclosedAccessor, &cur_token_span);
                   return Err(())
                 },
                 _ => unreachable!()
@@ -3036,7 +3076,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 },
                 // Error
                 SequenceEndType::ProgramEnd => {
-                  self.report_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+                  self.report_error(Problem::UnclosedAccessor, &self.reader.last_token_span());
                   return Err(())
                 },
                 _ => unreachable!()
@@ -3049,7 +3089,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           }
         } else {
-          self.report_error(Problem::UnclosedVariableAccess, &self.reader.last_token_span());
+          self.report_error(Problem::UnclosedAccessor, &self.reader.last_token_span());
           return Err(())
         }
       }

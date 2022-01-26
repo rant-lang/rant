@@ -1,6 +1,6 @@
-use crate::{InternalString, RantList, RantMap, RantValue, format::{NumberFormat, OutputFormat}};
+use crate::{InternalString, RantList, RantMap, RantValue, format::{NumberFormat, OutputFormat}, RantTuple};
 use super::format::{WhitespaceNormalizationMode};
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
 const INITIAL_CHAIN_CAPACITY: usize = 64;
 const DEFAULT_SPACE: &str = " ";
@@ -75,12 +75,16 @@ impl OutputWriter {
           OutputBuffer::Value(RantValue::List(_)) => {
             self.mode = OutputPrintMode::List;
           },
+          OutputBuffer::Value(RantValue::Tuple(_)) => {
+            self.mode = OutputPrintMode::Tuple;
+          }
           OutputBuffer::Value(RantValue::Map(_)) => {
             self.mode = OutputPrintMode::Map;
           },
           _ => {},
         }
       },
+      // Single and concat modes transition to either text or concat
       (_, OutputPrintMode::Single | OutputPrintMode::Concat) => {
         match &value {
           OutputBuffer::Fragment(_) | OutputBuffer::Whitespace(_) | OutputBuffer::Value(RantValue::String(_)) => {
@@ -92,8 +96,16 @@ impl OutputWriter {
         }
       },
       (_, OutputPrintMode::List) => {
-        if !matches!(value, OutputBuffer::Whitespace(_) | OutputBuffer::Value(RantValue::List(_))) {
+        if !matches!(value, OutputBuffer::Whitespace(_) | OutputBuffer::Value(RantValue::List(_) | RantValue::Tuple(_))) {
           self.mode = OutputPrintMode::Text;
+        }
+      },
+      (_, OutputPrintMode::Tuple) => {
+        match value {
+          OutputBuffer::Whitespace(_) | OutputBuffer::Value(RantValue::Tuple(_)) => {},
+          // List beats tuple
+          OutputBuffer::Value(RantValue::List(_)) => self.mode = OutputPrintMode::List,
+          _ => self.mode = OutputPrintMode::Text
         }
       },
       (_, OutputPrintMode::Map) => {
@@ -169,11 +181,26 @@ impl OutputWriter {
           OutputPrintMode::List => {
             let mut output = RantList::new();
             for buf in self.buffers {
-              if let OutputBuffer::Value(RantValue::List(list)) = buf {
-                output.extend(list.borrow().iter().cloned());
+              match buf {
+                OutputBuffer::Value(RantValue::List(list)) => {
+                  output.extend(list.borrow().iter().cloned());
+                },
+                OutputBuffer::Value(RantValue::Tuple(tuple)) => {
+                  output.extend(tuple.iter().cloned());
+                },
+                _ => {}
               }
             }
-            RantValue::List(Rc::new(RefCell::new(output)))
+            RantValue::List(RantList::from(output).into_handle())
+          },
+          OutputPrintMode::Tuple => {
+            let mut output: Vec<RantValue> = vec![];
+            for buf in self.buffers {
+              if let OutputBuffer::Value(RantValue::Tuple(tuple)) = buf {
+                output.extend(tuple.iter().cloned());
+              }
+            }
+            RantValue::Tuple(RantTuple::from(output).into_handle())
           },
           OutputPrintMode::Map => {
             let mut output = RantMap::new();
@@ -182,7 +209,7 @@ impl OutputWriter {
                 output.extend(map.borrow())
               }
             }
-            RantValue::Map(Rc::new(RefCell::new(output)))
+            RantValue::Map(RantMap::from(output).into_handle())
           },
           OutputPrintMode::Concat => {
             let mut val = RantValue::Empty;
@@ -207,10 +234,17 @@ impl Default for OutputWriter {
 
 #[derive(Debug, Copy, Clone)]
 enum OutputPrintMode {
+  /// Only the first value buffer is printed.
   Single,
+  /// The entire buffer chain is printed as text.
   Text,
+  /// All buffers containing a list (or tuple) are concatenated into a single list.
   List,
+  /// All buffers containing a tuple are concatenated into a single tuple.
+  Tuple,
+  /// All buffers containing a map are merged into a single map.
   Map,
+  /// All buffers are concatenated according to the `RantValue::concat` rules.
   Concat,
 }
 

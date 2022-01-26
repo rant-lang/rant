@@ -32,7 +32,7 @@ pub(crate) fn whitespace_fmt(vm: &mut VM, (mode, custom): (Option<String>, Optio
   Ok(())
 }
 
-pub(crate) fn num_fmt(vm: &mut VM, (options, depth): (Option<RantMapRef>, Option<usize>)) -> RantStdResult {
+pub(crate) fn num_fmt(vm: &mut VM, (options, depth): (Option<RantMapHandle>, Option<usize>)) -> RantStdResult {
   const KEY_SYSTEM: &str = "system";
   const KEY_ALT: &str = "alt";
   const KEY_PRECISION: &str = "precision";

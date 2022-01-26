@@ -28,7 +28,7 @@ pub(crate) fn sep(vm: &mut VM, separator: RantValue) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn mut_(vm: &mut VM, mutator_func: Option<RantFunctionRef>) -> RantStdResult {
+pub(crate) fn mut_(vm: &mut VM, mutator_func: Option<RantFunctionHandle>) -> RantStdResult {
   vm.resolver_mut().attrs_mut().mutator = mutator_func;
   Ok(())
 }

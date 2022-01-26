@@ -10,15 +10,15 @@ use crate::runtime::*;
 use crate::{lang::{Varity, Parameter, Identifier}, stdlib::RantStdResult};
 use cast::*;
 use cast::Error as CastError;
-use std::{rc::Rc, ops::{DerefMut, Deref}, cell::RefCell, convert::TryInto};
+use std::{rc::Rc, ops::{DerefMut, Deref}, convert::TryInto};
 
-/// Enables conversion from a native type to a `RantValue`.
+/// Enables fallible conversion from a native type to a `RantValue`.
 pub trait IntoRant {
   /// Convert to a `RantValue`.
   fn into_rant(self) -> Result<RantValue, ValueError>;
 }
 
-/// Enables conversion from a `RantValue` to a native type.
+/// Enables fallible conversion from a `RantValue` to a native type.
 pub trait FromRant: Sized {
   /// Convert from a `RantValue`.
   fn from_rant(val: RantValue) -> Result<Self, ValueError>;
@@ -26,17 +26,17 @@ pub trait FromRant: Sized {
   fn is_rant_optional() -> bool;
 }
 
-trait ToCastResult<T> {
+trait IntoCastResult<T> {
   fn into_cast_result(self) -> Result<T, CastError>;
 }
 
-impl<T> ToCastResult<T> for Result<T, CastError> {
+impl<T> IntoCastResult<T> for Result<T, CastError> {
   fn into_cast_result(self) -> Result<T, CastError> {
     self
   }
 }
 
-impl ToCastResult<i64> for i64 {
+impl IntoCastResult<i64> for i64 {
   fn into_cast_result(self) -> Result<i64, CastError> {
     Ok(self)
   }
@@ -243,13 +243,19 @@ impl IntoRant for String {
 
 impl IntoRant for RantMap {
   fn into_rant(self) -> Result<RantValue, ValueError> {
-    Ok(RantValue::Map(RantMapRef::new(RefCell::new(self))))
+    Ok(RantValue::Map(self.into_handle()))
   }
 }
 
 impl IntoRant for RantList {
   fn into_rant(self) -> Result<RantValue, ValueError> {
-    Ok(RantValue::List(RantListRef::new(RefCell::new(self))))
+    Ok(RantValue::List(self.into_handle()))
+  }
+}
+
+impl IntoRant for RantTuple {
+  fn into_rant(self) -> Result<RantValue, ValueError> {
+    Ok(RantValue::Tuple(self.into_handle()))
   }
 }
 
@@ -277,14 +283,14 @@ impl IntoRant for &'static str {
 
 impl IntoRant for Vec<RantValue> {
   fn into_rant(self) -> Result<RantValue, ValueError> {
-    Ok(RantValue::List(Rc::new(RefCell::new(RantList::from(self)))))
+    Ok(RantValue::List(RantList::from(self).into_handle()))
   }
 }
 
 impl<T: IntoRant> IntoRant for Vec<T> {
   fn into_rant(mut self) -> Result<RantValue, ValueError> {
     let list = self.drain(..).map(|v| v.into_rant()).collect::<Result<RantList, ValueError>>()?;
-    Ok(RantValue::List(Rc::new(RefCell::new(list))))
+    Ok(RantValue::List(RantList::from(list).into_handle()))
   }
 }
 
@@ -298,12 +304,25 @@ impl FromRant for String {
   }
 }
 
-impl FromRant for RantListRef {
+impl FromRant for RantTupleHandle {
+  fn from_rant(val: RantValue) -> ValueResult<Self> {
+    if let RantValue::Tuple(tuple_ref) = val {
+      Ok(tuple_ref)
+    } else {
+      Err(ValueError::InvalidConversion { from: val.type_name(), to: RantValueType::Tuple.name(), message: None })
+    }
+  }
+  fn is_rant_optional() -> bool {
+    false
+  }
+}
+
+impl FromRant for RantListHandle {
   fn from_rant(val: RantValue) -> ValueResult<Self> {
     if let RantValue::List(list_ref) = val {
       Ok(list_ref)
     } else {
-      Err(ValueError::InvalidConversion { from: val.type_name(), to: "list", message: None })
+      Err(ValueError::InvalidConversion { from: val.type_name(), to: RantValueType::List.name(), message: None })
     }
   }
   fn is_rant_optional() -> bool {
@@ -311,12 +330,12 @@ impl FromRant for RantListRef {
   }
 }
 
-impl FromRant for RantMapRef {
+impl FromRant for RantMapHandle {
   fn from_rant(val: RantValue) -> ValueResult<Self> {
     if let RantValue::Map(map_ref) = val {
       Ok(map_ref)
     } else {
-      Err(ValueError::InvalidConversion { from: val.type_name(), to: "map", message: None })
+      Err(ValueError::InvalidConversion { from: val.type_name(), to: RantValueType::Map.name(), message: None })
     }
   }
   fn is_rant_optional() -> bool {
@@ -324,12 +343,12 @@ impl FromRant for RantMapRef {
   }
 }
 
-impl FromRant for RantFunctionRef {
+impl FromRant for RantFunctionHandle {
   fn from_rant(val: RantValue) -> Result<Self, ValueError> {
     if let RantValue::Function(func_ref) = val {
       Ok(func_ref)
     } else {
-      Err(ValueError::InvalidConversion { from: val.type_name(), to: "function", message: None })
+      Err(ValueError::InvalidConversion { from: val.type_name(), to: RantValueType::Function.name(), message: None })
     }
   }
   fn is_rant_optional() -> bool {

@@ -23,7 +23,7 @@ pub(crate) fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue
   }
 }
 
-pub(crate) fn call(vm: &mut VM, (func, args): (RantFunctionRef, Option<Vec<RantValue>>)) -> RantStdResult {
+pub(crate) fn call(vm: &mut VM, (func, args): (RantFunctionHandle, Option<Vec<RantValue>>)) -> RantStdResult {
   vm.push_val(RantValue::Function(Rc::clone(&func)))?;
   let argc = args.as_ref().map(|args| args.len()).unwrap_or(0);
   if let Some(mut args) = args {
@@ -193,7 +193,7 @@ pub(crate) fn require(vm: &mut VM, module_path: String) -> RantStdResult {
   }
 }
 
-pub(crate) fn try_(vm: &mut VM, (context, handler): (RantValue, Option<RantFunctionRef>)) -> RantStdResult {
+pub(crate) fn try_(vm: &mut VM, (context, handler): (RantValue, Option<RantFunctionHandle>)) -> RantStdResult {
   vm.push_unwind_state(handler);
   vm.cur_frame_mut().push_intent(Intent::DropStaleUnwinds);
   match context {

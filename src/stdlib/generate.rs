@@ -18,7 +18,7 @@ pub(crate) fn rand_list(vm: &mut VM, (a, b, n): (i64, i64, usize)) -> RantStdRes
   for _ in 0..n {
     list.push(RantValue::Int(rng.next_i64(a, b)));
   }
-  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list))));
+  vm.cur_frame_mut().write_value(RantValue::List(RantList::from(list).into_handle()));
   Ok(())
 }
 
@@ -28,7 +28,7 @@ pub(crate) fn randf_list(vm: &mut VM, (a, b, n): (f64, f64, usize)) -> RantStdRe
   for _ in 0..n {
     list.push(RantValue::Float(rng.next_f64(a, b)));
   }
-  vm.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list))));
+  vm.cur_frame_mut().write_value(RantValue::List(RantList::from(list).into_handle()));
   Ok(())
 }
 

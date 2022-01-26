@@ -13,7 +13,7 @@ pub use self::intent::*;
 pub use self::stack::*;
 pub use self::error::*;
 
-use std::{cell::RefCell, fmt::{Debug, Display}, ops::Deref, rc::Rc};
+use std::{fmt::{Debug, Display}, ops::Deref, rc::Rc};
 use smallvec::{SmallVec, smallvec};
 
 /// The largest possible stack size before a stack overflow error is raised by the runtime.
@@ -81,7 +81,7 @@ macro_rules! runtime_error {
 }
 
 pub struct UnwindState {
-  pub handler: Option<RantFunctionRef>,
+  pub handler: Option<RantFunctionHandle>,
   pub value_stack_size: usize,
   pub block_stack_size: usize,
   pub attr_stack_size: usize,
@@ -646,12 +646,29 @@ impl<'rant> VM<'rant> {
 
           // Check if the list is complete
           if index >= init.len() {
-            self.cur_frame_mut().write_value(RantValue::List(Rc::new(RefCell::new(list))))
+            self.cur_frame_mut().write_value(RantValue::List(RantList::from(list).into_handle()))
           } else {
             // Continue list creation
-            self.cur_frame_mut().push_intent(Intent::BuildList { init: Rc::clone(&init), index: index + 1, list });
-            let val_expr = &init[index];
-            self.push_frame(Rc::clone(val_expr), true)?;
+            let val_expr = Rc::clone(&init[index]);
+            self.cur_frame_mut().push_intent(Intent::BuildList { init, index: index + 1, list });
+            self.push_frame(val_expr, true)?;
+            return Ok(true)
+          }
+        },
+        Intent::BuildTuple { init, index, mut items } => {
+          // Add latest evaluated value to tuple
+          if index > 0 {
+            items.push(self.pop_val()?);
+          }
+
+          // Check if the tuple is complete
+          if index >= init.len() {
+            self.cur_frame_mut().write_value(RantValue::Tuple(RantTuple::from(items).into_handle()))
+          } else {
+            // Continue tuple creation
+            let val_expr = Rc::clone(&init[index]);
+            self.cur_frame_mut().push_intent(Intent::BuildTuple { init, index: index + 1, items });
+            self.push_frame(val_expr, true)?;
             return Ok(true)
           }
         },
@@ -670,7 +687,7 @@ impl<'rant> VM<'rant> {
 
           // Check if the map is completed
           if pair_index >= init.len() {
-            self.cur_frame_mut().write_value(RantValue::Map(Rc::new(RefCell::new(map))));
+            self.cur_frame_mut().write_value(RantValue::Map(map.into_handle()));
           } else {
             // Continue map creation
             self.cur_frame_mut().push_intent(Intent::BuildMap { init: Rc::clone(&init), pair_index: pair_index + 1, map });
@@ -693,7 +710,7 @@ impl<'rant> VM<'rant> {
           } else {
             let mut cache = RantMap::new();
             cache.raw_set(&module_name, module.clone());
-            self.engine.set_global(crate::MODULES_CACHE_KEY, RantValue::Map(Rc::new(RefCell::new(cache))));
+            self.engine.set_global(crate::MODULES_CACHE_KEY, RantValue::Map(RantMap::from(cache).into_handle()));
           }
 
           self.def_var_value(&module_name, AccessPathKind::Descope(descope), module, true)?;
@@ -866,9 +883,18 @@ impl<'rant> VM<'rant> {
     
     // Run frame's sequence elements in order
     while let Some(rst) = &self.cur_frame_mut().seq_next() {
-      match Rc::deref(rst) {        
+      match Rc::deref(rst) {
+        Rst::Sequence(seq) => {
+          self.cur_frame_mut().push_intent(Intent::PrintLast);
+          self.push_frame(Rc::clone(seq), false)?;
+          return Ok(true)
+        },
         Rst::ListInit(elements) => {
           self.cur_frame_mut().push_intent(Intent::BuildList { init: Rc::clone(elements), index: 0, list: RantList::with_capacity(elements.len()) });
+          return Ok(true)
+        },
+        Rst::TupleInit(elements) => {
+          self.cur_frame_mut().push_intent(Intent::BuildTuple { init: Rc::clone(elements), index: 0, items: vec![] });
           return Ok(true)
         },
         Rst::MapInit(elements) => {
@@ -1270,6 +1296,7 @@ impl<'rant> VM<'rant> {
           self.cur_frame_mut().push_intent(Intent::CheckCondition{ conditions: Rc::clone(conditions), fallback: fallback.as_ref().map(Rc::clone), index: 0 });
           return Ok(true)
         },
+        #[allow(unreachable_patterns)]
         rst => {
           runtime_error!(RuntimeErrorType::InternalError, format!("unsupported node type: '{}'", rst.display_name()));
         },
@@ -1314,7 +1341,7 @@ impl<'rant> VM<'rant> {
 
   /// Prepares a call to a function with the specified arguments.
   #[inline]
-  pub fn call_func(&mut self, func: RantFunctionRef, mut args: Vec<RantValue>, override_print: bool) -> RuntimeResult<()> {
+  pub fn call_func(&mut self, func: RantFunctionHandle, mut args: Vec<RantValue>, override_print: bool) -> RuntimeResult<()> {
     let argc = args.len();
 
     if !override_print {
@@ -1350,7 +1377,7 @@ impl<'rant> VM<'rant> {
         }
 
         // This won't be added to args because we need to check default arguments
-        let mut vararg = func.is_variadic().then(|| RantValue::List(Rc::new(RefCell::new(args_iter.collect::<RantList>()))));
+        let mut vararg = func.is_variadic().then(|| RantValue::List(RantList::from(args_iter.collect::<RantList>()).into_handle()));
 
         // Push the function onto the call stack
         self.push_frame_flavored(Rc::clone(user_func), func.flavor.unwrap_or(StackFrameFlavor::FunctionBody))?;
@@ -2078,7 +2105,7 @@ impl<'rant> VM<'rant> {
   }
 
   #[inline]
-  pub fn push_unwind_state(&mut self, handler: Option<RantFunctionRef>) {
+  pub fn push_unwind_state(&mut self, handler: Option<RantFunctionHandle>) {
     self.unwinds.push(UnwindState {
       handler,
       call_stack_size: self.call_stack.len(),

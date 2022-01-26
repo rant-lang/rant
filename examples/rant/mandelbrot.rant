@@ -1,10 +1,10 @@
 # I wrote this mostly as a joke. It's very slow.
 
-[%vlen: vec] { [map: <vec>; [?: x] { [pow: <x>; 2.0] } |> sum |> sqrt] }
+[%vlen: vec] { [map: <vec>; [?: x] { <x> ** 2 } |> sum |> sqrt] }
 [%vadd: vec-a; vec-b] { [zip: <vec-a>; <vec-b>; <add>] }
 [%vsub: vec-a; vec-b] { [zip: <vec-a>; <vec-b>; <sub>] }
-[%vmulf: vec; b] { [map: <vec>; [?:x]{[mul:<x>;<b>]}] }
-[%vdivf: vec; b] { [map: <vec>; [?:x]{[div:<x>;<b>]}] }
+[%vmulf: vec; b] { [map: <vec>; [?: x] { <x> * <b> }] }
+[%vdivf: vec; b] { [map: <vec>; [?: x] { <x> / <b>}] }
 
 [%mandelbrot: w; h; n] {
   [rep: <h>][sep: \n]
@@ -13,7 +13,7 @@
     [rep: <w>]
     {
       <
-        $x = [step-index |> to-float |> mul: 0.35];
+        $x = [step-index |> to-float] * 0.35;
         $c = [vdivf: (<x>; <y>); <h> |> vmulf: 2.0 |> vsub: (2.0; 1.0)];
         $z = (0.0; 0.0);
         $out = \s;

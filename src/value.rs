@@ -3,7 +3,7 @@ use crate::collections::*;
 use crate::runtime::resolver::*;
 use crate::runtime::*;
 use crate::util::*;
-use std::{cell::RefCell, fmt::{Display, Debug}, ops::{Add, Div, Mul, Neg, Not, Rem, Sub}, rc::Rc};
+use std::{fmt::{Display, Debug}, ops::{Add, Div, Mul, Neg, Not, Rem, Sub}, rc::Rc};
 use std::error::Error;
 use std::cmp::Ordering;
 use cast::*;
@@ -57,7 +57,7 @@ pub type ValueSliceResult = Result<RantValue, SliceError>;
 pub type ValueSliceSetResult = Result<(), SliceError>;
 
 /// Type alias for `Rc<RantFunction>`
-pub type RantFunctionRef = Rc<RantFunction>;
+pub type RantFunctionHandle = Rc<RantFunction>;
 
 /// Rant's "empty" value.
 pub struct RantEmpty;
@@ -66,8 +66,8 @@ pub struct RantEmpty;
 ///
 /// ## Cloning
 ///
-/// It is important to note that calling `clone()` on a `RantValue` will only result in a shallow clone of the data.
-/// Since collection types like `list` and `map` are represented by handles to their actual contents, cloning these will
+/// It is important to note that calling `clone()` on a `RantValue` will not shallow-copy collections.
+/// Since collection types like `list` and `map` are represented in `RantValue` as handles to their actual contents, cloning these will
 /// only make copies of these handles; both copies will still point to the same data.
 #[derive(Clone)]
 pub enum RantValue {
@@ -80,11 +80,13 @@ pub enum RantValue {
   /// A Rant value of type `bool`. Passed by-value.
   Boolean(bool),
   /// A Rant value of type `function`. Passed by-reference.
-  Function(RantFunctionRef),
+  Function(RantFunctionHandle),
   /// A Rant value of type `list`. Passed by-reference.
-  List(RantListRef),
+  List(RantListHandle),
+  /// A Rant value of type `tuple`. Passed by-reference.
+  Tuple(RantTupleHandle),
   /// A Rant value of type `map`. Passed by-reference.
-  Map(RantMapRef),
+  Map(RantMapHandle),
   /// A Rant value of type `range`. Passed by-value.
   Range(RantRange),
   /// A Rant value of type `special`. Passed by-value.
@@ -135,7 +137,7 @@ impl RantValue {
   /// 2. `int` returns `true` for any non-zero value; otherwise, `false`.
   /// 3. `float` returns `true` for any [normal](https://en.wikipedia.org/wiki/Normal_number_(computing)) value; otherwise, `false`.
   /// 4. `empty` returns `false`.
-  /// 5. Collections (`string`, `list`, `map`, `range`) return `true` if non-empty; otherwise, `false`.
+  /// 5. Collections that can be zero-length (`string`, `list`, `map`, `range`) return `true` if their length is nonzero; otherwise, `false`.
   /// 6. All other types return `true`.
   #[inline]
   pub fn to_bool(&self) -> bool {
@@ -146,6 +148,7 @@ impl RantValue {
       Self::Int(n) => *n != 0,
       Self::Function(_) => true,
       Self::List(l) => !l.borrow().is_empty(),
+      Self::Tuple(_) => true,
       Self::Map(m) => !m.borrow().is_empty(),
       Self::Range(r) => !r.is_empty(),
       Self::Special(_) => true,
@@ -206,11 +209,11 @@ impl RantValue {
   #[inline]
   pub fn into_rant_list(self) -> Self {
     Self::List(match self {
-      Self::String(s) => Rc::new(RefCell::new(s.to_rant_list())),
-      Self::List(list) => Rc::new(RefCell::new(list.borrow().clone())),
-      Self::Range(range) => Rc::new(RefCell::new(range.to_list())),
+      Self::String(s) => s.to_rant_list(),
+      Self::List(list) => list.borrow().clone(),
+      Self::Range(range) => range.to_list(),
       _ => return RantValue::Empty,
-    })
+    }.into_handle())
   }
 
   /// Concatenates two values.
@@ -231,7 +234,7 @@ impl RantValue {
       (Self::Boolean(a), Self::Boolean(b)) => Self::Boolean(a || b),
       (Self::Boolean(a), Self::Int(b)) => Self::Int(bi64(a).saturating_add(b)),
       (Self::Boolean(a), Self::Float(b)) => Self::Float(bf64(a) + b),
-      (Self::List(a), Self::List(b)) => Self::List(Rc::new(RefCell::new(a.borrow().iter().cloned().chain(b.borrow().iter().cloned()).collect()))),
+      (Self::List(a), Self::List(b)) => Self::List(RantList::from(a.borrow().iter().cloned().chain(b.borrow().iter().cloned()).collect::<Vec<RantValue>>()).into_handle()),
       (lhs, rhs) => Self::String(RantString::from(format!("{}{}", lhs, rhs)))
     }
   }
@@ -248,6 +251,8 @@ impl RantValue {
       Self::Range(range) => range.len(),
       // Length of map is element count
       Self::Map(map) => map.borrow().raw_len(),
+      // Length of tuple is element count
+      Self::Tuple(tuple) => tuple.len(),
       // Treat everything else as length 1, since all other value types are primitives
       _ => 1
     }
@@ -257,7 +262,8 @@ impl RantValue {
   pub fn reversed(&self) -> Self {
     match self {
       Self::String(s) => RantValue::String(s.reversed()),
-      Self::List(list) => RantValue::List(Rc::new(RefCell::new(list.borrow().iter().rev().cloned().collect()))),
+      Self::Tuple(tuple) => RantValue::Tuple(tuple.iter().rev().collect::<RantTuple>().into_handle()),
+      Self::List(list) => RantValue::List(list.borrow().iter().rev().cloned().collect::<RantList>().into_handle()),
       Self::Range(range) => RantValue::Range(range.reversed()),
       _ => self.clone(),
     }
@@ -267,8 +273,9 @@ impl RantValue {
   #[inline]
   pub fn shallow_copy(&self) -> Self {
     match self {
-      Self::List(list) => RantValue::List(Rc::new(RefCell::new(list.borrow().clone()))),
-      Self::Map(map) => RantValue::Map(Rc::new(RefCell::new(map.borrow().clone()))),
+      Self::List(list) => RantValue::List(list.cloned()),
+      Self::Map(map) => RantValue::Map(map.cloned()),
+      Self::Tuple(tuple) => RantValue::Tuple(tuple.cloned()),
       Self::Special(special) => RantValue::Special(special.clone()),
       _ => self.clone(),
     }
@@ -284,6 +291,7 @@ impl RantValue {
       Self::Boolean(_) =>    RantValueType::Boolean,
       Self::Function(_) =>   RantValueType::Function,
       Self::List(_) =>       RantValueType::List,
+      Self::Tuple(_) =>      RantValueType::Tuple,
       Self::Map(_) =>        RantValueType::Map,
       Self::Range(_) =>      RantValueType::Range,
       Self::Special(_) =>    RantValueType::Special,
@@ -349,11 +357,22 @@ impl RantValue {
         let list = list.borrow();
         match (slice_from, slice_to) {
           (None, None) => Ok(self.shallow_copy()),
-          (None, Some(to)) => Ok(Self::List(Rc::new(RefCell::new((&list[..to]).iter().cloned().collect())))),
-          (Some(from), None) => Ok(Self::List(Rc::new(RefCell::new((&list[from..]).iter().cloned().collect())))),
+          (None, Some(to)) => Ok(Self::List((&list[..to]).iter().cloned().collect::<RantList>().into_handle())),
+          (Some(from), None) => Ok(Self::List((&list[from..]).iter().cloned().collect::<RantList>().into_handle())),
           (Some(from), Some(to)) => {
             let (from, to) = util::minmax(from, to);
-            Ok(Self::List(Rc::new(RefCell::new((&list[from..to]).iter().cloned().collect()))))
+            Ok(Self::List((&list[from..to]).iter().cloned().collect::<RantList>().into_handle()))
+          }
+        }
+      },
+      Self::Tuple(tuple) => {
+        match (slice_from, slice_to) {
+          (None, None) => Ok(self.shallow_copy()),
+          (None, Some(to)) => Ok(Self::Tuple((&tuple[..to]).iter().cloned().collect::<RantTuple>().into_handle())),
+          (Some(from), None) => Ok(Self::Tuple((&tuple[from..]).iter().cloned().collect::<RantTuple>().into_handle())),
+          (Some(from), Some(to)) => {
+            let (from, to) = util::minmax(from, to);
+            Ok(Self::Tuple((&tuple[from..to]).iter().cloned().collect::<RantTuple>().into_handle()))
           }
         }
       }
@@ -394,7 +413,7 @@ impl RantValue {
   /// Indicates whether the value can be indexed into.
   #[inline]
   pub fn is_indexable(&self) -> bool {
-    matches!(self, Self::String(_) | Self::List(_) | Self::Range(_))
+    matches!(self, Self::String(_) | Self::List(_) | Self::Range(_) | Self::Tuple(_))
   }
 
   /// Attempts to get a value by index.
@@ -420,6 +439,13 @@ impl RantValue {
       Self::Range(range) => {
         if let Some(item) = range.get(uindex) {
           Ok(Self::Int(item))
+        } else {
+          Err(IndexError::OutOfRange)
+        }
+      },
+      Self::Tuple(tuple) => {
+        if uindex < tuple.len() {
+          Ok(tuple[uindex].clone())
         } else {
           Err(IndexError::OutOfRange)
         }
@@ -505,6 +531,8 @@ pub enum RantValueType {
   Function,
   /// The `list` type.
   List,
+  /// The `tuple` type.
+  Tuple,
   /// The `map` type.
   Map,
   /// The `special` type.
@@ -525,6 +553,7 @@ impl RantValueType {
       Self::Boolean =>     "bool",
       Self::Function =>    "function",
       Self::List =>        "list",
+      Self::Tuple =>       "tuple",
       Self::Map =>         "map",
       Self::Special =>     "special",
       Self::Range =>       "range",
@@ -693,6 +722,7 @@ impl Debug for RantValue {
       Self::Boolean(b) => write!(f, "{}", if *b { "@true" }  else { "@false" }),
       Self::Function(func) => write!(f, "[function({:?})]", func.body),
       Self::List(l) => write!(f, "[list({})]", l.borrow().len()),
+      Self::Tuple(t) => write!(f, "[tuple({})]", t.len()),
       Self::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
       Self::Range(range) => write!(f, "{}", range),
       Self::Special(special) => write!(f, "[special({:?})]", special),
@@ -711,7 +741,10 @@ fn get_display_string(value: &RantValue, max_depth: usize) -> String {
     RantValue::List(list) => {
       let mut buf = String::new();
       let mut is_first = true;
-      buf.push('(');
+      buf.push_str("(:");
+      if !list.borrow().is_empty() {
+        buf.push(' ');
+      }
       if max_depth > 0 {
         for val in list.borrow().iter() {
           if is_first {
@@ -727,10 +760,35 @@ fn get_display_string(value: &RantValue, max_depth: usize) -> String {
       buf.push(')');
       buf
     },
+    RantValue::Tuple(tuple) => {
+      let mut buf = String::new();
+      let mut is_first = true;
+      buf.push('(');
+      if max_depth > 0 {
+        for val in tuple.iter() {
+          if is_first {
+            is_first = false;
+          } else {
+            buf.push_str("; ");
+          }
+          buf.push_str(&get_display_string(val, max_depth - 1));
+        }
+      } else {
+        buf.push_str("...");
+      }
+      if tuple.len() == 1 {
+        buf.push(';');
+      }
+      buf.push(')');
+      buf
+    },
     RantValue::Map(map) => {
       let mut buf = String::new();
       let mut is_first = true;
-      buf.push_str("@(");
+      buf.push_str("(::");
+      if !map.borrow().is_empty() {
+        buf.push(' ');
+      }
       if max_depth > 0 {
         let map = map.borrow();
         for key in map.raw_keys() {
@@ -773,8 +831,9 @@ impl PartialEq for RantValue {
       (Self::Float(a), Self::Int(b)) => *a == *b as f64,
       (Self::Boolean(a), Self::Boolean(b)) => a == b,
       (Self::Range(ra), Self::Range(rb)) => ra == rb,
-      (Self::List(a), Self::List(b)) => a.borrow().eq(&b.borrow()),
-      (Self::Map(a), Self::Map(b)) => Rc::as_ptr(a) == Rc::as_ptr(b),
+      (Self::List(a), Self::List(b)) => a.eq(b),
+      (Self::Tuple(a), Self::Tuple(b)) => a.eq(b),
+      (Self::Map(a), Self::Map(b)) => a.eq(b),
       (Self::Special(a), Self::Special(b)) => a == b,
       _ => false
     }
@@ -834,7 +893,8 @@ impl Add for RantValue {
       (Self::Boolean(a), Self::Boolean(b)) => Self::Int(bi64(a) + bi64(b)),
       (Self::Boolean(a), Self::Int(b)) => Self::Int(bi64(a).saturating_add(b)),
       (Self::Boolean(a), Self::Float(b)) => Self::Float(bf64(a) + b),
-      (Self::List(a), Self::List(b)) => Self::List(Rc::new(RefCell::new(a.borrow().iter().cloned().chain(b.borrow().iter().cloned()).collect()))),
+      (Self::Tuple(a), Self::Tuple(b)) => Self::Tuple(a.iter().cloned().chain(b.iter().cloned()).collect::<RantTuple>().into_handle()),
+      (Self::List(a), Self::List(b)) => Self::List(a.borrow().iter().cloned().chain(b.borrow().iter().cloned()).collect::<RantList>().into_handle()),
       (lhs, rhs) => Self::String(RantString::from(format!("{}{}", lhs, rhs)))
     }
   }

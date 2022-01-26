@@ -2,15 +2,150 @@ use std::{borrow::Cow, cell::RefCell, cmp::Ordering, fmt::Display, iter::FromIte
 use crate::{InternalString, RantValue, util};
 use fnv::FnvHashMap;
 
-const LIST_INLINE_SIZE: usize = 2;
+/// Reference handle for a Rant map
+#[derive(Debug, Clone)]
+pub struct RantMapHandle(Rc<RefCell<RantMap>>);
 
-/// Type alias for `Rc<RefCell<RantMap>>`
-pub type RantMapRef = Rc<RefCell<RantMap>>;
+impl RantMapHandle {
+  pub fn cloned(&self) -> Self {
+    Self(Rc::new(RefCell::new((*self.0.borrow()).clone())))
+  }
+}
 
-/// Type alias for `Rc<RefCell<RantList>>`
-pub type RantListRef = Rc<RefCell<RantList>>;
+impl PartialEq for RantMapHandle {
+  fn eq(&self, other: &Self) -> bool {
+    self.0.as_ptr() == other.0.as_ptr()
+  }
+}
 
-/// Represents Rant's `list` type, which stores an ordered collection of values.
+impl From<RantMap> for RantMapHandle {
+  #[inline]
+  fn from(map: RantMap) -> Self {
+    Self(Rc::new(RefCell::new(map)))
+  }
+}
+
+impl Deref for RantMapHandle {
+  type Target = RefCell<RantMap>;
+  #[inline]
+  fn deref(&self) -> &Self::Target {
+    self.0.as_ref()
+  }
+}
+
+/// Reference handle for a Rant list
+#[derive(Debug, Clone, PartialEq)]
+pub struct RantListHandle(Rc<RefCell<RantList>>);
+
+impl RantListHandle {
+  pub fn cloned(&self) -> Self {
+    Self(Rc::new(RefCell::new((*self.0.borrow()).clone())))
+  }
+}
+
+impl From<RantList> for RantListHandle {
+  #[inline]
+  fn from(list: RantList) -> Self {
+    Self(Rc::new(RefCell::new(list)))
+  }
+}
+
+impl Deref for RantListHandle {
+  type Target = RefCell<RantList>;
+  #[inline]
+  fn deref(&self) -> &Self::Target {
+    self.0.as_ref()
+  }
+}
+
+/// Reference handle for a Rant tuple
+#[derive(Debug, Clone, PartialEq)]
+pub struct RantTupleHandle(Rc<RantTuple>);
+
+impl RantTupleHandle {
+  pub fn cloned(&self) -> Self {
+    Self(Rc::new((*self.0).clone()))
+  }
+}
+
+impl From<RantTuple> for RantTupleHandle {
+  #[inline]
+  fn from(tuple: RantTuple) -> Self {
+    Self(Rc::new(tuple))
+  }
+}
+
+impl Deref for RantTupleHandle {
+  type Target = RantTuple;
+  #[inline]
+  fn deref(&self) -> &Self::Target {
+    self.0.as_ref()
+  }
+}
+
+/// Represents Rant's `tuple` type, which stores an ordered, immutable collection of values.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RantTuple(Vec<RantValue>);
+
+impl RantTuple {
+  #[inline]
+  pub fn new() -> Self {
+    Self(vec![])
+  }
+
+  #[inline]
+  pub fn is_empty(&self) -> bool {
+    self.0.is_empty()
+  }
+
+  #[inline]
+  pub fn len(&self) -> usize {
+    self.0.len()
+  }
+
+  #[inline]
+  pub fn into_handle(self) -> RantTupleHandle {
+    RantTupleHandle::from(self)
+  }
+}
+
+impl From<Vec<RantValue>> for RantTuple {
+  fn from(values: Vec<RantValue>) -> Self {
+    Self(values)
+  }
+}
+
+impl Deref for RantTuple {
+  type Target = Vec<RantValue>;
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl<'a> FromIterator<&'a RantValue> for RantTuple {
+  fn from_iter<T: IntoIterator<Item = &'a RantValue>>(iter: T) -> Self {
+    let vec: Vec<RantValue> = iter.into_iter().cloned().collect();
+    Self(vec)
+  }
+}
+
+impl FromIterator<RantValue> for RantTuple {
+  fn from_iter<T: IntoIterator<Item = RantValue>>(iter: T) -> Self {
+    let vec: Vec<RantValue> = iter.into_iter().collect();
+    Self(vec)
+  }
+}
+
+impl IntoIterator for RantTuple {
+  type Item = RantValue;
+  type IntoIter = std::vec::IntoIter<Self::Item>;
+
+  fn into_iter(self) -> Self::IntoIter {
+    self.0.into_iter()
+  }
+}
+
+/// Represents Rant's `list` type, which stores an ordered, mutable collection of values.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RantList(Vec<RantValue>);
 
@@ -33,6 +168,11 @@ impl RantList {
   #[inline(always)]
   pub fn is_empty(&self) -> bool {
     self.0.is_empty()
+  }
+
+  #[inline]
+  pub fn into_handle(self) -> RantListHandle {
+    RantListHandle::from(self)
   }
 }
 
@@ -80,14 +220,14 @@ impl IntoIterator for RantList {
   }
 }
 
-/// Represents Rant's `map` type, which stores a collection of key-value pairs.
+/// Represents Rant's `map` type, which stores a mutable collection of key-value pairs.
 /// Map keys are always strings.
 #[derive(Debug, Clone)]
 pub struct RantMap {
   /// The physical contents of the map
   map: FnvHashMap<InternalString, RantValue>,
   /// The prototype of the map
-  proto: Option<RantMapRef>
+  proto: Option<RantMapHandle>
 }
 
 impl RantMap {
@@ -96,6 +236,11 @@ impl RantMap {
       map: Default::default(),
       proto: None
     }
+  }
+
+  #[inline]
+  pub fn into_handle(self) -> RantMapHandle {
+    RantMapHandle::from(self)
   }
 
   #[inline]
@@ -114,7 +259,7 @@ impl RantMap {
   }
 
   #[inline]
-  pub fn proto(&self) -> Option<RantMapRef> {
+  pub fn proto(&self) -> Option<RantMapHandle> {
     self.proto.clone()
   }
 
@@ -127,7 +272,7 @@ impl RantMap {
   }
 
   #[inline]
-  pub fn set_proto(&mut self, proto: Option<RantMapRef>) {
+  pub fn set_proto(&mut self, proto: Option<RantMapHandle>) {
     self.proto = proto;
   }
 
@@ -159,13 +304,13 @@ impl RantMap {
     }
 
     // Climb the prototype chain to see if the member is in one of them
-    let mut next_proto = self.proto.as_ref().map(Rc::clone);
+    let mut next_proto = self.proto.as_ref().map(RantMapHandle::clone);
     while let Some(cur_proto) = next_proto {
       let cur_proto_ref = cur_proto.borrow();
       if let Some(proto_member) = cur_proto_ref.raw_get(key) {
         return Some(Cow::Owned(proto_member.clone()));
       }
-      next_proto = cur_proto_ref.proto.as_ref().map(Rc::clone);
+      next_proto = cur_proto_ref.proto.as_ref().map(RantMapHandle::clone);
     }
     None
   }
@@ -197,6 +342,10 @@ impl Default for RantMap {
   }
 }
 
+/// Represents Rant's `range` type, which characterizes a closed range of integers with an exclusive end bound. 
+/// 
+/// Includes a `step` value which specifies how far apart adjacent values in the range should be.
+/// If the size of the range isn't evenly divisible by `step`, the ending step will be smaller.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RantRange {
   start: i64,

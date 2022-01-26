@@ -1,6 +1,22 @@
 # Changelog
 
-## 4.0.0-alpha.26 (unreleased)
+## 4.0.0-alpha.27 (unreleased)
+
+## New
+* Added the `tuple` type, along with tuple initialization syntax:
+  * `()`, `(A;)`, `(A; B)`, `(A; B; C)`, ...
+
+## Changes
+* Changed the reference handle types for all collection types from type aliases to structs (and much refactoring was had)
+* Completely changed all collection initializer syntax:
+  * List: `(:)`, `(: A)`, `(: A; B)`, ...
+  * Map: `(::)`, `(:: A=1)`, `(:: A=1; B=2)`, ...
+
+## Fixes
+
+## 4.0.0-alpha.26
+
+(1/25/2022)
 
 ## New
 * Added map initializer shorthands; specify both a key and value with a single variable getter

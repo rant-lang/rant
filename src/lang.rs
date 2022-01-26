@@ -719,6 +719,8 @@ pub enum Rst {
   Block(Rc<Block>),
   /// List initializer
   ListInit(Rc<Vec<Rc<Sequence>>>),
+  /// Tuple initializer
+  TupleInit(Rc<Vec<Rc<Sequence>>>),
   /// Map initializer
   MapInit(Rc<Vec<(MapKeyExpr, Rc<Sequence>)>>),
   /// Lambda expression
@@ -812,6 +814,7 @@ impl Rst {
       Rst::Sequence(_) =>                     "sequence",
       Rst::Block(..) =>                       "block",
       Rst::ListInit(_) =>                     "list",
+      Rst::TupleInit(_) =>                    "tuple",
       Rst::MapInit(_) =>                      "map",
       Rst::Lambda(_) =>                       "lambda",
       Rst::FuncCall(_) =>                     "call function",

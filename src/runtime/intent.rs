@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{lang::*, InternalString};
-use crate::{RantFunctionRef, RantList, RantMap, RantValue};
+use crate::{RantFunctionHandle, RantList, RantMap, RantValue};
 
 use super::{RuntimeResult, VM, resolver::Weights};
 
@@ -57,15 +57,17 @@ pub enum Intent {
     pipeval: Option<RantValue>,
   },
   /// Evaluates each sequence in `default_arg_exprs` in order and assigns their results to local constants with their associated `Identifier`.
-  CreateDefaultArgs { context: RantFunctionRef, default_arg_exprs: Vec<(Rc<Sequence>, usize)>, eval_index: usize, },
+  CreateDefaultArgs { context: RantFunctionHandle, default_arg_exprs: Vec<(Rc<Sequence>, usize)>, eval_index: usize, },
   /// Pop `argc` args off the stack, then pop a function off the stack and call it with the args.
   Call { argc: usize, override_print: bool },
   /// Call a sequence without an inner variable scope, then push its output to the value stack.
   CallOperand { sequence: Rc<Sequence> },
   /// Call a function for every variant of a temporal argument set and increment the provided temporal state.
-  CallTemporal { func: RantFunctionRef, args: Rc<Vec<RantValue>>, temporal_state: TemporalSpreadState, },
+  CallTemporal { func: RantFunctionHandle, args: Rc<Vec<RantValue>>, temporal_state: TemporalSpreadState, },
   /// Pop value from stack and add it to a list. If `index` is out of range, print the list.
   BuildList { init: Rc<Vec<Rc<Sequence>>>, index: usize, list: RantList },
+  /// Pop a value from the stack and add it to a vector. If `index` is out of range, produce a tuple from the items and print it.
+  BuildTuple { init: Rc<Vec<Rc<Sequence>>>, index: usize, items: Vec<RantValue> },
   /// Pop value and optional key from stack and add them to a map. If `pair_index` is out of range, print the map.
   BuildMap { init: Rc<Vec<(MapKeyExpr, Rc<Sequence>)>>, pair_index: usize, map: RantMap },
   /// Evaluate block weights and then run the block
@@ -139,6 +141,7 @@ impl Intent {
       Self::CallOperand { .. } => "call_operand",
       Self::CallTemporal { .. } => "call_temporal",
       Self::BuildList { .. } => "build_list",
+      Self::BuildTuple { .. } => "build_tuple",
       Self::BuildMap { .. } => "build_map",
       Self::ImportLastAsModule { .. } => "load_module",
       Self::RuntimeCall { .. } => "runtime_call",
@@ -201,7 +204,7 @@ pub enum InvokePipeStepState {
   ///
   /// Transitions to `PostTemporalCall`.
   PreTemporalCall {
-    step_function: RantFunctionRef,
+    step_function: RantFunctionHandle,
     temporal_state: TemporalSpreadState,
     args: Vec<RantValue>,
   },
@@ -209,7 +212,7 @@ pub enum InvokePipeStepState {
   ///
   /// Transitions to `PostCall`.
   PreCall { 
-    step_function: RantFunctionRef,
+    step_function: RantFunctionHandle,
     args: Vec<RantValue>,
   },
   /// Step function has returned and output can be used.
@@ -218,7 +221,7 @@ pub enum InvokePipeStepState {
   ///
   /// Might transition to `PreTemporalCall`.
   PostTemporalCall {
-    step_function: RantFunctionRef,
+    step_function: RantFunctionHandle,
     temporal_state: TemporalSpreadState,
     args: Vec<RantValue>,
   }
