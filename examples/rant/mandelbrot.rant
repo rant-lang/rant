@@ -14,15 +14,15 @@
     {
       <
         $x = [step-index |> to-float] * 0.35;
-        $c = [vdivf: (<x>; <y>); <h> |> vmulf: 2.0 |> vsub: (2.0; 1.0)];
-        $z = (0.0; 0.0);
+        $c = [vdivf: (: <x>; <y>); <h> |> vmulf: 2.0 |> vsub: (: 2.0; 1.0)];
+        $z = (: 0.0; 0.0);
         $out = \s;
       >
 
       [rep: <n>]
       {
         <z = [vadd: 
-          ([pow: <z/0>; 2 |> sub: [pow: <z/1>; 2]]; [mul: <z/0>; <z/1> |> mul: 2.0]); 
+          (: [pow: <z/0>; 2 |> sub: [pow: <z/1>; 2]]; [mul: <z/0>; <z/1> |> mul: 2.0]); 
           <c>
         ]>
         [if: [vlen: <z> |> gt: 2.0]] { <out = \#> @break }
