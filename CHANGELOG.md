@@ -5,6 +5,8 @@
 ## New
 * Added the `tuple` type, along with tuple initialization syntax:
   * `()`, `(A;)`, `(A; B)`, `(A; B; C)`, ...
+* Added stdlib functions:
+  * `[squish-thru]`
 
 ## Changes
 * Parametric spread is now enabled for all indexable collection types; not just lists
@@ -12,9 +14,12 @@
 * Completely changed all collection initializer syntax:
   * List: `(:)`, `(: A)`, `(: A; B)`, ...
   * Map: `(::)`, `(:: A=1)`, `(:: A=1; B=2)`, ...
+* Renamed stdlib functions:
+  * `[squish]` &rarr; `[squish-self]`
+  * `[squished]` &rarr; `[squish]`
 
 ## Fixes
-* Fixed `[augment]` accidentally mutating the source map
+* Fixed `[augment]` accidentally mutating the original instance of the destination map
 
 ## 4.0.0-alpha.26
 

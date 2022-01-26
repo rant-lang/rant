@@ -483,19 +483,18 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       }
     }
     
+    #[allow(unused_assignments)] // whitespace macro needs this, but https://github.com/rust-lang/rust/issues/15701
     while let Some((token, span)) = self.reader.next() {
       let _debug_inject_toggle = true;
 
       macro_rules! whitespace {
-        (allow) => {
-          if is_seq_text {
-            if let Some(ws) = pending_whitespace.take() {
+        (allow) => {{
+          if let Some(ws) = pending_whitespace.take() {
+            if is_seq_text {
               emit!(Rst::Whitespace(ws));
             }
-          } else {
-            pending_whitespace = None;
           }
-        };
+        }};
         (queue next) => {{
           if let Some((Whitespace, ..)) = self.reader.take_where(|tt| matches!(tt, Some((Whitespace, ..)))) {
             pending_whitespace = Some(self.reader.last_token_string());
@@ -505,7 +504,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           pending_whitespace = Some($ws);
         };
         (ignore prev) => {{
-          #![allow(unused_assignments)]
           pending_whitespace = None;
         }};
         (ignore next) => {

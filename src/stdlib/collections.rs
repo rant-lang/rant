@@ -19,7 +19,7 @@ pub(crate) fn rev(vm: &mut VM, val: RantValue) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn squish(vm: &mut VM, (list, target_size): (RantListHandle, usize)) -> RantStdResult {
+pub(crate) fn squish_self(vm: &mut VM, (list, target_size): (RantListHandle, usize)) -> RantStdResult {
   let mut list = list.borrow_mut();
 
   if target_size == 0 {
@@ -43,25 +43,18 @@ pub(crate) fn squish(vm: &mut VM, (list, target_size): (RantListHandle, usize)) 
   Ok(())
 }
 
-pub(crate) fn squished(vm: &mut VM, (list, target_size): (RantListHandle, usize)) -> RantStdResult {
-  let mut list = list.borrow_mut().clone();
+pub(crate) fn squish(vm: &mut VM, (list, target_size): (RantListHandle, usize)) -> RantStdResult {
+  let list = list.cloned();
+  let list_ref_clone = RantListHandle::clone(&list);
+  squish_self(vm, (list, target_size))?;
+  vm.cur_frame_mut().write_value(RantValue::List(list_ref_clone));
+  Ok(())
+}
 
-  if target_size == 0 {
-    runtime_error!(RuntimeErrorType::ArgumentError, "cannot squish to a target size of 0");
-  }
-
-  let rng = vm.rng();
-  while list.len() > target_size {
-    let n = list.len();
-    let left_index = rng.next_usize(n - 1);
-    let right_index = (left_index + 1) % n;
-    let left_val = list.get(left_index).unwrap().clone();
-    let right_val = list.remove(right_index);
-    list[left_index] = left_val + right_val;
-  }
-
-  vm.cur_frame_mut().write_value(RantValue::List(RantList::from(list).into_handle()));
-
+pub(crate) fn squish_thru(vm: &mut VM, (list, target_size): (RantListHandle, usize)) -> RantStdResult {
+  let list_ref_clone = RantListHandle::clone(&list);
+  squish_self(vm, (list, target_size))?;
+  vm.cur_frame_mut().write_value(RantValue::List(list_ref_clone));
   Ok(())
 }
 
@@ -318,21 +311,10 @@ pub(crate) fn shuffle_thru(vm: &mut VM, list: RantListHandle) -> RantStdResult {
 }
 
 pub(crate) fn shuffle(vm: &mut VM, list: RantListHandle) -> RantStdResult {
-  let mut list = list.borrow().clone();
-  if list.is_empty() {
-    return Ok(());
-  }
-
-  let n = list.len();
-  let rng = vm.rng();
-
-  for i in 0..n {
-    let swap_index = rng.next_usize(n);
-    list.swap(i, swap_index);
-  }
-
-  vm.cur_frame_mut().write_value(RantValue::List(list.into_handle()));
-  
+  let list = list.cloned();
+  let list_ref_clone = RantListHandle::clone(&list);
+  shuffle_self(vm, list)?;
+  vm.cur_frame_mut().write_value(RantValue::List(list_ref_clone));  
   Ok(())
 }
 
@@ -396,14 +378,9 @@ pub(crate) fn augment_thru(vm: &mut VM, (to_map, from_map): (RantMapHandle, Rant
 
 pub(crate) fn augment(vm: &mut VM, (to_map, from_map): (RantMapHandle, RantMapHandle)) -> RantStdResult {
   let to_map = to_map.cloned();
-  for (key, val) in from_map.borrow().raw_pairs_internal() {
-    let orig_val = to_map.borrow().get(key).map(|v| v.as_ref().clone());
-    if let Some(orig_val) = orig_val {
-      to_map.borrow_mut().raw_set(key, orig_val.concat(val.clone()));
-    } else {
-      to_map.borrow_mut().raw_set(key, val.clone());
-    }
-  }
+  let to_map_ref_clone = RantMapHandle::clone(&to_map);
+  augment_self(vm, (to_map_ref_clone, from_map))?;
+  vm.cur_frame_mut().write_value(RantValue::Map(to_map));
   Ok(())
 }
 

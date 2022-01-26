@@ -135,7 +135,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
 
     // Collection functions
     assoc, augment, augment_self as "augment-self", augment_thru as "augment-thru", chunks, clear, collect, has, keys, index_of as "index-of", insert, last_index_of as "last-index-of", 
-    nlist, remove, rev, sift_self as "sift-self", sift_thru as "sift-thru", sift, squish, squished, take, translate, values,
+    nlist, remove, rev, sift_self as "sift-self", sift_thru as "sift-thru", sift, squish_self as "squish-self", squish_thru as "squish-thru", squish, take, translate, values,
     pick, filter, join, map, sort_self as "sort-self", sort_thru as "sort-thru", sort, shuffle_self as "shuffle-self", shuffle_thru as "shuffle-thru", shuffle, sum,
     list_push as "push", list_pop as "pop", oxford_join as "oxford-join", zip,
 
