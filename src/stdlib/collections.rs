@@ -395,6 +395,7 @@ pub(crate) fn augment_thru(vm: &mut VM, (to_map, from_map): (RantMapHandle, Rant
 }
 
 pub(crate) fn augment(vm: &mut VM, (to_map, from_map): (RantMapHandle, RantMapHandle)) -> RantStdResult {
+  let to_map = to_map.cloned();
   for (key, val) in from_map.borrow().raw_pairs_internal() {
     let orig_val = to_map.borrow().get(key).map(|v| v.as_ref().clone());
     if let Some(orig_val) = orig_val {

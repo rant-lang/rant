@@ -14,6 +14,7 @@
   * Map: `(::)`, `(:: A=1)`, `(:: A=1; B=2)`, ...
 
 ## Fixes
+* Fixed `[augment]` accidentally mutating the source map
 
 ## 4.0.0-alpha.26
 
