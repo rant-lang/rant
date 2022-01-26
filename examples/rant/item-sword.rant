@@ -1,22 +1,22 @@
 [%enchant-item: item] {
   @{
     @if @not [has: <item>; enchantments]: {
-      <item/enchantments = @()>
+      <item/enchantments = (::)>
     }
-    <$dmg-bonus = 0; $wt-bonus = 0>
+    <$damage = 0; $weight = 0>
 
     # Apply enchantment
-    [augment-self: <item/enchantments>; @({{
-        fire        <dmg-bonus = 2>                   @weight 10 |
-        ice         <dmg-bonus = 1>                   @weight 12 |
-        lightning   <dmg-bonus = 3>                   @weight 5 |
-        wind        <dmg-bonus = 1; wt-bonus = -1>    @weight 8 |
-        time                                          @weight 3 |
-        demon       <dmg-bonus = 12>                  @weight 1
+    [augment-self: <item/enchantments>; (:: {{
+        fire        <damage = 2>                    @weight 10 |
+        ice         <damage = 1>                    @weight 12 |
+        lightning   <damage = 3>                    @weight 5 |
+        wind        <damage = 1; weight = -1>       @weight 8 |
+        time                                        @weight 3 |
+        demon       <damage = 12>                   @weight 1
     }} = 1)]
 
     # Apply bonus damage from enchantment
-    [augment-self: <item>; @(damage = <dmg-bonus>; weight = <wt-bonus>)]
+    [augment-self: <item>; (:: <damage>; <weight>)]
   }
 }
 
@@ -80,10 +80,7 @@
     %weight = [randf: 0.1; 10];
     %damage = <weight> / 16.0 + [randf: 1; 10];
   >
-  @(
-    weight = <weight>;
-    damage = <damage>;
-  )
+  (:: <weight>; <damage>)
 }
 
 [%gen-sword] {
