@@ -207,6 +207,9 @@ pub(crate) fn min(vm: &mut VM, values: RequiredVarArgs<RantValue>) -> RantStdRes
       RantValue::List(list_ref) => {
         Some(Cow::Owned(util::min_rant_value(list_ref.borrow().iter()).cloned().unwrap_or_default()))
       },
+      RantValue::Tuple(tuple_ref) => {
+        Some(Cow::Owned(util::min_rant_value(tuple_ref.iter()).cloned().unwrap_or_default()))
+      }
       other => Some(Cow::Borrowed(other)),
     };
 
@@ -236,6 +239,9 @@ pub(crate) fn max(vm: &mut VM, values: RequiredVarArgs<RantValue>) -> RantStdRes
       RantValue::List(list_ref) => {
         Some(Cow::Owned(util::max_rant_value(list_ref.borrow().iter()).cloned().unwrap_or_default()))
       },
+      RantValue::Tuple(tuple_ref) => {
+        Some(Cow::Owned(util::max_rant_value(tuple_ref.iter()).cloned().unwrap_or_default()))
+      }
       other => Some(Cow::Borrowed(other)),
     };
 

@@ -1,4 +1,4 @@
-<$list = (foo;bar)>
+<$list = (: foo;bar)>
 
 [$get-list] {<list>}
 

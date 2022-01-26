@@ -1,4 +1,4 @@
-<$obj = @(a=foo;b=bar;c=baz)>
+<$obj = (:: a=foo; b=bar; c=baz)>
 <obj/a ? oops>,\s
 <obj/b ? oops>,\s
 <obj/c ? oops>,\s

@@ -405,6 +405,26 @@ impl RantValue {
         }
         Ok(())
       },
+      (Self::List(dst_list), Self::Tuple(src_tuple)) => {
+        let mut dst_list = dst_list.borrow_mut();
+        let src = src_tuple.iter().cloned();
+        match (slice_from, slice_to) {
+          (None, None) => {
+            dst_list.splice(.., src);
+          },
+          (None, Some(to)) => {
+            dst_list.splice(..to, src);
+          },
+          (Some(from), None) => {
+            dst_list.splice(from.., src);
+          },
+          (Some(from), Some(to)) => {
+            let (from, to) = util::minmax(from, to);
+            dst_list.splice(from..to, src);
+          }
+        }
+        Ok(())
+      },
       (Self::List(_), other) => Err(SliceError::UnsupportedSpliceSource { src: RantValueType::List, dst: other.get_type() }),
       (dst, _src) => Err(SliceError::CannotSetSliceOnType(dst.get_type()))
     }

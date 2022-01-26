@@ -474,6 +474,41 @@ fn slice_list_to_dynamic() {
 }
 
 #[test]
+fn slice_tuple_full() {
+  test_rant_file!("sources/slice/tuple/full.rant");
+}
+
+#[test]
+fn slice_tuple_between_static() {
+  test_rant_file!("sources/slice/tuple/between_static.rant");
+}
+
+#[test]
+fn slice_tuple_from_static() {
+  test_rant_file!("sources/slice/tuple/from_static.rant");
+}
+
+#[test]
+fn slice_tuple_to_static() {
+  test_rant_file!("sources/slice/tuple/to_static.rant");
+}
+
+#[test]
+fn slice_tuple_between_dynamic() {
+  test_rant_file!("sources/slice/tuple/between_dynamic.rant");
+}
+
+#[test]
+fn slice_tuple_from_dynamic() {
+  test_rant_file!("sources/slice/tuple/from_dynamic.rant");
+}
+
+#[test]
+fn slice_tuple_to_dynamic() {
+  test_rant_file!("sources/slice/tuple/to_dynamic.rant");
+}
+
+#[test]
 fn slice_string_full() {
   test_rant_file!("sources/slice/string/full.rant");
 }
@@ -544,13 +579,23 @@ fn slice_range_to_dynamic() {
 }
 
 #[test]
-fn splice_static() {
-  test_rant_file!("sources/splice/static.rant");
+fn splice_static_from_tuple() {
+  test_rant_file!("sources/splice/static_from_tuple.rant");
 }
 
 #[test]
-fn splice_dynamic() {
-  test_rant_file!("sources/splice/dynamic.rant");
+fn splice_dynamic_from_tuple() {
+  test_rant_file!("sources/splice/dynamic_from_tuple.rant");
+}
+
+#[test]
+fn splice_static_from_list() {
+  test_rant_file!("sources/splice/static_from_list.rant");
+}
+
+#[test]
+fn splice_dynamic_from_list() {
+  test_rant_file!("sources/splice/dynamic_from_list.rant");
 }
 
 #[test]
@@ -631,6 +676,21 @@ fn list_autoconcat() {
 #[test]
 fn list_autoconcat_repeater() {
   test_rant_file!("sources/collections/list_autoconcat_repeater.rant");
+}
+
+#[test]
+fn tuple_autoconcat() {
+  test_rant_file!("sources/collections/tuple_autoconcat.rant");
+}
+
+#[test]
+fn tuple_autoconcat_repeater() {
+  test_rant_file!("sources/collections/tuple_autoconcat_repeater.rant");
+}
+
+#[test]
+fn list_tuple_autoconcat() {
+  test_rant_file!("sources/collections/list_tuple_autoconcat.rant");
 }
 
 #[test]

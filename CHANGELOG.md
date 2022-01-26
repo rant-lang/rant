@@ -7,6 +7,7 @@
   * `()`, `(A;)`, `(A; B)`, `(A; B; C)`, ...
 
 ## Changes
+* Parametric spread is now enabled for all indexable collection types; not just lists
 * Changed the reference handle types for all collection types from type aliases to structs (and much refactoring was had)
 * Completely changed all collection initializer syntax:
   * List: `(:)`, `(: A)`, `(: A; B)`, ...

@@ -330,9 +330,23 @@ impl<'rant> VM<'rant> {
               let arg = self.pop_val()?;
               // When parametric spread is used and the argument is a list, expand its values into individual args
               if matches!(arg_expr.spread_mode, ArgumentSpreadMode::Parametric) {
-                if let RantValue::List(list_ref) = &arg {
-                  for spread_arg in list_ref.borrow().iter() {
-                    args.push(spread_arg.clone());
+                if arg.is_indexable() {
+                  match &arg {
+                    RantValue::List(list_ref) => {
+                      for spread_arg in list_ref.borrow().iter() {
+                        args.push(spread_arg.clone());
+                      }
+                    },
+                    RantValue::Tuple(tuple_ref) => {
+                      for spread_arg in tuple_ref.iter() {
+                        args.push(spread_arg.clone());
+                      }
+                    },
+                    other => {
+                      for i in 0..(other.len()) {
+                        args.push(other.index_get(i as i64).into_runtime_result()?);
+                      }
+                    }
                   }
                   continue
                 }
@@ -431,9 +445,23 @@ impl<'rant> VM<'rant> {
                   let arg = self.pop_val()?;
                   // When parametric spread is used and the argument is a list, expand its values into individual args
                   if matches!(arg_expr.spread_mode, ArgumentSpreadMode::Parametric) {
-                    if let RantValue::List(list_ref) = &arg {
-                      for spread_arg in list_ref.borrow().iter() {
-                        args.push(spread_arg.clone());
+                    if arg.is_indexable() {
+                      match &arg {
+                        RantValue::List(list_ref) => {
+                          for spread_arg in list_ref.borrow().iter() {
+                            args.push(spread_arg.clone());
+                          }
+                        },
+                        RantValue::Tuple(tuple_ref) => {
+                          for spread_arg in tuple_ref.iter() {
+                            args.push(spread_arg.clone());
+                          }
+                        },
+                        other => {
+                          for i in 0..(other.len()) {
+                            args.push(other.index_get(i as i64).into_runtime_result()?);
+                          }
+                        }
                       }
                       continue
                     }
