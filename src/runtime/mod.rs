@@ -105,7 +105,7 @@ impl<'rant> VM<'rant> {
   {
     if let Some(args) = args.into() {
       for (k, v) in args {
-        self.def_var_value(&k, AccessPathKind::Local, v, true)?;
+        self.def_var_value(&k, VarAccessMode::Local, v, true)?;
       }
     }
 
@@ -279,7 +279,7 @@ impl<'rant> VM<'rant> {
             // Store it as a local
             let (_, var_name_index) = default_arg_exprs[eval_index - 1];
             let var_name = &context.params[var_name_index].name;
-            self.def_var_value(var_name.as_str(), AccessPathKind::Local, default_arg, true)?;
+            self.def_var_value(var_name.as_str(), VarAccessMode::Local, default_arg, true)?;
           }
 
           // Check if there's another arg expression to evaluate
@@ -741,7 +741,7 @@ impl<'rant> VM<'rant> {
             self.engine.set_global(crate::MODULES_CACHE_KEY, RantValue::Map(RantMap::from(cache).into_handle()));
           }
 
-          self.def_var_value(&module_name, AccessPathKind::Descope(descope), module, true)?;
+          self.def_var_value(&module_name, VarAccessMode::Descope(descope), module, true)?;
         },
         Intent::RuntimeCall { function, interrupt } => {
           function(self)?;
@@ -912,28 +912,28 @@ impl<'rant> VM<'rant> {
     // Run frame's sequence elements in order
     while let Some(rst) = &self.cur_frame_mut().seq_next() {
       match Rc::deref(rst) {
-        Rst::Sequence(seq) => {
+        Expression::Sequence(seq) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.push_frame(Rc::clone(seq), false)?;
           return Ok(true)
         },
-        Rst::ListInit(elements) => {
+        Expression::ListInit(elements) => {
           self.cur_frame_mut().push_intent(Intent::BuildList { init: Rc::clone(elements), index: 0, list: RantList::with_capacity(elements.len()) });
           return Ok(true)
         },
-        Rst::TupleInit(elements) => {
+        Expression::TupleInit(elements) => {
           self.cur_frame_mut().push_intent(Intent::BuildTuple { init: Rc::clone(elements), index: 0, items: vec![] });
           return Ok(true)
         },
-        Rst::MapInit(elements) => {
+        Expression::MapInit(elements) => {
           self.cur_frame_mut().push_intent(Intent::BuildMap { init: Rc::clone(elements), pair_index: 0, map: RantMap::new() });
           return Ok(true)
         },
-        Rst::Block(block) => {
+        Expression::Block(block) => {
           self.pre_push_block(block)?;
           return Ok(true)
         },
-        Rst::DefVar(vname, access_kind, val_expr) => {
+        Expression::DefVar(vname, access_kind, val_expr) => {
           if let Some(val_expr) = val_expr {
             // If a value is present, it needs to be evaluated first
             self.cur_frame_mut().push_intent(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind, is_const: false });
@@ -944,7 +944,7 @@ impl<'rant> VM<'rant> {
             self.def_var_value(vname.as_str(), *access_kind, RantValue::Empty, false)?;
           }
         },
-        Rst::DefConst(vname, access_kind, val_expr) => {
+        Expression::DefConst(vname, access_kind, val_expr) => {
           if let Some(val_expr) = val_expr {
             // If a value is present, it needs to be evaluated first
             self.cur_frame_mut().push_intent(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind, is_const: true });
@@ -955,11 +955,11 @@ impl<'rant> VM<'rant> {
             self.def_var_value(vname.as_str(), *access_kind, RantValue::Empty, true)?;
           }
         },
-        Rst::Get(path, fallback) => {
+        Expression::Get(path, fallback) => {
           self.push_getter_intents(path, false, false, fallback.as_ref().map(Rc::clone));
           return Ok(true)
         },
-        Rst::Depth(vname, access_kind, fallback) => {
+        Expression::Depth(vname, access_kind, fallback) => {
           match (self.get_var_depth(vname, *access_kind), fallback) {
             (Ok(depth), _) => self.cur_frame_mut().write_value(RantValue::Int(depth as i64)),
             (Err(_), Some(fallback)) => {
@@ -970,7 +970,7 @@ impl<'rant> VM<'rant> {
             (Err(err), None) => return Err(err),
           }
         },
-        Rst::Set(path, val_expr) => {
+        Expression::Set(path, val_expr) => {
           // Get list of dynamic expressions in path
           let exprs = path.dynamic_exprs();
 
@@ -990,7 +990,7 @@ impl<'rant> VM<'rant> {
           }
           return Ok(true)
         },
-        Rst::FuncDef(FunctionDef {
+        Expression::FuncDef(FunctionDef {
           body,
           capture_vars: to_capture,
           is_const,
@@ -1000,7 +1000,7 @@ impl<'rant> VM<'rant> {
           // Capture variables
           let mut captured_vars = vec![];
           for capture_id in to_capture.iter() {
-            let var = self.call_stack.get_var_mut(self.engine, capture_id, AccessPathKind::Local)?;
+            let var = self.call_stack.get_var_mut(self.engine, capture_id, VarAccessMode::Local)?;
             var.make_by_ref();
             captured_vars.push((capture_id.clone(), var.clone()));
           }
@@ -1030,7 +1030,7 @@ impl<'rant> VM<'rant> {
 
           return Ok(true)
         },
-        Rst::Lambda(LambdaExpr { 
+        Expression::Lambda(LambdaExpr { 
           params, 
           body, 
           capture_vars: to_capture 
@@ -1038,7 +1038,7 @@ impl<'rant> VM<'rant> {
           // Capture variables
           let mut captured_vars = vec![];
           for capture_id in to_capture.iter() {
-            let var = self.call_stack.get_var_mut(self.engine, capture_id, AccessPathKind::Local)?;
+            let var = self.call_stack.get_var_mut(self.engine, capture_id, VarAccessMode::Local)?;
             var.make_by_ref();
             captured_vars.push((capture_id.clone(), var.clone()));
           }
@@ -1057,7 +1057,7 @@ impl<'rant> VM<'rant> {
 
           self.cur_frame_mut().write_value(func);
         },
-        Rst::FuncCall(fcall) => {
+        Expression::FuncCall(fcall) => {
           let FunctionCall {
             target,
             arguments,
@@ -1091,7 +1091,7 @@ impl<'rant> VM<'rant> {
           }
           return Ok(true)
         },
-        Rst::PipedCall(compcall) => {     
+        Expression::PipedCall(compcall) => {     
           self.cur_frame_mut().push_intent(Intent::InvokePipeStep {
             steps: Rc::clone(&compcall.steps),
             step_index: 0,
@@ -1100,21 +1100,21 @@ impl<'rant> VM<'rant> {
           });
           return Ok(true)
         },
-        Rst::PipeValue => {
-          let pipeval = self.get_var_value(PIPE_VALUE_NAME, AccessPathKind::Local, false)?;
+        Expression::PipeValue => {
+          let pipeval = self.get_var_value(PIPE_VALUE_NAME, VarAccessMode::Local, false)?;
           self.cur_frame_mut().write_value(pipeval);
         },
-        Rst::DebugCursor(info) => {
+        Expression::DebugCursor(info) => {
           self.cur_frame_mut().set_debug_info(info);
         },
-        Rst::Fragment(frag) => self.cur_frame_mut().write_frag(frag),
-        Rst::Whitespace(ws) => self.cur_frame_mut().write_ws(ws),
-        Rst::Integer(n) => self.cur_frame_mut().write_value(RantValue::Int(*n)),
-        Rst::Float(n) => self.cur_frame_mut().write_value(RantValue::Float(*n)),
-        Rst::EmptyValue => self.cur_frame_mut().write_value(RantValue::Empty),
-        Rst::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
-        Rst::Nop => {},
-        Rst::Return(expr) => {
+        Expression::Fragment(frag) => self.cur_frame_mut().write_frag(frag),
+        Expression::Whitespace(ws) => self.cur_frame_mut().write_ws(ws),
+        Expression::Integer(n) => self.cur_frame_mut().write_value(RantValue::Int(*n)),
+        Expression::Float(n) => self.cur_frame_mut().write_value(RantValue::Float(*n)),
+        Expression::EmptyValue => self.cur_frame_mut().write_value(RantValue::Empty),
+        Expression::Boolean(b) => self.cur_frame_mut().write_value(RantValue::Boolean(*b)),
+        Expression::Nop => {},
+        Expression::Return(expr) => {
           if let Some(expr) = expr {
             self.cur_frame_mut().push_intent(Intent::ReturnLast);
             self.push_frame(Rc::clone(expr), true)?;
@@ -1124,7 +1124,7 @@ impl<'rant> VM<'rant> {
             return Ok(true)
           }
         },
-        Rst::Continue(expr) => {
+        Expression::Continue(expr) => {
           if let Some(expr) = expr {
             self.cur_frame_mut().push_intent(Intent::ContinueLast);
             self.push_frame(Rc::clone(expr), true)?;
@@ -1134,7 +1134,7 @@ impl<'rant> VM<'rant> {
             return Ok(true)
           }
         },
-        Rst::Break(expr) => {
+        Expression::Break(expr) => {
           if let Some(expr) = expr {
             self.cur_frame_mut().push_intent(Intent::BreakLast);
             self.push_frame(Rc::clone(expr), true)?;
@@ -1144,103 +1144,103 @@ impl<'rant> VM<'rant> {
             return Ok(true)
           }
         },
-        Rst::Add(lhs, rhs) => {
+        Expression::Add(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::Add);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::Subtract(lhs, rhs) => {
+        Expression::Subtract(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::Subtract);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::Multiply(lhs, rhs) => {
+        Expression::Multiply(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::Multiply);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::Divide(lhs, rhs) => {
+        Expression::Divide(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::Divide);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::Modulo(lhs, rhs) => {
+        Expression::Modulo(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::Modulo);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::Power(lhs, rhs) => {
+        Expression::Power(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::Power);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::Negate(operand) => {
+        Expression::Negate(operand) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::Negate);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(operand) });
           return Ok(true)
         },
-        Rst::LogicNot(operand) => {
+        Expression::LogicNot(operand) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::LogicNot);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(operand) });
           return Ok(true)
         },
-        Rst::Equals(lhs, rhs) => {
+        Expression::Equals(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::Equals);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::NotEquals(lhs, rhs) => {
+        Expression::NotEquals(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::NotEquals);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::Less(lhs, rhs) => {
+        Expression::Less(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::Less);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::LessOrEqual(lhs, rhs) => {
+        Expression::LessOrEqual(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::LessOrEqual);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::Greater(lhs, rhs) => {
+        Expression::Greater(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::Greater);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::GreaterOrEqual(lhs, rhs) => {
+        Expression::GreaterOrEqual(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::GreaterOrEqual);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::LogicAnd(lhs, rhs) => {
+        Expression::LogicAnd(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::LogicShortCircuit {
             on_truthiness: false,
@@ -1251,7 +1251,7 @@ impl<'rant> VM<'rant> {
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::LogicOr(lhs, rhs) => {
+        Expression::LogicOr(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::LogicShortCircuit {
             on_truthiness: true,
@@ -1262,7 +1262,7 @@ impl<'rant> VM<'rant> {
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::LogicNand(lhs, rhs) => {
+        Expression::LogicNand(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::LogicShortCircuit {
             on_truthiness: false,
@@ -1273,7 +1273,7 @@ impl<'rant> VM<'rant> {
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::LogicNor(lhs, rhs) => {
+        Expression::LogicNor(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::LogicShortCircuit {
             on_truthiness: true,
@@ -1284,14 +1284,14 @@ impl<'rant> VM<'rant> {
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::LogicXor(lhs, rhs) => {
+        Expression::LogicXor(lhs, rhs) => {
           self.cur_frame_mut().push_intent(Intent::PrintLast);
           self.cur_frame_mut().push_intent(Intent::LogicXor);
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(rhs) });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)
         },
-        Rst::Require { alias, path } => {
+        Expression::Require { alias, path } => {
           // TODO: Move this into a separate function
           // Get name of module from path
           if let Some(module_name) = 
@@ -1305,7 +1305,7 @@ impl<'rant> VM<'rant> {
             // Check if module is cached; if so, don't do anything
             if let Some(RantValue::Map(module_cache_ref)) = self.context().get_global(crate::MODULES_CACHE_KEY) {
               if let Some(module @ RantValue::Map(..)) = module_cache_ref.borrow().raw_get(&module_name) {
-                self.def_var_value(alias.as_ref().map(|a| a.as_str()).unwrap_or_else(|| module_name.as_str()), AccessPathKind::Local, module.clone(), true)?;
+                self.def_var_value(alias.as_ref().map(|a| a.as_str()).unwrap_or_else(|| module_name.as_str()), VarAccessMode::Local, module.clone(), true)?;
                 continue
               }
             }
@@ -1320,7 +1320,7 @@ impl<'rant> VM<'rant> {
             runtime_error!(RuntimeErrorType::ArgumentError, "module name is missing from path");
           }
         },
-        Rst::Conditional { conditions, fallback } => {
+        Expression::Conditional { conditions, fallback } => {
           self.cur_frame_mut().push_intent(Intent::CheckCondition{ conditions: Rc::clone(conditions), fallback: fallback.as_ref().map(Rc::clone), index: 0 });
           return Ok(true)
         },
@@ -1442,7 +1442,7 @@ impl<'rant> VM<'rant> {
           self.call_stack.def_var_value(
             self.engine, 
             pname_str, 
-            AccessPathKind::Local, 
+            VarAccessMode::Local, 
             user_arg.unwrap_or_default(),
             true,
           )?;
@@ -1473,7 +1473,7 @@ impl<'rant> VM<'rant> {
     // Setter RHS should be last value to pop
     let setter_value = self.pop_val()?;
     
-    let access_kind = path.kind();
+    let access_kind = path.mode();
     let mut path_iter = path.iter();
     let mut dynamic_values = dynamic_values.drain(..);
     
@@ -1536,7 +1536,7 @@ impl<'rant> VM<'rant> {
         },
         // Pipeval
         AccessPathComponent::PipeValue => {
-          let pipeval = self.get_var_value(PIPE_VALUE_NAME, AccessPathKind::Local, false)?;
+          let pipeval = self.get_var_value(PIPE_VALUE_NAME, VarAccessMode::Local, false)?;
           match pipeval {
             RantValue::Int(i) => SetterKey::Index(i),
             key_val => SetterKey::KeyString(InternalString::from(key_val.to_string()))
@@ -1594,17 +1594,17 @@ impl<'rant> VM<'rant> {
     // Get the root variable or anon value
     let mut getter_value = match path_iter.next() {
         Some(AccessPathComponent::Name(vname)) => {
-          self.get_var_value(vname.as_str(), path.kind(), prefer_function)?
+          self.get_var_value(vname.as_str(), path.mode(), prefer_function)?
         },
         Some(AccessPathComponent::DynamicKey(_)) => {
           let key = dynamic_keys.next().unwrap().to_string();
-          self.get_var_value(key.as_str(), path.kind(), prefer_function)?
+          self.get_var_value(key.as_str(), path.mode(), prefer_function)?
         },
         Some(AccessPathComponent::AnonymousValue(_)) => {
           dynamic_keys.next().unwrap()
         },
         Some(AccessPathComponent::PipeValue) => {
-          self.get_var_value(PIPE_VALUE_NAME, AccessPathKind::Local, false)?
+          self.get_var_value(PIPE_VALUE_NAME, VarAccessMode::Local, false)?
         }
         _ => unreachable!()
     };
@@ -1653,7 +1653,7 @@ impl<'rant> VM<'rant> {
         },
         // Pipeval
         AccessPathComponent::PipeValue => {
-          let pipeval = self.get_var_value(PIPE_VALUE_NAME, AccessPathKind::Local, false)?;
+          let pipeval = self.get_var_value(PIPE_VALUE_NAME, VarAccessMode::Local, false)?;
           match pipeval {
             RantValue::Int(index) => {
               getter_value = match getter_value.index_get(index) {
@@ -1733,7 +1733,7 @@ impl<'rant> VM<'rant> {
 
             // Define the input variable
             if let Some(input_id) = &modifier.input_var {
-              self.def_var_value(input_id.as_str(), AccessPathKind::Local, modifier_input, true)?;
+              self.def_var_value(input_id.as_str(), VarAccessMode::Local, modifier_input, true)?;
             }
           } else {
             // Push the next element
@@ -1758,7 +1758,7 @@ impl<'rant> VM<'rant> {
 
             // Define the input variable
             if let Some(input_id) = &modifier.input_var {
-              self.def_var_value(input_id.as_str(), AccessPathKind::Local, input_value, true)?;
+              self.def_var_value(input_id.as_str(), VarAccessMode::Local, input_value, true)?;
             }
           } else {
             // Call the mutator function
@@ -1818,29 +1818,29 @@ impl<'rant> VM<'rant> {
 
   #[inline(always)]
   fn def_pipeval(&mut self, pipeval: RantValue) -> RuntimeResult<()> {
-    self.call_stack.def_var_value(self.engine, PIPE_VALUE_NAME, AccessPathKind::Local, pipeval, true)
+    self.call_stack.def_var_value(self.engine, PIPE_VALUE_NAME, VarAccessMode::Local, pipeval, true)
   }
 
   /// Sets the value of an existing variable.
   #[inline(always)]
-  pub(crate) fn set_var_value(&mut self, varname: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
+  pub(crate) fn set_var_value(&mut self, varname: &str, access: VarAccessMode, val: RantValue) -> RuntimeResult<()> {
     self.call_stack.set_var_value(self.engine, varname, access, val)
   }
 
   /// Gets the value of an existing variable.
   #[inline(always)]
-  pub fn get_var_value(&self, varname: &str, access: AccessPathKind, prefer_function: bool) -> RuntimeResult<RantValue> {
+  pub fn get_var_value(&self, varname: &str, access: VarAccessMode, prefer_function: bool) -> RuntimeResult<RantValue> {
     self.call_stack.get_var_value(self.engine, varname, access, prefer_function)
   }
 
   #[inline(always)]
-  pub fn get_var_depth(&self, varname: &str, access: AccessPathKind) -> RuntimeResult<usize> {
+  pub fn get_var_depth(&self, varname: &str, access: VarAccessMode) -> RuntimeResult<usize> {
     self.call_stack.get_var_depth(self.engine, varname, access)
   }
 
   /// Defines a new variable in the current scope.
   #[inline(always)]
-  pub fn def_var_value(&mut self, varname: &str, access: AccessPathKind, val: RantValue, is_const: bool) -> RuntimeResult<()> {
+  pub fn def_var_value(&mut self, varname: &str, access: VarAccessMode, val: RantValue, is_const: bool) -> RuntimeResult<()> {
     self.call_stack.def_var_value(self.engine, varname, access, val, is_const)
   }
   

@@ -1,7 +1,7 @@
 use std::{rc::Rc};
 use fnv::{FnvBuildHasher};
 use quickscope::ScopeMap;
-use crate::{lang::{Sequence, Rst}, RantValue, Rant};
+use crate::{lang::{Sequence, Expression}, RantValue, Rant};
 use crate::runtime::*;
 use super::{output::OutputWriter};
 
@@ -123,9 +123,9 @@ impl<I> CallStack<I> {
 
   /// Sets a variable's value using the specified access type.
   #[inline]
-  pub fn set_var_value(&mut self, context: &mut Rant, id: &str, access: AccessPathKind, val: RantValue) -> RuntimeResult<()> {
+  pub fn set_var_value(&mut self, context: &mut Rant, id: &str, access: VarAccessMode, val: RantValue) -> RuntimeResult<()> {
     match access {
-      AccessPathKind::Local => {
+      VarAccessMode::Local => {
         if let Some(var) = self.locals.get_mut(id) {
           if !var.write(val) {
             runtime_error!(RuntimeErrorType::InvalidAccess, "cannot reassign local constant '{}'", id);
@@ -133,7 +133,7 @@ impl<I> CallStack<I> {
           return Ok(())
         }
       },
-      AccessPathKind::Descope(n) => {
+      VarAccessMode::Descope(n) => {
         if let Some(var) = self.locals.get_parent_mut(id, n) {
           if !var.write(val) {
             runtime_error!(RuntimeErrorType::InvalidAccess, "cannot reassign local constant '{}'", id);
@@ -142,7 +142,7 @@ impl<I> CallStack<I> {
         }
       },
       // Skip locals completely if it's a global accessor
-      AccessPathKind::ExplicitGlobal => {}
+      VarAccessMode::ExplicitGlobal => {}
     }
 
     // Check globals
@@ -157,20 +157,20 @@ impl<I> CallStack<I> {
   }
 
   #[inline]
-  pub fn get_var_depth(&self, context: &Rant, id: &str, access: AccessPathKind) -> RuntimeResult<usize> {
+  pub fn get_var_depth(&self, context: &Rant, id: &str, access: VarAccessMode) -> RuntimeResult<usize> {
     match access {
-      AccessPathKind::Local => {
+      VarAccessMode::Local => {
         if let Some(d) = self.locals.depth_of(id) {
           return Ok(d)
         }
       },
-      AccessPathKind::Descope(n) => {
+      VarAccessMode::Descope(n) => {
         if let Some((_, d)) = self.locals.get_parent_depth(id, n) {
           return Ok(d)
         }
       },
       // Skip locals completely if it's a global accessor
-      AccessPathKind::ExplicitGlobal => {}
+      VarAccessMode::ExplicitGlobal => {}
     }
 
     // Check globals
@@ -183,7 +183,7 @@ impl<I> CallStack<I> {
 
   /// Gets a variable's value using the specified access type.
   #[inline]
-  pub fn get_var_value(&self, context: &Rant, id: &str, access: AccessPathKind, prefer_function: bool) -> RuntimeResult<RantValue> {
+  pub fn get_var_value(&self, context: &Rant, id: &str, access: VarAccessMode, prefer_function: bool) -> RuntimeResult<RantValue> {
 
     macro_rules! percolating_func_lookup {
       ($value_iter:expr) => {
@@ -205,7 +205,7 @@ impl<I> CallStack<I> {
     }
 
     match access {
-      AccessPathKind::Local => {
+      VarAccessMode::Local => {
         // If the caller requested a function, perform function percolation
         if prefer_function {
           percolating_func_lookup!(self.locals.get_all(id));
@@ -213,14 +213,14 @@ impl<I> CallStack<I> {
           return Ok(var.value_cloned())
         }
       },
-      AccessPathKind::Descope(n) => {
+      VarAccessMode::Descope(n) => {
         if prefer_function {
           percolating_func_lookup!(self.locals.get_parents(id, n));
         } else if let Some(var) = self.locals.get_parent(id, n) {
           return Ok(var.value_cloned())
         }
       },
-      AccessPathKind::ExplicitGlobal => {},
+      VarAccessMode::ExplicitGlobal => {},
     }    
 
     // Check globals
@@ -236,19 +236,19 @@ impl<I> CallStack<I> {
   }
 
   /// Gets a mutable reference to a variable.
-  pub fn get_var_mut<'a>(&'a mut self, context: &'a mut Rant, id: &str, access: AccessPathKind) -> RuntimeResult<&'a mut RantVar> {
+  pub fn get_var_mut<'a>(&'a mut self, context: &'a mut Rant, id: &str, access: VarAccessMode) -> RuntimeResult<&'a mut RantVar> {
     match access {
-      AccessPathKind::Local => {
+      VarAccessMode::Local => {
         if let Some(var) = self.locals.get_mut(id) {
           return Ok(var)
         }
       },
-      AccessPathKind::Descope(n) => {
+      VarAccessMode::Descope(n) => {
         if let Some(var) = self.locals.get_parent_mut(id, n) {
           return Ok(var)
         }
       },
-      AccessPathKind::ExplicitGlobal => {},
+      VarAccessMode::ExplicitGlobal => {},
     }    
 
     // Check globals
@@ -279,9 +279,9 @@ impl<I> CallStack<I> {
   ///
   /// This function does not perform any identifier validation.
   #[inline]
-  pub fn def_var_value(&mut self, context: &mut Rant, id: &str, access: AccessPathKind, val: RantValue, is_const: bool) -> RuntimeResult<()> {
+  pub fn def_var_value(&mut self, context: &mut Rant, id: &str, access: VarAccessMode, val: RantValue, is_const: bool) -> RuntimeResult<()> {
     match access {
-      AccessPathKind::Local => {
+      VarAccessMode::Local => {
         // Don't allow redefs of local constants
         if let Some(v) = self.locals.get(id) {
           if v.is_const() && self.locals.depth_of(id) == Some(0) {
@@ -293,7 +293,7 @@ impl<I> CallStack<I> {
         self.locals.define(InternalString::from(id), variable);
         return Ok(())
       },
-      AccessPathKind::Descope(descope_count) => {
+      VarAccessMode::Descope(descope_count) => {
         // Don't allow redefs of parent constants
         if let Some((v, vd)) = self.locals.get_parent_depth(id, descope_count) {
           if v.is_const() && vd == descope_count {
@@ -305,7 +305,7 @@ impl<I> CallStack<I> {
         self.locals.define_parent(InternalString::from(id), variable, descope_count);
         return Ok(())
       },
-      AccessPathKind::ExplicitGlobal => {}
+      VarAccessMode::ExplicitGlobal => {}
     }
     
     // Don't allow redefs of global constants
@@ -421,7 +421,7 @@ impl<I> StackFrame<I> {
 
 impl<I> StackFrame<I> {
   #[inline]
-  pub(crate) fn seq_next(&mut self) -> Option<Rc<Rst>> {
+  pub(crate) fn seq_next(&mut self) -> Option<Rc<Expression>> {
     if self.is_done() {
       return None
     }

@@ -25,9 +25,9 @@ pub enum Intent {
   /// Check if the current block is finished and either continue the block or pop the state from the stack
   TickCurrentBlock,
   /// Pop a value off the stack and assign it to an existing variable.
-  SetVar { vname: Identifier, access_kind: AccessPathKind, },
+  SetVar { vname: Identifier, access_kind: VarAccessMode, },
   /// Pop a value off the stack and assign it to a new variable.
-  DefVar { vname: Identifier, access_kind: AccessPathKind, is_const: bool },
+  DefVar { vname: Identifier, access_kind: VarAccessMode, is_const: bool },
   /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `GetValue`.
   BuildDynamicGetter { 
     path: Rc<AccessPath>, dynamic_key_count: usize, pending_exprs: Vec<Rc<Sequence>>, 

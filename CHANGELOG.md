@@ -7,8 +7,11 @@
   * `()`, `(A;)`, `(A; B)`, `(A; B; C)`, ...
 * Added stdlib functions:
   * `[squish-thru]`
+  * `[to-tuple]`
+* Added several Rust API functions to support conversion to and from tuples and other collection types
 
 ## Changes
+* Renamed `lang::Rst` to `lang::Expression` to better reflect its purpose
 * Parametric spread is now enabled for all indexable collection types; not just lists
 * Changed the reference handle types for all collection types from type aliases to structs (and much refactoring was had)
 * Completely changed all collection initializer syntax:
@@ -20,6 +23,7 @@
 
 ## Fixes
 * Fixed `[augment]` accidentally mutating the original instance of the destination map
+* Fixed `[to-list]` not working on tuples
 
 ## 4.0.0-alpha.26
 

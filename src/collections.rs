@@ -107,6 +107,11 @@ impl RantTuple {
   pub fn into_handle(self) -> RantTupleHandle {
     RantTupleHandle::from(self)
   }
+
+  #[inline]
+  pub fn into_rant_list(self) -> RantList {
+    RantList::from(self.0)
+  }
 }
 
 impl From<Vec<RantValue>> for RantTuple {
@@ -173,6 +178,16 @@ impl RantList {
   #[inline]
   pub fn into_handle(self) -> RantListHandle {
     RantListHandle::from(self)
+  }
+
+  #[inline]
+  pub fn into_rant_tuple(self) -> RantTuple {
+    RantTuple::from(self.0)
+  }
+
+  #[inline]
+  pub fn to_rant_tuple(&self) -> RantTuple {
+    RantTuple::from(self.0.clone())
   }
 }
 
@@ -492,7 +507,7 @@ impl RantRange {
 
   /// Enumerates the values of the range and returns the results as a Rant `list` object.
   #[inline]
-  pub fn to_list(&self) -> RantList {
+  pub fn to_rant_list(&self) -> RantList {
     let n = self.len();
     let mut list = RantList::new();
 
@@ -503,5 +518,19 @@ impl RantRange {
     }
 
     list
+  }
+
+  #[inline]
+  pub fn to_rant_tuple(&self) -> RantTuple {
+    let n = self.len();
+    let mut items = Vec::with_capacity(n);
+
+    for i in 0..n {
+      if let Some(item) = self.get(i) {
+        items.push(RantValue::Int(item));
+      }
+    }
+
+    items.into()
   }
 }

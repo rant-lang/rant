@@ -85,7 +85,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     assert as "assert", assert_not as "assert-not", assert_eq as "assert-eq", assert_neq as "assert-neq",
 
     // Formatting functions
-    whitespace_fmt as "whitespace-fmt", 
+    ws_fmt as "ws-fmt", 
     num_fmt as "num-fmt",
     num_fmt_system as "num-fmt-system", 
     num_fmt_alt as "num-fmt-alt",
@@ -125,7 +125,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     asin, sin, acos, cos, atan, atan2, tan, sqrt, 
 
     // Conversion functions
-    to_int as "to-int", to_float as "to-float", to_string as "to-string", to_bool as "to-bool", to_list as "to-list",
+    to_int as "to-int", to_float as "to-float", to_string as "to-string", to_bool as "to-bool", to_list as "to-list", to_tuple as "to=tuple",
 
     // Generator functions
     alpha, dig, digh, dignz, maybe, rand, randf, rand_list as "rand-list", randf_list as "randf-list", rand_list_sum as "rand-list-sum",

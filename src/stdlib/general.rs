@@ -3,7 +3,7 @@ use std::mem;
 use data::DataSourceError;
 
 use super::*;
-use crate::lang::{AccessPathKind};
+use crate::lang::{VarAccessMode};
 
 /// `[$alt: a (any); b+ (any)]`
 ///
@@ -177,7 +177,7 @@ pub(crate) fn require(vm: &mut VM, module_path: String) -> RantStdResult {
     // Check if module is cached; if so, don't do anything
     if let Some(RantValue::Map(module_cache_ref)) = vm.context().get_global(crate::MODULES_CACHE_KEY) {
       if let Some(module @ RantValue::Map(..)) = module_cache_ref.borrow().raw_get(&module_name) {
-        vm.def_var_value(module_name.as_str(), AccessPathKind::Descope(1), module.clone(), true)?;
+        vm.def_var_value(module_name.as_str(), VarAccessMode::Descope(1), module.clone(), true)?;
         return Ok(())
       }
     }

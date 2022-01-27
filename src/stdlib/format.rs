@@ -1,10 +1,10 @@
 use super::*;
 use crate::format::*;
 
-/// `[$whitespace-fmt: mode? (string); custom-value? (any)]`
+/// `[$ws-fmt: mode? (string); custom-value? (any)]`
 ///
 /// Gets or sets the whitespace normalization mode for the current scope.
-pub(crate) fn whitespace_fmt(vm: &mut VM, (mode, custom): (Option<String>, Option<RantValue>)) -> RantStdResult {
+pub(crate) fn ws_fmt(vm: &mut VM, (mode, custom): (Option<String>, Option<RantValue>)) -> RantStdResult {
   if let Some(mode) = mode.as_deref() {
     let mode = match mode {
       "default" =>    WhitespaceNormalizationMode::Default,

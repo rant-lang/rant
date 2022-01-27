@@ -158,13 +158,13 @@ impl RantValue {
 
   /// Converts to a Rant `bool` value.
   #[inline]
-  pub fn into_rant_bool(self) -> Self {
+  pub fn into_bool_value(self) -> Self {
     Self::Boolean(self.to_bool())
   }
 
   /// Converts to a Rant `int` value (or `empty` if the conversion fails).
   #[inline]
-  pub fn into_rant_int(self) -> Self {
+  pub fn into_int_value(self) -> Self {
     match self {
       Self::Int(_) => self,
       Self::Float(n) => Self::Int(n as i64),
@@ -181,7 +181,7 @@ impl RantValue {
 
   /// Converts to a Rant `float` value (or `empty` if the conversion fails).
   #[inline]
-  pub fn into_rant_float(self) -> Self {
+  pub fn into_float_value(self) -> Self {
     match self {
       Self::Float(_) => self,
       Self::Int(n) => Self::Float(n as f64),
@@ -198,7 +198,7 @@ impl RantValue {
 
   /// Converts to a Rant `string` value.
   #[inline]
-  pub fn into_rant_string(self) -> Self {
+  pub fn into_string_value(self) -> Self {
     match self {
       Self::String(_) => self,
       _ => Self::String(self.to_string().into())
@@ -207,11 +207,24 @@ impl RantValue {
 
   /// Converts to a Rant `list` value.
   #[inline]
-  pub fn into_rant_list(self) -> Self {
+  pub fn into_list_value(self) -> Self {
     Self::List(match self {
+      Self::Tuple(tuple) => tuple.into_rant_list(),
       Self::String(s) => s.to_rant_list(),
-      Self::List(list) => list.borrow().clone(),
-      Self::Range(range) => range.to_list(),
+      Self::Range(range) => range.to_rant_list(),
+      list @ Self::List(_) => return list,
+      _ => return RantValue::Empty,
+    }.into_handle())
+  }
+
+  /// Converts to a Rant `tuple` value.
+  #[inline]
+  pub fn into_tuple_value(self) -> Self {
+    Self::Tuple(match self {
+      Self::String(s) => s.to_rant_tuple(),
+      Self::List(list) => list.borrow().to_rant_tuple(),
+      Self::Range(range) => range.to_rant_tuple(),
+      tuple @ RantValue::Tuple(_) => return tuple,
       _ => return RantValue::Empty,
     }.into_handle())
   }

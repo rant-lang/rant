@@ -194,9 +194,9 @@ impl Display for AccessPathComponent {
   }
 }
 
-/// Types of access paths.
+/// Defines available variable resolution modes for variable access paths.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum AccessPathKind {
+pub enum VarAccessMode {
   /// Path points to a variable in the current scope.
   Local,
   /// Path points explicitly to a global variable.
@@ -205,12 +205,12 @@ pub enum AccessPathKind {
   Descope(usize),
 }
 
-impl AccessPathKind {
-  /// Gets the number of explicit descopes required by this path. If the path is explicitly global, returns 0.
+impl VarAccessMode {
+  /// Gets the number of explicit descopes required for this mode. If the path is explicitly global, returns 0.
   pub fn descope_count(&self) -> usize {
     match self {
-      AccessPathKind::Local | AccessPathKind::ExplicitGlobal => 0,
-      AccessPathKind::Descope(n) => *n
+      VarAccessMode::Local | VarAccessMode::ExplicitGlobal => 0,
+      VarAccessMode::Descope(n) => *n
     }
   }
 
@@ -225,22 +225,22 @@ impl AccessPathKind {
 #[derive(Debug)]
 pub struct AccessPath {
   path: Vec<AccessPathComponent>,
-  kind: AccessPathKind,
+  mode: VarAccessMode,
 }
 
 impl AccessPath {
   #[inline]
-  pub fn new(path: Vec<AccessPathComponent>, kind: AccessPathKind) -> Self {
+  pub fn new(path: Vec<AccessPathComponent>, kind: VarAccessMode) -> Self {
     Self {
       path,
-      kind
+      mode: kind
     }
   }
 
   /// Determines whether the access path is explicitly accessing a global value.
   #[inline]
   pub fn is_explicit_global(&self) -> bool {
-    matches!(self.kind, AccessPathKind::ExplicitGlobal)
+    matches!(self.mode, VarAccessMode::ExplicitGlobal)
   }
 
   /// Determines whether the root of the access path is an inline value.
@@ -249,16 +249,16 @@ impl AccessPath {
     matches!(self.first(), Some(AccessPathComponent::AnonymousValue(..)))
   }
 
-  /// Determines whether the access path targets just a variable.
+  /// Determines whether the access path targets *only* a variable (i.e. no child access).
   #[inline]
-  pub fn is_variable(&self) -> bool {
+  pub fn is_variable_target(&self) -> bool {
     self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::Name(..) | AccessPathComponent::DynamicKey(..) | AccessPathComponent::PipeValue))
   }
 
   /// Gets the kind access path this is.
   #[inline]
-  pub fn kind(&self) -> AccessPathKind {
-    self.kind
+  pub fn mode(&self) -> VarAccessMode {
+    self.mode
   }
 
   /// Returns a list of dynamic keys used by the path in order.
@@ -316,10 +316,10 @@ impl Display for AccessPath {
   }
 }
 
-/// A series of Rant program elements.
+/// A series of Rant expressions to be executed in order.
 #[derive(Debug)]
 pub struct Sequence {
-  elements: Vec<Rc<Rst>>,
+  elements: Vec<Rc<Expression>>,
   /// An optional name for the sequence.
   pub name: Option<InternalString>,
   /// Information about where the sequence came from, such as its source file.
@@ -329,7 +329,7 @@ pub struct Sequence {
 impl Sequence {
   /// Creates a new sequence.
   #[inline]
-  pub fn new(seq: Vec<Rc<Rst>>, origin: &Rc<RantProgramInfo>) -> Self {
+  pub fn new(seq: Vec<Rc<Expression>>, origin: &Rc<RantProgramInfo>) -> Self {
     Self {
       elements: seq,
       name: None,
@@ -339,7 +339,7 @@ impl Sequence {
   
   /// Creates a new sequence with a single element.
   #[inline]
-  pub fn one(rst: Rst, origin: &Rc<RantProgramInfo>) -> Self {
+  pub fn one(rst: Expression, origin: &Rc<RantProgramInfo>) -> Self {
     Self {
       elements: vec![Rc::new(rst)],
       name: None,
@@ -373,7 +373,7 @@ impl Sequence {
 }
 
 impl Deref for Sequence {
-  type Target = Vec<Rc<Rst>>;
+  type Target = Vec<Rc<Expression>>;
   fn deref(&self) -> &Self::Target {
     &self.elements
   }
@@ -708,9 +708,9 @@ pub enum MapKeyExpr {
   Static(InternalString),
 }
 
-/// Rant Syntax Tree
+/// Defines Rant expression tree node types. These are directly executable by the VM.
 #[derive(Debug)]
-pub enum Rst {
+pub enum Expression {
   /// No Operation
   Nop,
   /// Program sequence
@@ -732,11 +732,11 @@ pub enum Rst {
   /// Function definition
   FuncDef(FunctionDef),
   /// Variable definition
-  DefVar(Identifier, AccessPathKind, Option<Rc<Sequence>>),
+  DefVar(Identifier, VarAccessMode, Option<Rc<Sequence>>),
   /// Constant definition
-  DefConst(Identifier, AccessPathKind, Option<Rc<Sequence>>),
+  DefConst(Identifier, VarAccessMode, Option<Rc<Sequence>>),
   /// Variable depth
-  Depth(Identifier, AccessPathKind, Option<Rc<Sequence>>),
+  Depth(Identifier, VarAccessMode, Option<Rc<Sequence>>),
   /// Getter
   Get(Rc<AccessPath>, Option<Rc<Sequence>>),
   /// Setter
@@ -807,62 +807,62 @@ pub enum Rst {
   Require { alias: Option<InternalString>, path: InternalString },
 }
 
-impl Rst {
+impl Expression {
   /// Gets the diagnostic display name for the node.
   pub fn display_name(&self) -> &'static str {
     match self {
-      Rst::Sequence(_) =>                     "sequence",
-      Rst::Block(..) =>                       "block",
-      Rst::ListInit(_) =>                     "list",
-      Rst::TupleInit(_) =>                    "tuple",
-      Rst::MapInit(_) =>                      "map",
-      Rst::Lambda(_) =>                       "lambda",
-      Rst::FuncCall(_) =>                     "call function",
-      Rst::FuncDef(_) =>                      "define function",
-      Rst::Fragment(_) =>                     "fragment",
-      Rst::Whitespace(_) =>                   "whitespace",
-      Rst::Integer(_) =>                      "integer",
-      Rst::Float(_) =>                        "float",
-      Rst::Boolean(_) =>                      "bool",
-      Rst::EmptyValue =>                      "emptyval",
-      Rst::Nop =>                             "no-op",
-      Rst::DefVar(..) =>                      "define variable",
-      Rst::DefConst(..) =>                    "define constant",
-      Rst::Depth(..) =>                       "variable depth",
-      Rst::Get(..) =>                         "getter",
-      Rst::Set(..) =>                         "setter",
-      Rst::PipedCall(_) =>                    "piped call",
-      Rst::PipeValue =>                       "pipeval",
-      Rst::Return(_) =>                       "return",
-      Rst::Continue(_) =>                     "continue",
-      Rst::Break(_) =>                        "break",
-      Rst::LogicNot(_) =>                     "not",
-      Rst::Negate(_) =>                       "negate",
-      Rst::Power(_, _) =>                     "power",
-      Rst::Multiply(_, _) =>                  "multiply",
-      Rst::Divide(_, _) =>                    "divide",
-      Rst::Modulo(_, _) =>                    "modulo",
-      Rst::Add(_, _) =>                       "add",
-      Rst::Subtract(_, _) =>                  "subtract",
-      Rst::Less(_, _) =>                      "less than",
-      Rst::LessOrEqual(_, _) =>               "less than or equal",
-      Rst::Greater(_, _) =>                   "greater than",
-      Rst::GreaterOrEqual(_, _) =>            "greater than or equal",
-      Rst::Equals(_, _) =>                    "equals",
-      Rst::NotEquals(_, _) =>                 "not equals",
-      Rst::LogicAnd(_, _) =>                  "and",
-      Rst::LogicNor(_, _) =>                  "nor",
-      Rst::LogicXor(_, _) =>                  "xor",
-      Rst::LogicOr(_, _) =>                   "or",
-      Rst::LogicNand(_, _) =>                 "nand",
-      Rst::DebugCursor(_) =>                  "debug cursor",
-      Rst::Conditional { .. } =>              "conditional",
-      Rst::Require { .. } =>                  "require",
+      Self::Sequence(_) =>                     "sequence",
+      Self::Block(..) =>                       "block",
+      Self::ListInit(_) =>                     "list",
+      Self::TupleInit(_) =>                    "tuple",
+      Self::MapInit(_) =>                      "map",
+      Self::Lambda(_) =>                       "lambda",
+      Self::FuncCall(_) =>                     "call function",
+      Self::FuncDef(_) =>                      "define function",
+      Self::Fragment(_) =>                     "fragment",
+      Self::Whitespace(_) =>                   "whitespace",
+      Self::Integer(_) =>                      "integer",
+      Self::Float(_) =>                        "float",
+      Self::Boolean(_) =>                      "bool",
+      Self::EmptyValue =>                      "emptyval",
+      Self::Nop =>                             "no-op",
+      Self::DefVar(..) =>                      "define variable",
+      Self::DefConst(..) =>                    "define constant",
+      Self::Depth(..) =>                       "variable depth",
+      Self::Get(..) =>                         "getter",
+      Self::Set(..) =>                         "setter",
+      Self::PipedCall(_) =>                    "piped call",
+      Self::PipeValue =>                       "pipeval",
+      Self::Return(_) =>                       "return",
+      Self::Continue(_) =>                     "continue",
+      Self::Break(_) =>                        "break",
+      Self::LogicNot(_) =>                     "not",
+      Self::Negate(_) =>                       "negate",
+      Self::Power(_, _) =>                     "power",
+      Self::Multiply(_, _) =>                  "multiply",
+      Self::Divide(_, _) =>                    "divide",
+      Self::Modulo(_, _) =>                    "modulo",
+      Self::Add(_, _) =>                       "add",
+      Self::Subtract(_, _) =>                  "subtract",
+      Self::Less(_, _) =>                      "less than",
+      Self::LessOrEqual(_, _) =>               "less than or equal",
+      Self::Greater(_, _) =>                   "greater than",
+      Self::GreaterOrEqual(_, _) =>            "greater than or equal",
+      Self::Equals(_, _) =>                    "equals",
+      Self::NotEquals(_, _) =>                 "not equals",
+      Self::LogicAnd(_, _) =>                  "and",
+      Self::LogicNor(_, _) =>                  "nor",
+      Self::LogicXor(_, _) =>                  "xor",
+      Self::LogicOr(_, _) =>                   "or",
+      Self::LogicNand(_, _) =>                 "nand",
+      Self::DebugCursor(_) =>                  "debug cursor",
+      Self::Conditional { .. } =>              "conditional",
+      Self::Require { .. } =>                  "require",
     }
   }
 }
 
-impl Display for Rst {
+impl Display for Expression {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}", self.display_name())
   }

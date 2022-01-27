@@ -8,6 +8,11 @@ pub(crate) fn collect(vm: &mut VM, items: VarArgs<RantValue>) -> RantStdResult {
   Ok(())
 }
 
+pub(crate) fn tuple(vm: &mut VM, items: VarArgs<RantValue>) -> RantStdResult {
+  vm.cur_frame_mut().write_value(RantValue::Tuple(items.iter().cloned().collect::<RantTuple>().into_handle()));
+  Ok(())
+}
+
 pub(crate) fn nlist(vm: &mut VM, items: VarArgs<RantValue>) -> RantStdResult {
   let list = RantValue::List(items.iter().cloned().collect::<RantList>().into_handle());
   vm.cur_frame_mut().write_value(RantValue::List(RantList::from(vec![list]).into_handle()));

@@ -96,6 +96,18 @@ impl RantString {
     list
   }
 
+  /// Splits the string into individual graphemes and returns them as a Rant tuple.
+  #[inline]
+  pub fn to_rant_tuple(&self) -> RantTuple {
+    let n = self.len();
+    let mut items = Vec::with_capacity(n);
+    for i in 0..n {
+      let c = self.grapheme_at(i).unwrap();
+      items.push(RantValue::String(c));
+    }
+    RantTuple::from(items)
+  }
+
   /// Gets the string at the specified slice.
   pub fn to_slice(&self, start: Option<usize>, end: Option<usize>) -> Option<RantString> {
     let graphemes = self.graphemes();
@@ -228,7 +240,7 @@ impl PartialOrd for RantString {
 
 impl FromRant for RantString {
   fn from_rant(val: RantValue) -> Result<Self, ValueError> {
-    if let RantValue::String(s) = val.into_rant_string() {
+    if let RantValue::String(s) = val.into_string_value() {
       return Ok(s)
     }
     unreachable!()
