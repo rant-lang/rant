@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.0.0-alpha.27 (unreleased)
+## 4.0.0-alpha.27
 
 ## New
 * Added the `tuple` type, along with tuple initialization syntax:
