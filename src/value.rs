@@ -209,7 +209,7 @@ impl RantValue {
   #[inline]
   pub fn into_list_value(self) -> Self {
     Self::List(match self {
-      Self::Tuple(tuple) => tuple.into_rant_list(),
+      Self::Tuple(tuple) => tuple.to_rant_list(),
       Self::String(s) => s.to_rant_list(),
       Self::Range(range) => range.to_rant_list(),
       list @ Self::List(_) => return list,

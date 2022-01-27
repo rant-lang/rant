@@ -1,7 +1,7 @@
 [package]
 name = "rant"
-version = "4.0.0-alpha.26"
-edition = "2018"
+version = "4.0.0-alpha.27"
+edition = "2021"
 description = "The Rant procedural templating language"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/rant-lang/rant"
@@ -9,7 +9,7 @@ homepage = "https://rant-lang.org"
 keywords = ["rant", "templating", "procedural", "generation", "procgen"]
 categories = ["text-processing", "game-development", "template-engine"]
 readme = "README.md"
-rust-version = "1.57"
+rust-version = "1.58.1"
 include = [
   "**/*.rs", 
   "Cargo.toml",

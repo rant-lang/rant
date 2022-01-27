@@ -4,7 +4,7 @@ use once_cell::sync::OnceCell;
 use smallvec::{SmallVec};
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::{FromRant, InternalString, IntoRant, RantList, RantValue, ValueError, util};
+use crate::{FromRant, InternalString, IntoRant, RantList, RantValue, ValueError, util, RantTuple};
 
 type Graphemes = SmallVec<[(usize, usize); 1]>;
 

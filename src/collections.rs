@@ -109,6 +109,11 @@ impl RantTuple {
   }
 
   #[inline]
+  pub fn to_rant_list(&self) -> RantList {
+    RantList::from(self.0.clone())
+  }
+
+  #[inline]
   pub fn into_rant_list(self) -> RantList {
     RantList::from(self.0)
   }

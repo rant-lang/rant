@@ -150,10 +150,6 @@ Since Rant 4 is early in development, some documentation may be outdated/incompl
 
 The changelog is updated constantly throughout the development process, providing a complete summary of upcoming changes at a glance even before the next release.
 
-## MSRV
-
-The minimum supported Rust version is `1.57.0`.
-
 ## License
 
 Licensed under either of
