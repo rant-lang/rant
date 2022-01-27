@@ -1,5 +1,5 @@
 use crate::{RantFunction, RantString, lang::Slice, util};
-use crate::collections::*;
+use crate::{collections::*, TryFromRant};
 use crate::runtime::resolver::*;
 use crate::runtime::*;
 use crate::util::*;
@@ -739,11 +739,34 @@ impl PartialEq for RantSpecial {
   }
 }
 
-// TODO: Use `RantNumber` to accept any number type in stdlib functions
+/// Represents a dynamically-typed Rant number.
+/// 
+/// Implements `TryFromRant` and can therefore be used on native functions to accept any number type (`int` or `float`), 
+/// while preserving the original type.
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
-pub(crate) enum RantNumber {
+pub enum RantNumber {
+  /// Rant `int` value.
   Int(i64),
+  /// Rant `float` value.
   Float(f64)
+}
+
+impl TryFromRant for RantNumber {
+  fn try_from_rant(val: RantValue) -> Result<Self, ValueError> {
+    match val {
+      RantValue::Int(i) => Ok(RantNumber::Int(i)),
+      RantValue::Float(f) => Ok(RantNumber::Float(f)),
+      other => Err(ValueError::InvalidConversion {
+        from: other.type_name(),
+        to: "number",
+        message: None,
+      })
+    }
+  }
+
+  fn is_rant_optional() -> bool {
+    false
+  }
 }
 
 impl Debug for RantValue {
