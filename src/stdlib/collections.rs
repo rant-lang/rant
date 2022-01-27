@@ -628,7 +628,7 @@ pub(crate) fn seg(vm: &mut VM, (collection, seg_size): (RantValue, usize)) -> Ra
         segs.push(collection.slice_get(&Slice::Between((i * seg_size) as i64, ((i + 1) * seg_size) as i64)).into_runtime_result()?);
       }
     }
-    vm.cur_frame_mut().write_value(segs.into_rant().into_runtime_result()?);
+    vm.cur_frame_mut().write_value(segs.try_into_rant().into_runtime_result()?);
   }
   Ok(())
 }
@@ -658,6 +658,6 @@ pub(crate) fn chunks(vm: &mut VM, (collection, chunk_count): (RantValue, usize))
     }
   }
 
-  vm.cur_frame_mut().write_value(chunks.into_rant().into_runtime_result()?);
+  vm.cur_frame_mut().write_value(chunks.try_into_rant().into_runtime_result()?);
   Ok(())
 }

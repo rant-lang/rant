@@ -64,7 +64,7 @@ pub(crate) fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
       Some(Rc::clone(&selector))
     },
     Some(val @ RantValue::String(_)) => {
-      let mode = SelectorMode::from_rant(val).into_runtime_result()?;
+      let mode = SelectorMode::try_from_rant(val).into_runtime_result()?;
       let selector = Rc::new(RefCell::new(Selector::new(mode)));
       Some(selector)
     },

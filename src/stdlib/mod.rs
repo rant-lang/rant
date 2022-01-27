@@ -7,7 +7,7 @@ use std::rc::Rc;
 use crate::*;
 use crate::runtime::*;
 use crate::convert::*;
-use crate::convert::IntoRant;
+use crate::convert::TryIntoRant;
 
 mod assertion;
 mod block;

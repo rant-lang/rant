@@ -60,45 +60,45 @@ pub(crate) fn num_fmt(vm: &mut VM, (options, depth): (Option<RantMapHandle>, Opt
 
         match key_invariant.as_str() {
           KEY_SYSTEM => {
-            let system = NumeralSystem::from_rant(v).into_runtime_result()?;
+            let system = NumeralSystem::try_from_rant(v).into_runtime_result()?;
             format.system = system;
           },
           KEY_ALT => {
-            let alt = bool::from_rant(v).into_runtime_result()?;
+            let alt = bool::try_from_rant(v).into_runtime_result()?;
             format.alternate = alt;
           },
           KEY_PRECISION => {
-            let precision_encoded = i16::from_rant(v).into_runtime_result()?;
+            let precision_encoded = i16::try_from_rant(v).into_runtime_result()?;
             let precision = (precision_encoded >= 0).then(|| precision_encoded as u16);
             format.precision = precision;
           },
           KEY_PADDING => {
-            let padding = u16::from_rant(v).into_runtime_result()?;
+            let padding = u16::try_from_rant(v).into_runtime_result()?;
             format.padding = padding;
           },
           KEY_UPPER => {
-            let upper = bool::from_rant(v).into_runtime_result()?;
+            let upper = bool::try_from_rant(v).into_runtime_result()?;
             format.uppercase = upper;
           },
           KEY_ENDIAN => {
-            let endian = Endianness::from_rant(v).into_runtime_result()?;
+            let endian = Endianness::try_from_rant(v).into_runtime_result()?;
             format.endianness = endian;
           },
           KEY_SIGN => {
-            let sign = SignStyle::from_rant(v).into_runtime_result()?;
+            let sign = SignStyle::try_from_rant(v).into_runtime_result()?;
             format.sign = sign;
           },
           KEY_INFINITY => {
-            let infinity = InfinityStyle::from_rant(v).into_runtime_result()?;
+            let infinity = InfinityStyle::try_from_rant(v).into_runtime_result()?;
             format.infinity = infinity;
           },
           KEY_GROUP_SEP => {
-            let group_sep_encoded = InternalString::from_rant(v).into_runtime_result()?;
+            let group_sep_encoded = InternalString::try_from_rant(v).into_runtime_result()?;
             let group_sep = (!group_sep_encoded.is_empty()).then(|| group_sep_encoded);
             format.group_sep = group_sep;
           },
           KEY_DECIMAL_SEP => {
-            let decimal_sep_encoded = InternalString::from_rant(v).into_runtime_result()?;
+            let decimal_sep_encoded = InternalString::try_from_rant(v).into_runtime_result()?;
             let decimal_sep = (!decimal_sep_encoded.is_empty()).then(|| decimal_sep_encoded);
             format.decimal_sep = decimal_sep;
           },
@@ -116,18 +116,18 @@ pub(crate) fn num_fmt(vm: &mut VM, (options, depth): (Option<RantMapHandle>, Opt
 
     let mut fmt_map = RantMap::new();
     
-    fmt_map.raw_set(KEY_SYSTEM, fmt.system.into_rant().into_runtime_result()?);
-    fmt_map.raw_set(KEY_ALT, fmt.alternate.into_rant().into_runtime_result()?);
-    fmt_map.raw_set(KEY_PRECISION, fmt.precision.map(|p| p as i64).unwrap_or(-1).into_rant().into_runtime_result()?);
-    fmt_map.raw_set(KEY_PADDING, fmt.padding.into_rant().into_runtime_result()?);
-    fmt_map.raw_set(KEY_UPPER, fmt.uppercase.into_rant().into_runtime_result()?);
-    fmt_map.raw_set(KEY_ENDIAN, fmt.endianness.into_rant().into_runtime_result()?);
-    fmt_map.raw_set(KEY_SIGN, fmt.sign.into_rant().into_runtime_result()?);
-    fmt_map.raw_set(KEY_INFINITY, fmt.infinity.into_rant().into_runtime_result()?);
-    fmt_map.raw_set(KEY_GROUP_SEP, fmt.group_sep.unwrap_or_default().into_rant().into_runtime_result()?);
-    fmt_map.raw_set(KEY_DECIMAL_SEP, fmt.decimal_sep.unwrap_or_default().into_rant().into_runtime_result()?);
+    fmt_map.raw_set(KEY_SYSTEM, fmt.system.try_into_rant().into_runtime_result()?);
+    fmt_map.raw_set(KEY_ALT, fmt.alternate.try_into_rant().into_runtime_result()?);
+    fmt_map.raw_set(KEY_PRECISION, fmt.precision.map(|p| p as i64).unwrap_or(-1).try_into_rant().into_runtime_result()?);
+    fmt_map.raw_set(KEY_PADDING, fmt.padding.try_into_rant().into_runtime_result()?);
+    fmt_map.raw_set(KEY_UPPER, fmt.uppercase.try_into_rant().into_runtime_result()?);
+    fmt_map.raw_set(KEY_ENDIAN, fmt.endianness.try_into_rant().into_runtime_result()?);
+    fmt_map.raw_set(KEY_SIGN, fmt.sign.try_into_rant().into_runtime_result()?);
+    fmt_map.raw_set(KEY_INFINITY, fmt.infinity.try_into_rant().into_runtime_result()?);
+    fmt_map.raw_set(KEY_GROUP_SEP, fmt.group_sep.unwrap_or_default().try_into_rant().into_runtime_result()?);
+    fmt_map.raw_set(KEY_DECIMAL_SEP, fmt.decimal_sep.unwrap_or_default().try_into_rant().into_runtime_result()?);
 
-    vm.cur_frame_mut().write_value(fmt_map.into_rant().into_runtime_result()?);
+    vm.cur_frame_mut().write_value(fmt_map.try_into_rant().into_runtime_result()?);
   }
 
   Ok(())
@@ -146,7 +146,7 @@ pub(crate) fn num_fmt_system(vm: &mut VM, (system, depth): (Option<NumeralSystem
     let cur_system = match vm.parent_frame_mut(actual_depth) {
       Some(frame) => frame.output().format().num_format.system,
       None => Default::default(),
-    }.into_rant().into_runtime_result()?;
+    }.try_into_rant().into_runtime_result()?;
       
     vm.cur_frame_mut().write_value(cur_system);
   }
@@ -167,7 +167,7 @@ pub(crate) fn num_fmt_alt(vm: &mut VM, (alt, depth): (Option<bool>, Option<usize
     let cur_alternate = match vm.parent_frame(actual_depth) {
       Some(frame) => frame.output().format().num_format.alternate,
       None => false
-    }.into_rant().into_runtime_result()?;
+    }.try_into_rant().into_runtime_result()?;
     vm.cur_frame_mut().write_value(cur_alternate);
   }
 
@@ -187,7 +187,7 @@ pub(crate) fn num_fmt_padding(vm: &mut VM, (padding, depth): (Option<u16>, Optio
     let cur_padding = match vm.parent_frame(actual_depth) {
         Some(frame) => frame.output().format().num_format.padding,
         None => 0,
-    }.into_rant().into_runtime_result()?;
+    }.try_into_rant().into_runtime_result()?;
     vm.cur_frame_mut().write_value(cur_padding);
   }
   
@@ -208,7 +208,7 @@ pub(crate) fn num_fmt_precision(vm: &mut VM, (precision, depth): (Option<i16>, O
     let cur_precision = match vm.parent_frame(actual_depth) {
         Some(frame) => frame.output().format().num_format.precision.map(|p| p as i64).unwrap_or(-DEFAULT_PRECISION),
         None => DEFAULT_PRECISION,
-    }.into_rant().into_runtime_result()?;
+    }.try_into_rant().into_runtime_result()?;
     vm.cur_frame_mut().write_value(cur_precision);
   }
   
@@ -228,7 +228,7 @@ pub(crate) fn num_fmt_upper(vm: &mut VM, (upper, depth): (Option<bool>, Option<u
     let cur_upper = match vm.parent_frame(actual_depth) {
       Some(frame) => frame.output().format().num_format.uppercase,
       None => false
-    }.into_rant().into_runtime_result()?;
+    }.try_into_rant().into_runtime_result()?;
     vm.cur_frame_mut().write_value(cur_upper);
   }
 
@@ -248,7 +248,7 @@ pub(crate) fn num_fmt_endian(vm: &mut VM, (endianness, depth): (Option<Endiannes
     let cur_endianness = match vm.parent_frame(actual_depth) {
       Some(frame) => frame.output().format().num_format.endianness,
       None => Default::default()
-    }.into_rant().into_runtime_result()?;
+    }.try_into_rant().into_runtime_result()?;
     vm.cur_frame_mut().write_value(cur_endianness);
   }
 
@@ -268,7 +268,7 @@ pub(crate) fn num_fmt_sign(vm: &mut VM, (sign_style, depth): (Option<SignStyle>,
     let cur_sign_style = match vm.parent_frame(actual_depth) {
       Some(frame) => frame.output().format().num_format.sign,
       None => Default::default()
-    }.into_rant().into_runtime_result()?;
+    }.try_into_rant().into_runtime_result()?;
     vm.cur_frame_mut().write_value(cur_sign_style);
   }
 
@@ -288,7 +288,7 @@ pub(crate) fn num_fmt_infinity(vm: &mut VM, (infinity_style, depth): (Option<Inf
     let cur_infinity_style = match vm.parent_frame(actual_depth) {
       Some(frame) => frame.output().format().num_format.infinity,
       None => Default::default()
-    }.into_rant().into_runtime_result()?;
+    }.try_into_rant().into_runtime_result()?;
     vm.cur_frame_mut().write_value(cur_infinity_style);
   }
 
@@ -308,7 +308,7 @@ pub(crate) fn num_fmt_group_sep(vm: &mut VM, (group_sep, depth): (Option<Interna
     let cur_group_sep = match vm.parent_frame(actual_depth) {
       Some(frame) => frame.output().format().num_format.group_sep.clone().unwrap_or_default(),
       None => Default::default()
-    }.into_rant().into_runtime_result()?;
+    }.try_into_rant().into_runtime_result()?;
 
     vm.cur_frame_mut().write_value(cur_group_sep);
   }
@@ -329,7 +329,7 @@ pub(crate) fn num_fmt_decimal_sep(vm: &mut VM, (decimal_sep, depth): (Option<Int
     let cur_decimal_sep = match vm.parent_frame(actual_depth) {
       Some(frame) => frame.output().format().num_format.decimal_sep.clone().unwrap_or_default(),
       None => Default::default()
-    }.into_rant().into_runtime_result()?;
+    }.try_into_rant().into_runtime_result()?;
 
     vm.cur_frame_mut().write_value(cur_decimal_sep);
   }

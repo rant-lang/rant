@@ -10,7 +10,7 @@ pub(crate) fn split(vm: &mut VM, (s, at): (String, Option<String>)) -> RantStdRe
       .split(at.unwrap().as_str())
       .map(|part| part.to_owned())
       .collect::<Vec<String>>()
-  }.into_rant().into_runtime_result()?;
+  }.try_into_rant().into_runtime_result()?;
 
   vm.cur_frame_mut().write_value(list);
   Ok(())

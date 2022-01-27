@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::{FromRant, InternalString, IntoRant, RantValue, ValueError};
+use crate::{TryFromRant, InternalString, TryIntoRant, RantValue, ValueError};
 
 const DEFAULT_SIGN_POSITIVE: &str = "+";
 const DEFAULT_SIGN_NEGATIVE: &str = "-";
@@ -83,8 +83,8 @@ impl Default for SignStyle {
   }
 }
 
-impl FromRant for SignStyle {
-  fn from_rant(val: RantValue) -> Result<Self, ValueError> {
+impl TryFromRant for SignStyle {
+  fn try_from_rant(val: RantValue) -> Result<Self, ValueError> {
     let mut s = val.to_string();
     s.make_ascii_lowercase();
     Ok(match s.as_str() {
@@ -104,13 +104,13 @@ impl FromRant for SignStyle {
   }
 }
 
-impl IntoRant for SignStyle {
-  fn into_rant(self) -> Result<RantValue, ValueError> {
+impl TryIntoRant for SignStyle {
+  fn try_into_rant(self) -> Result<RantValue, ValueError> {
     match self {
       Self::Explicit => Self::ALIAS_EXPLICIT,
       Self::ExplicitNonZero => Self::ALIAS_EXPLICIT_NON_ZERO,
       Self::NegativeOnly => Self::ALIAS_NEGATIVE_ONLY,
-    }.into_rant()
+    }.try_into_rant()
   }
 }
 
@@ -137,8 +137,8 @@ impl Default for InfinityStyle {
   }
 }
 
-impl FromRant for InfinityStyle {
-  fn from_rant(val: RantValue) -> Result<Self, ValueError> {
+impl TryFromRant for InfinityStyle {
+  fn try_from_rant(val: RantValue) -> Result<Self, ValueError> {
     let mut s = val.to_string();
     s.make_ascii_lowercase();
     Ok(match s.as_str() {
@@ -157,12 +157,12 @@ impl FromRant for InfinityStyle {
   }
 }
 
-impl IntoRant for InfinityStyle {
-  fn into_rant(self) -> Result<RantValue, ValueError> {
+impl TryIntoRant for InfinityStyle {
+  fn try_into_rant(self) -> Result<RantValue, ValueError> {
     match self {
       Self::Keyword => Self::ALIAS_KEYWORD,
       Self::Symbol => Self::ALIAS_SYMBOL,
-    }.into_rant()
+    }.try_into_rant()
   }
 }
 
@@ -217,8 +217,8 @@ impl Default for NumeralSystem {
   }
 }
 
-impl FromRant for NumeralSystem {
-  fn from_rant(val: RantValue) -> Result<Self, ValueError> {
+impl TryFromRant for NumeralSystem {
+  fn try_from_rant(val: RantValue) -> Result<Self, ValueError> {
     let mut s = val.to_string();
     s.make_ascii_lowercase();
     Ok(match s.as_str() {
@@ -244,8 +244,8 @@ impl FromRant for NumeralSystem {
   }
 }
 
-impl IntoRant for NumeralSystem {
-  fn into_rant(self) -> Result<RantValue, ValueError> {
+impl TryIntoRant for NumeralSystem {
+  fn try_into_rant(self) -> Result<RantValue, ValueError> {
     match self {
       Self::WestArabic => Self::ALIAS_WEST_ARABIC,
       Self::EastArabic => Self::ALIAS_EAST_ARABIC,
@@ -256,7 +256,7 @@ impl IntoRant for NumeralSystem {
       Self::Octal => Self::ALIAS_OCTAL,
       Self::Binary => Self::ALIAS_BINARY,
       Self::Alpha => Self::ALIAS_ALPHA,
-    }.into_rant()
+    }.try_into_rant()
   }
 }
 
@@ -313,8 +313,8 @@ impl Default for Endianness {
   }
 }
 
-impl FromRant for Endianness {
-  fn from_rant(val: RantValue) -> Result<Self, ValueError> {
+impl TryFromRant for Endianness {
+  fn try_from_rant(val: RantValue) -> Result<Self, ValueError> {
     let mut s = val.to_string();
     s.make_ascii_lowercase();
     Ok(match s.as_str() {
@@ -333,12 +333,12 @@ impl FromRant for Endianness {
   }
 }
 
-impl IntoRant for Endianness {
-  fn into_rant(self) -> Result<RantValue, ValueError> {
+impl TryIntoRant for Endianness {
+  fn try_into_rant(self) -> Result<RantValue, ValueError> {
     match self {
       Self::Big => "big",
       Self::Little => "little",
-    }.into_rant()
+    }.try_into_rant()
   }
 }
 

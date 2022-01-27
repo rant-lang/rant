@@ -1,5 +1,5 @@
 use std::{cell::RefCell, error::Error, fmt::Display, mem, ops::Index, rc::Rc};
-use crate::{FromRant, RantFunction, RantFunctionInterface, RantFunctionHandle, RantValue, ValueError, lang::{Block, BlockElement, BlockProtection}, rng::RantRng, runtime_error};
+use crate::{TryFromRant, RantFunction, RantFunctionInterface, RantFunctionHandle, RantValue, ValueError, lang::{Block, BlockElement, BlockProtection}, rng::RantRng, runtime_error};
 use smallvec::SmallVec;
 use super::{IntoRuntimeResult, RuntimeError, RuntimeErrorType, RuntimeResult, StackFrameFlavor};
 
@@ -743,8 +743,8 @@ pub enum SelectorMode {
   NoDouble,
 }
 
-impl FromRant for SelectorMode {
-  fn from_rant(val: RantValue) -> Result<Self, ValueError> {
+impl TryFromRant for SelectorMode {
+  fn try_from_rant(val: RantValue) -> Result<Self, ValueError> {
     match &val {
       RantValue::String(s) => {
         Ok(match s.as_str() {

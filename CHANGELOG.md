@@ -11,6 +11,8 @@
 * Added several Rust API functions to support conversion to and from tuples and other collection types
 
 ## Changes
+* Renamed `FromRant` to `TryFromRant` (and adjusted member names)
+* Renamed `IntoRant` to `TryIntoRant` (and adjusted member names)
 * Renamed `lang::Rst` to `lang::Expression` to better reflect its purpose
 * Parametric spread is now enabled for all indexable collection types; not just lists
 * Changed the reference handle types for all collection types from type aliases to structs (and much refactoring was had)

@@ -118,7 +118,7 @@ pub(crate) fn rand_list_sum(vm: &mut VM, (value, n, variance): (RantValue, i64, 
         *cell += shift;
       }
 
-      vm.cur_frame_mut().write_value(shreds.into_rant().into_runtime_result()?);
+      vm.cur_frame_mut().write_value(shreds.try_into_rant().into_runtime_result()?);
     },
     RantValue::Float(m) => {
       let mut shreds = vec![];
@@ -143,7 +143,7 @@ pub(crate) fn rand_list_sum(vm: &mut VM, (value, n, variance): (RantValue, i64, 
         *cell += shift;
       }
 
-      vm.cur_frame_mut().write_value(shreds.into_rant().into_runtime_result()?);
+      vm.cur_frame_mut().write_value(shreds.try_into_rant().into_runtime_result()?);
     },
     other => {
       return Err(RuntimeError {
