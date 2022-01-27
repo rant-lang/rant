@@ -1,2 +1,1 @@
-<%parts = (cu;cum;ber;batch)>
-[cat: **<parts>; **<parts>; **<parts>; **<parts>; \n]
+[cat: 🍓🍌🍆🥒 |> cat: **[]; **[]; **[]; **[] |> collect]
