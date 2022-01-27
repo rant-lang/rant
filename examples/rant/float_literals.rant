@@ -5,7 +5,7 @@
   # Integral part
   8;
   # Exponent + suffix
-  ** (.;) ~[cat: **(<>;.); **FfLl |> collect] [cat: **(<>;.); **Ee; **(;\+;-); 8; **(;F;f;L;l) |> collect];
+  ** (.;) ~[cat: **(<>;.); **FfLl |> list] [cat: **(<>;.); **Ee; **(;\+;-); 8; **(;F;f;L;l) |> list];
   # Newline
   \n
 ]
@@ -17,7 +17,7 @@
   # Fractional part
   .8;
   # Exponent + suffix
-  ** (<>;F;f;L;l) [cat: **Ee; **(<>;\+;-); 8; **(<>;F;f;L;l) |> collect];
+  ** (<>;F;f;L;l) [cat: **Ee; **(<>;\+;-); 8; **(<>;F;f;L;l) |> list];
   # Newline
   \n
 ]

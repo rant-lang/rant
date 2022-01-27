@@ -1,6 +1,18 @@
 # Changelog
 
+## 4.0.0-alpha.28 (unreleased)
+
+## New
+
+## Changes
+* Renamed stdlib functions:
+  * `[collect]` &rarr; `[list]`
+
+## Fixes
+
 ## 4.0.0-alpha.27
+
+(1/26/2022)
 
 ## New
 * Added the `tuple` type, along with tuple initialization syntax:

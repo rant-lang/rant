@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use super::*;
 use crate::lang::Slice;
 
-pub(crate) fn collect(vm: &mut VM, items: VarArgs<RantValue>) -> RantStdResult {
+pub(crate) fn list(vm: &mut VM, items: VarArgs<RantValue>) -> RantStdResult {
   vm.cur_frame_mut().write_value(RantValue::List(items.iter().cloned().collect::<RantList>().into_handle()));
   Ok(())
 }
