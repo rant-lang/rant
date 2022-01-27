@@ -12,16 +12,17 @@ use cast::*;
 use cast::Error as CastError;
 use std::{rc::Rc, ops::{DerefMut, Deref}, convert::TryInto};
 
-/// Enables fallible conversion from a native type to a `RantValue`.
+/// Enables fallible conversion into a `RantValue`.
 pub trait TryIntoRant: Sized {
   /// Convert to a `RantValue`.
   fn try_into_rant(self) -> Result<RantValue, ValueError>;
 }
 
-/// Enables fallible conversion from a `RantValue` to a native type.
+/// Enables fallible conversion from a `RantValue`.
 pub trait TryFromRant: Sized {
   /// Convert from a `RantValue`.
   fn try_from_rant(val: RantValue) -> Result<Self, ValueError>;
+  
   /// Returns true if the type can be used to represent an optional Rant parameter.
   fn is_rant_optional() -> bool;
 }
