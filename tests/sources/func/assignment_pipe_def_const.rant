@@ -1,0 +1,2 @@
+[cat: "hello" > %test]
+[assert-eq: <test>; "hello"]

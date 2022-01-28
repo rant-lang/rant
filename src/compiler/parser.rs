@@ -2089,14 +2089,61 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   break
                 },
                 SequenceEndType::FunctionArgEndToAssignPipe => {
-                  let (path, path_span) = self.parse_access_path(true)?;
+                  let assign_pipe_start_span = self.reader.last_token_span();
                   self.reader.skip_ws();
-                  // Don't allow assignment to known anonymous values
-                  if path.is_anonymous_target() {
-                    self.report_error(Problem::AnonValueAssignment, &path_span);
+                  let is_auto_hinted_def = self.reader.eat_kw(KW_TEXT);
+                  let auto_hint_span = self.reader.last_token_span();
+                  self.reader.skip_ws();
+
+                  let (is_def, is_const_def) = if let Some((def_token, ..)) 
+                  = self.reader.take_where(|t| matches!(t, Some((Dollar | Percent, ..)))) {
+                    match def_token {
+                      // Variable declaration
+                      Dollar => (true, false),
+                      // Constant declaration
+                      Percent => (true, true),
+                      _ => unreachable!()
+                    }
+                  } else {
+                    (false, false)
+                  };
+                  self.reader.skip_ws();
+
+                  // Error on @text when accessor isn't a definition
+                  if !is_def && is_auto_hinted_def {
+                    self.report_unexpected_token_error(&auto_hint_span);
                   }
-                  // Don't allow assignment to known constants
-                  self.track_variable_access(&path, true, false, &path_span, None);
+                  
+                  assignment_pipe = Some(Rc::new(if is_def {
+                    let access_mode = self.parse_access_path_kind();
+                    self.reader.skip_ws();
+                    let ident = self.parse_ident()?;
+                    let ident_span = self.reader.last_token_span();
+
+                    if is_temporal {
+                      // Don't allow constant definitions in temporal context
+                      if is_const_def {
+                        self.report_error(Problem::TemporalAssignPipeRedefinesConstant(ident.to_string()), &super_range(&assign_pipe_start_span, &ident_span));
+                      } else {
+                        self.report_warning(Problem::TemporalAssignPipeRedefinesVariable(ident.to_string()), &super_range(&assign_pipe_start_span, &ident_span));
+                      }
+                    }
+                    
+                    AssignmentPipeTarget::Def { ident, is_const: is_const_def, access_mode }
+                  } else {
+                    let (path, path_span) = self.parse_access_path(true)?;
+                    
+                    // Don't allow assignment to known anonymous values
+                    if path.is_anonymous_target() {
+                      self.report_error(Problem::AnonValueAssignment, &path_span);
+                    }
+
+                    self.track_variable_access(&path, true, false, &path_span, None);
+
+                    AssignmentPipeTarget::Set(Rc::new(path))
+                  }));
+
+                  self.reader.skip_ws();
 
                   // We expect the function accessor to end here
                   if !self.reader.eat(RantToken::RightBracket) {
@@ -2106,7 +2153,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   is_piped = true;
                   is_finished = true;
                   is_auto_hinted = false;
-                  assignment_pipe = Some(Rc::new(path));
                   break
                 },
                 SequenceEndType::ProgramEnd => {

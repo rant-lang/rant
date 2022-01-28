@@ -569,9 +569,15 @@ pub struct PipedCall {
   /// The function calls in the chain.
   pub steps: Rc<Vec<FunctionCall>>,
   /// Optional access path to assign the final piped value to.
-  pub assignment_pipe: Option<Rc<AccessPath>>,
+  pub assignment_pipe: Option<Rc<AssignmentPipeTarget>>,
   /// Determines whether the call executes temporally.
   pub is_temporal: bool,
+}
+
+#[derive(Debug)]
+pub enum AssignmentPipeTarget {
+  Set(Rc<AccessPath>),
+  Def { ident: Identifier, is_const: bool, access_mode: VarAccessMode },
 }
 
 /// Keeps track of combination indices in a temporally-spread function call.
@@ -739,6 +745,7 @@ pub enum Expression {
   PipedCall(PipedCall),
   /// Function definition
   FuncDef(FunctionDef),
+  // TODO: Merge DefVar and DefConst
   /// Variable definition
   DefVar(Identifier, VarAccessMode, Option<Rc<Sequence>>),
   /// Constant definition

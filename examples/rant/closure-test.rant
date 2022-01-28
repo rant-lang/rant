@@ -1,3 +1,3 @@
-<%funcs = [cat: **[range: 3] |> cat: ([?] { My value:\s[] })]>
+[cat: **[range: 3] |> cat: ([?] { My value:\s[] }) > %funcs]
 
-[cat: **<funcs> |> cat: [![]]; \n]
+[cat: **<funcs> |> [] |> cat: \n]

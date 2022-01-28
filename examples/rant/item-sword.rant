@@ -22,7 +22,7 @@
 
 [%refine-item: item] {
   <$weight = <item/weight>; $damage = <item/damage>>
-  <%refine-amount = [rand: 1; 3]>
+  [rand: 1; 3 > %refine-amount]
   @if <weight> @gt; 0: { <weight = <weight> / <refine-amount>> }
   <damage = <damage> * <refine-amount> * [randf: 1; 1.5]>
   <item/damage = <damage>>
@@ -85,7 +85,7 @@
 
 [%gen-sword] {
   # Generate the base stats for the sword
-  <%sword = [gen-base-sword-stats]>
+  [gen-base-sword-stats > %sword]
 
   # Enchant it
   @if [maybe: 0.9]: { 

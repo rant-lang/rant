@@ -3,7 +3,7 @@
 ## 4.0.0-alpha.28 (unreleased)
 
 ## New
-* Added assignment pipe; assign pipeval to a variable at the end of a piped call
+* Added assignment pipe; assign pipeval to a new or existing variable at the end of a piped call
 * Added infallible `IntoRant` and `FromRant` traits
 * Added stdlib functions:
   * `[string-replace]`

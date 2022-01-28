@@ -530,24 +530,8 @@ impl<'rant> VM<'rant> {
                 return Ok(true)
               } else {
                 // If there are no more steps in the chain, handle the pipe result and let this intent die
-                if let Some(path) = &assignment_pipe {
-                  // Get list of dynamic expressions in path
-                  let exprs = path.dynamic_exprs();
-
-                  if exprs.is_empty() {
-                    // Setter is static, so run it directly
-                    self.cur_frame_mut().push_intent(Intent::SetValue { path: Rc::clone(path), write_mode: VarWriteMode::SetOnly, expr_count: 0 });
-                    self.push_val(next_pipeval)?;
-                  } else {
-                    // Build dynamic keys before running setter
-                    self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter {
-                      expr_count: exprs.len(),
-                      write_mode: VarWriteMode::SetOnly,
-                      path: Rc::clone(path),
-                      pending_exprs: exprs,
-                      val_source: SetterValueSource::FromValue(next_pipeval)
-                    });
-                  }
+                if let Some(assignment_pipe) = assignment_pipe.as_ref().map(|t| t.as_ref()) {
+                  self.handle_assignment_pipe(assignment_pipe, next_pipeval)?;
                   return Ok(true)
                 } else {
                   self.cur_frame_mut().write(next_pipeval);
@@ -616,24 +600,8 @@ impl<'rant> VM<'rant> {
                 return Ok(true)
               } else {
                 // If there are no more steps in the chain, handle the pipe result and let this intent die
-                if let Some(path) = &assignment_pipe {
-                  // Get list of dynamic expressions in path
-                  let exprs = path.dynamic_exprs();
-
-                  if exprs.is_empty() {
-                    // Setter is static, so run it directly
-                    self.cur_frame_mut().push_intent(Intent::SetValue { path: Rc::clone(path), write_mode: VarWriteMode::SetOnly, expr_count: 0 });
-                    self.push_val(next_pipeval)?;
-                  } else {
-                    // Build dynamic keys before running setter
-                    self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter {
-                      expr_count: exprs.len(),
-                      write_mode: VarWriteMode::SetOnly,
-                      path: Rc::clone(path),
-                      pending_exprs: exprs,
-                      val_source: SetterValueSource::FromValue(next_pipeval)
-                    });
-                  }
+                if let Some(assignment_pipe) = assignment_pipe.as_ref().map(|t| t.as_ref()) {
+                  self.handle_assignment_pipe(assignment_pipe, next_pipeval)?;
                   return Ok(true)
                 } else {
                   self.cur_frame_mut().write(next_pipeval);
@@ -1390,6 +1358,36 @@ impl<'rant> VM<'rant> {
     self.push_val(last_frame.into_output())?;
     
     Ok(false)
+  }
+
+  #[inline]
+  fn handle_assignment_pipe(&mut self, assignment_pipe: &AssignmentPipeTarget, pipeval: RantValue) -> RuntimeResult<()> {
+    match assignment_pipe {
+      AssignmentPipeTarget::Set(path) => {
+        // Get list of dynamic expressions in path
+        let exprs = path.dynamic_exprs();
+
+        if exprs.is_empty() {
+          // Setter is static, so run it directly
+          self.cur_frame_mut().push_intent(Intent::SetValue { path: Rc::clone(path), write_mode: VarWriteMode::SetOnly, expr_count: 0 });
+          self.push_val(pipeval)?;
+        } else {
+          // Build dynamic keys before running setter
+          self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter {
+            expr_count: exprs.len(),
+            write_mode: VarWriteMode::SetOnly,
+            path: Rc::clone(path),
+            pending_exprs: exprs,
+            val_source: SetterValueSource::FromValue(pipeval)
+          });
+        }
+      },
+      AssignmentPipeTarget::Def { ident, is_const, access_mode } => {
+        self.cur_frame_mut().push_intent(Intent::DefVar { vname: ident.clone(), is_const: *is_const, access_kind: *access_mode });
+        self.push_val(pipeval)?;
+      },
+    }
+    Ok(())
   }
 
   #[inline(always)]

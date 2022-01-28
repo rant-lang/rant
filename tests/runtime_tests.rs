@@ -355,8 +355,18 @@ fn function_piping_callback() {
 }
 
 #[test]
-fn func_assignment_pipe() {
-  test_rant_file!("sources/func/assignment_pipe.rant");
+fn func_assignment_pipe_set() {
+  test_rant_file!("sources/func/assignment_pipe_set.rant");
+}
+
+#[test]
+fn func_assignment_pipe_def_var() {
+  test_rant_file!("sources/func/assignment_pipe_def_var.rant");
+}
+
+#[test]
+fn func_assignment_pipe_def_const() {
+  test_rant_file!("sources/func/assignment_pipe_def_const.rant");
 }
 
 #[test]
