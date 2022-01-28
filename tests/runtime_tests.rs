@@ -355,6 +355,11 @@ fn function_piping_callback() {
 }
 
 #[test]
+fn func_assignment_pipe() {
+  test_rant_file!("sources/func/assignment_pipe.rant");
+}
+
+#[test]
 fn getter_fallback_from_var() {
   test_rant_file!(
     "sources/access/getter_fallback_from_var.rant",

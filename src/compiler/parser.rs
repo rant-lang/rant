@@ -2105,6 +2105,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
                   is_piped = true;
                   is_finished = true;
+                  is_auto_hinted = false;
                   assignment_pipe = Some(Rc::new(path));
                   break
                 },
