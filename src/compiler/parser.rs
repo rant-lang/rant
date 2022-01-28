@@ -1008,7 +1008,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   whitespace!(allow);
                 }
               },
-              Expression::Set(..) | Expression::DefVar(..) | Expression::DefConst(..) => {
+              Expression::Set(..) | Expression::Define(..) => {
                 // whitespace!(ignore both);
               },
               _ => unreachable!()
@@ -1607,13 +1607,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
                 let accessor = accessor_nodes.drain(..).next();
                 match accessor {
-                  Some(Expression::Get(getter_path, getter_fallback)) => {
+                  Some(Expression::Get(getter)) => {
                     let mut is_valid_shorthand = false;
-                    if getter_path.is_variable_target() {
-                      if let Some(getter_var_name) = getter_path.var_name().as_ref().map(|v| v.as_str()) {
+                    if getter.path.is_variable_target() {
+                      if let Some(getter_var_name) = getter.path.var_name().as_ref().map(|v| v.as_str()) {
                         is_valid_shorthand = true;
                         let key = InternalString::from(getter_var_name);
-                        let value_seq = Sequence::one(Expression::Get(getter_path, getter_fallback), &self.info);
+                        let value_seq = Sequence::one(Expression::Get(getter), &self.info);
                         pairs.push((MapKeyExpr::Static(key), Rc::new(value_seq)));
                       }
                     }
@@ -2120,7 +2120,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   }
                   
                   assignment_pipe = Some(Rc::new(if is_def {
-                    let access_mode = self.parse_access_path_kind();
+                    let access_mode = self.parse_access_mode();
                     self.reader.skip_ws();
                     let ident = self.parse_ident()?;
                     let ident_span = self.reader.last_token_span();
@@ -2312,7 +2312,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
     
   #[inline]
-  fn parse_access_path_kind(&mut self) -> VarAccessMode {    
+  fn parse_access_mode(&mut self) -> VarAccessMode {    
     if let Some((token, _span)) = self.reader.take_where(
       |t| matches!(t, Some((Slash | Caret, _)))
     ) {
@@ -2369,7 +2369,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       }
     } else {
       // Check for global/descope specifiers
-      access_kind = self.parse_access_path_kind();
+      access_kind = self.parse_access_mode();
 
       self.reader.skip_ws();
 
@@ -3007,7 +3007,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       // Check if it's a definition. If not, it's a getter or setter
       if is_def {
         // Check for accessor modifiers
-        let access_kind = self.parse_access_path_kind();
+        let access_mode = self.parse_access_mode();
         self.reader.skip_ws();
         // Read name of variable we're defining
         let var_name = self.parse_ident()?;
@@ -3015,24 +3015,26 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         
         if let Some((token, _token_span)) = self.reader.next_solid() {
           match token {
-            // Empty definition
+            // End of accessor
             RightAngle => {              
-              self.track_variable(&var_name, &access_kind, is_const_def, is_auto_hinted_def, VarRole::Normal, &def_span);
-              if is_const_def {
-                add_accessor!(Expression::DefConst(var_name, access_kind, None));
-              } else {
-                add_accessor!(Expression::DefVar(var_name, access_kind, None));
-              }
+              self.track_variable(&var_name, &access_mode, is_const_def, is_auto_hinted_def, VarRole::Normal, &def_span);
+              add_accessor!(Expression::Define(Definition {
+                is_const: is_const_def,
+                access_mode,
+                name: var_name,
+                value: None
+              }));
               break 'read
             },
             // Accessor delimiter
             Semicolon => {
-              self.track_variable(&var_name, &access_kind, is_const_def, is_auto_hinted_def, VarRole::Normal, &def_span);
-              if is_const_def {
-                add_accessor!(Expression::DefConst(var_name, access_kind, None));
-              } else {
-                add_accessor!(Expression::DefVar(var_name, access_kind, None));
-              }
+              self.track_variable(&var_name, &access_mode, is_const_def, is_auto_hinted_def, VarRole::Normal, &def_span);
+              add_accessor!(Expression::Define(Definition {
+                is_const: is_const_def,
+                access_mode,
+                name: var_name,
+                value: None
+              }));
               continue 'read;
             },
             // Definition and assignment
@@ -3045,12 +3047,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               } = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
 
               let def_span = access_start_span.start .. self.reader.last_token_span().start;
-              self.track_variable(&var_name, &access_kind, is_const_def, is_auto_hinted_def, VarRole::Normal, &def_span);
-              if is_const_def {
-                add_accessor!(Expression::DefConst(var_name, access_kind, Some(Rc::new(setter_expr))));
-              } else {
-                add_accessor!(Expression::DefVar(var_name, access_kind, Some(Rc::new(setter_expr))));
-              }
+              self.track_variable(&var_name, &access_mode, is_const_def, is_auto_hinted_def, VarRole::Normal, &def_span);
+              add_accessor!(Expression::Define(Definition {
+                name: var_name,
+                access_mode,
+                is_const: is_const_def,
+                value: Some(Rc::new(setter_expr)),
+              }));
               
               match setter_end_type {
                 SequenceEndType::VariableAssignDelim => {
@@ -3104,7 +3107,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               add_accessor!(if is_depth_op {
                 Expression::Depth(var_path.var_name().unwrap(), var_path.mode(), None)
               } else { 
-                Expression::Get(Rc::new(var_path), None)
+                Expression::Get(Getter { path: Rc::new(var_path), fallback: None })
               });
               break 'read;
             },
@@ -3115,7 +3118,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               add_accessor!(if is_depth_op {
                 Expression::Depth(var_path.var_name().unwrap(), var_path.mode(), None)
               } else { 
-                Expression::Get(Rc::new(var_path), None)
+                Expression::Get(Getter { path: Rc::new(var_path), fallback: None })
               });
               continue 'read;
             },
@@ -3133,7 +3136,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               add_accessor!(if is_depth_op {
                 Expression::Depth(var_path.var_name().unwrap(), var_path.mode(), Some(Rc::new(fallback_expr)))
               } else { 
-                Expression::Get(Rc::new(var_path), Some(Rc::new(fallback_expr)))
+                Expression::Get(Getter { path: Rc::new(var_path), fallback: Some(Rc::new(fallback_expr)) })
               });
 
               match fallback_end_type {
@@ -3163,7 +3166,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               }
 
               self.track_variable_access(&var_path, var_path.is_variable_target(), false, &setter_span, None);
-              add_accessor!(Expression::Set(Rc::new(var_path), Rc::new(setter_rhs_expr)));
+              add_accessor!(Expression::Set(Setter { path: Rc::new(var_path), value: Rc::new(setter_rhs_expr) }));
 
               // Assignment is not valid if we're using depth operator
               if is_depth_op {
@@ -3236,7 +3239,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               }
             }
           } else {
-            self.report_error(Problem::ExpectedToken("<integer>".to_owned()), &self.reader.last_token_span());
+            self.report_expected_token_error("<integer>", &self.reader.last_token_span());
             return Err(())
           }
         }

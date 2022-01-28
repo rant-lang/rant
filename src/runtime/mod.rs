@@ -963,30 +963,19 @@ impl<'rant> VM<'rant> {
           self.pre_push_block(block)?;
           return Ok(true)
         },
-        Expression::DefVar(vname, access_kind, val_expr) => {
-          if let Some(val_expr) = val_expr {
+        Expression::Define(def) => {
+          if let Some(val_expr) = &def.value {
             // If a value is present, it needs to be evaluated first
-            self.cur_frame_mut().push_intent(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind, is_const: false });
+            self.cur_frame_mut().push_intent(Intent::DefVar { vname: def.name.clone(), access_kind: def.access_mode, is_const: def.is_const });
             self.push_frame(Rc::clone(val_expr), true)?;
             return Ok(true)
           } else {
             // If there's no assignment, just set it to empty value
-            self.def_var_value(vname.as_str(), *access_kind, RantValue::Empty, false)?;
+            self.def_var_value(def.name.as_str(), def.access_mode, RantValue::Empty, def.is_const)?;
           }
         },
-        Expression::DefConst(vname, access_kind, val_expr) => {
-          if let Some(val_expr) = val_expr {
-            // If a value is present, it needs to be evaluated first
-            self.cur_frame_mut().push_intent(Intent::DefVar { vname: vname.clone(), access_kind: *access_kind, is_const: true });
-            self.push_frame(Rc::clone(val_expr), true)?;
-            return Ok(true)
-          } else {
-            // If there's no assignment, just set it to empty value
-            self.def_var_value(vname.as_str(), *access_kind, RantValue::Empty, true)?;
-          }
-        },
-        Expression::Get(path, fallback) => {
-          self.push_getter_intents(path, false, false, fallback.as_ref().map(Rc::clone));
+        Expression::Get(getter) => {
+          self.push_getter_intents(&getter.path, false, false, getter.fallback.as_ref().map(Rc::clone));
           return Ok(true)
         },
         Expression::Depth(vname, access_kind, fallback) => {
@@ -1000,22 +989,22 @@ impl<'rant> VM<'rant> {
             (Err(err), None) => return Err(err),
           }
         },
-        Expression::Set(path, val_expr) => {
+        Expression::Set(setter) => {
           // Get list of dynamic expressions in path
-          let exprs = path.dynamic_exprs();
+          let exprs = setter.path.dynamic_exprs();
 
           if exprs.is_empty() {
             // Setter is static, so run it directly
-            self.cur_frame_mut().push_intent(Intent::SetValue { path: Rc::clone(path), write_mode: VarWriteMode::SetOnly, expr_count: 0 });
-            self.push_frame(Rc::clone(val_expr), true)?;
+            self.cur_frame_mut().push_intent(Intent::SetValue { path: Rc::clone(&setter.path), write_mode: VarWriteMode::SetOnly, expr_count: 0 });
+            self.push_frame(Rc::clone(&setter.value), true)?;
           } else {
             // Build dynamic keys before running setter
             self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter {
               expr_count: exprs.len(),
               write_mode: VarWriteMode::SetOnly,
-              path: Rc::clone(path),
+              path: Rc::clone(&setter.path),
               pending_exprs: exprs,
-              val_source: SetterValueSource::FromExpression(Rc::clone(val_expr))
+              val_source: SetterValueSource::FromExpression(Rc::clone(&setter.value))
             });
           }
           return Ok(true)

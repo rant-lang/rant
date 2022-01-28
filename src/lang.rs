@@ -17,23 +17,6 @@ pub enum PrintFlag {
   Sink
 }
 
-impl PrintFlag {
-  /// Determines which of two `PrintFlag` values should take priority.
-  #[inline]
-  pub fn prioritize(prev: PrintFlag, next: PrintFlag) -> PrintFlag {
-    match next {
-      PrintFlag::None => prev,
-      _ => next,
-    }
-  }
-
-  /// Returns `true` if the flag is a sink.
-  #[inline]
-  pub fn is_sink(&self) -> bool {
-    matches!(self, PrintFlag::Sink)
-  }
-}
-
 /// Identifiers are special strings used to name variables and static (non-procedural) map keys.
 /// This is just a wrapper around a SmartString that enforces identifier formatting requirements.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -574,9 +557,12 @@ pub struct PipedCall {
   pub is_temporal: bool,
 }
 
+/// Represents the target for an assignment pipe expression.
 #[derive(Debug)]
 pub enum AssignmentPipeTarget {
+  /// Set a value.
   Set(Rc<AccessPath>),
+  /// Define a variable.
   Def { ident: Identifier, is_const: bool, access_mode: VarAccessMode },
 }
 
@@ -722,6 +708,37 @@ pub enum MapKeyExpr {
   Static(InternalString),
 }
 
+/// Represents a getter accessor.
+#[derive(Debug)]
+pub struct Getter {
+  /// The path to the value.
+  pub path: Rc<AccessPath>,
+  /// The fallback expression to evaluate if the path cannot resolve.
+  pub fallback: Option<Rc<Sequence>>,
+}
+
+/// Represents a setter accessor.
+#[derive(Debug)]
+pub struct Setter {
+  /// The path to the target whose value will be set.
+  pub path: Rc<AccessPath>,
+  /// The vlaue to set the target to.
+  pub value: Rc<Sequence>,
+}
+
+/// Represents a variable definition accessor.
+#[derive(Debug)]
+pub struct Definition {
+  /// The name of the variable to define.
+  pub name: Identifier,
+  /// Will it be a constant?
+  pub is_const: bool,
+  /// The access mode for the variable to define.
+  pub access_mode: VarAccessMode,
+  /// The value to assign to the newly created variable.
+  pub value: Option<Rc<Sequence>>,
+}
+
 /// Defines Rant expression tree node types. These are directly executable by the VM.
 #[derive(Debug)]
 pub enum Expression {
@@ -745,17 +762,14 @@ pub enum Expression {
   PipedCall(PipedCall),
   /// Function definition
   FuncDef(FunctionDef),
-  // TODO: Merge DefVar and DefConst
   /// Variable definition
-  DefVar(Identifier, VarAccessMode, Option<Rc<Sequence>>),
-  /// Constant definition
-  DefConst(Identifier, VarAccessMode, Option<Rc<Sequence>>),
+  Define(Definition),
   /// Variable depth
   Depth(Identifier, VarAccessMode, Option<Rc<Sequence>>),
   /// Getter
-  Get(Rc<AccessPath>, Option<Rc<Sequence>>),
+  Get(Getter),
   /// Setter
-  Set(Rc<AccessPath>, Rc<Sequence>),
+  Set(Setter),
   /// Pipe value
   PipeValue,
   /// Fragment
@@ -841,8 +855,7 @@ impl Expression {
       Self::Boolean(_) =>                      "bool",
       Self::EmptyValue =>                      "emptyval",
       Self::Nop =>                             "no-op",
-      Self::DefVar(..) =>                      "define variable",
-      Self::DefConst(..) =>                    "define constant",
+      Self::Define(..) =>                      "definition",
       Self::Depth(..) =>                       "variable depth",
       Self::Get(..) =>                         "getter",
       Self::Set(..) =>                         "setter",
