@@ -801,19 +801,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
         // Pipe value
         PipeValue => {
-          if let Some(pipeval) = self.var_stack.get_mut(PIPE_VALUE_NAME) {
-            emit!(Expression::PipeValue);
-            pipeval.add_read(false);
-            // Handle capturing
-            if let Some((capture_frame_height, captures)) = self.capture_stack.last_mut() {
-              // Variable must not exist in the current scope of the active function
-              if self.var_stack.height_of(PIPE_VALUE_NAME).unwrap_or_default() < *capture_frame_height {
-                captures.insert(PIPE_VALUE_NAME.into());
-              }
-            }
-          } else {
-            self.report_error(Problem::NothingToPipe, &span);
-          }
+          emit!(Expression::PipeValue);
+          self.track_pipeval_read(&span);
         },
         
         // Block element delimiter (when in block parsing mode)
@@ -1420,6 +1409,21 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     })
   }
 
+  fn track_pipeval_read(&mut self, span: &Range<usize>) {
+    if let Some(pipeval) = self.var_stack.get_mut(PIPE_VALUE_NAME) {
+      pipeval.add_read(false);
+      // Handle capturing
+      if let Some((capture_frame_height, captures)) = self.capture_stack.last_mut() {
+        // Variable must not exist in the current scope of the active function
+        if self.var_stack.height_of(PIPE_VALUE_NAME).unwrap_or_default() < *capture_frame_height {
+          captures.insert(PIPE_VALUE_NAME.into());
+        }
+      }
+    } else {
+      self.report_error(Problem::NothingToPipe, &span);
+    }
+  }
+
   #[inline]
   fn parse_conditional(&mut self, expect_opening_if: bool) -> ParseResult<ParsedConditional> {
     let mut conditions = vec![];
@@ -1914,6 +1918,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     let start_span = self.reader.last_token_span();
     let mut is_auto_hinted = false;
     self.reader.skip_ws();
+    
     // Check if we're defining a function (with [$|% ...]) or creating a lambda (with [? ...])
     if let Some((func_access_type_token, func_access_type_span)) 
     = self.reader.take_where(|t| matches!(t, Some((Dollar | Percent | Question, ..)))) {
@@ -2227,8 +2232,21 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
           calls.push(fcall);
         } else {
+          let old_pipeval = if is_piped {
+            let old = self.var_stack.remove(PIPE_VALUE_NAME);
+            self.var_stack.define(PIPE_VALUE_NAME.into(), VarStats::new(VarRole::PipeValue, Default::default(), true));
+            old
+          } else {
+            None
+          };
+
           // Named function call
           let (func_path, func_path_span) = self.parse_access_path(false)?;
+          
+          if let Some(pipeval_stats) = self.var_stack.get(PIPE_VALUE_NAME) {
+            is_pipeval_used |= pipeval_stats.reads > 0;
+          }
+          
           if let Some((token, _)) = self.reader.next_solid() {
             match token {
               // No args, fall through
@@ -2264,6 +2282,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             // Found EOF instead of end of function call, emit hard error
             self.report_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
             return Err(())
+          }
+
+          if is_piped {
+            self.var_stack.remove(PIPE_VALUE_NAME);
+            if let Some(old_pipeval) = old_pipeval {
+              self.var_stack.define(PIPE_VALUE_NAME.into(), old_pipeval);
+            }
           }
         }
 
@@ -2371,8 +2396,9 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           },
           // Pipeval can be directly accessed here too
-          Some((PipeValue, _span)) => {
+          Some((PipeValue, span)) => {
             idparts.push(AccessPathComponent::PipeValue);
+            self.track_pipeval_read(&span);
           }
           // An expression can also be used to provide the variable
           Some((LeftBrace, _)) => {
@@ -2461,6 +2487,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               // Pipeval
               Some((PipeValue, _span)) => {
                 idparts.push(AccessPathComponent::PipeValue);
+                let pipeval_span = &self.reader.last_token_span();
+                self.track_pipeval_read(&pipeval_span);
               }
               // Full- or to-slice
               Some((Colon, _)) => {

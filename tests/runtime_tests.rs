@@ -370,6 +370,11 @@ fn func_assignment_pipe_def_const() {
 }
 
 #[test]
+fn func_pipecall_pipeval() {
+  test_rant_file!("sources/func/pipecall_pipeval.rant");
+}
+
+#[test]
 fn getter_fallback_from_var() {
   test_rant_file!(
     "sources/access/getter_fallback_from_var.rant",

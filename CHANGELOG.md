@@ -11,8 +11,11 @@
 ## Changes
 * Renamed stdlib functions:
   * `[collect]` &rarr; `[list]`
+* Upgraded library dependencies:
+  * `quickscope` &rarr; 0.2.0
 
 ## Fixes
+* Fixed runtime error when attempting to use pipeval in a pipecall path
 
 ## 4.0.0-alpha.27
 

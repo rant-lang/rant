@@ -29,6 +29,7 @@ pub struct VM<'rant> {
   program: &'rant RantProgram,
   val_stack: SmallVec<[RantValue; VALUE_STACK_INLINE_COUNT]>,
   call_stack: CallStack<Intent>,
+  pipeval_overlay_stack: SmallVec<[RantValue; 1]>,
   resolver: Resolver,
   // TODO: Store unwind states in call stack
   unwinds: SmallVec<[UnwindState; 1]>,
@@ -44,6 +45,7 @@ impl<'rant> VM<'rant> {
       program,
       val_stack: Default::default(),
       call_stack: Default::default(),
+      pipeval_overlay_stack: Default::default(),
       unwinds: Default::default(),
     }
   }
@@ -86,6 +88,7 @@ pub struct UnwindState {
   pub block_stack_size: usize,
   pub attr_stack_size: usize,
   pub call_stack_size: usize,
+  pub temp_pipeval_stack_size: usize,
 }
 
 impl<'rant> VM<'rant> {
@@ -390,25 +393,28 @@ impl<'rant> VM<'rant> {
         } => {          
           match state {
             InvokePipeStepState::EvaluatingFunc => {
-              let step = &steps[step_index];
-              let pipeval_copy = pipeval.clone();
+              let step = &steps[step_index];              
 
               self.cur_frame_mut().push_intent(Intent::InvokePipeStep {
                 steps: Rc::clone(&steps),
                 step_index,
                 state: InvokePipeStepState::EvaluatingArgs { num_evaluated: 0 },
-                pipeval,
+                pipeval: pipeval.clone(),
                 assignment_pipe,
               });
 
+              // Expose pipeval to function access paths
+              if let Some(pipeval) = &pipeval {
+                self.pipeval_overlay_stack.push(pipeval.clone());
+              }
+
               match &step.target {
                 FunctionCallTarget::Path(path) => {
-                  // TODO: expose pipeval to path-based function access in piped calls
                   self.push_getter_intents(path, true, true, None);
                 },
                 FunctionCallTarget::Expression(expr) => {
                   self.push_frame(Rc::clone(expr), true)?;
-                  if let Some(pipeval) = pipeval_copy {
+                  if let Some(pipeval) = pipeval {
                     self.def_pipeval(pipeval)?;
                   }
                 },
@@ -416,6 +422,11 @@ impl<'rant> VM<'rant> {
               return Ok(true)
             },
             InvokePipeStepState::EvaluatingArgs { num_evaluated } => {
+              // We no longer need the temp pipeval from the previous state
+              if num_evaluated == 0 && pipeval.is_some() {
+                self.pipeval_overlay_stack.pop();
+              }
+
               let step = &steps[step_index];
               let arg_exprs = &step.arguments;
               let argc = arg_exprs.len();
@@ -1121,7 +1132,7 @@ impl<'rant> VM<'rant> {
           return Ok(true)
         },
         Expression::PipeValue => {
-          let pipeval = self.get_var_value(PIPE_VALUE_NAME, VarAccessMode::Local, false)?;
+          let pipeval = self.get_pipeval()?;
           self.cur_frame_mut().write(pipeval);
         },
         Expression::DebugCursor(info) => {
@@ -1586,7 +1597,7 @@ impl<'rant> VM<'rant> {
         },
         // Pipeval
         AccessPathComponent::PipeValue => {
-          let pipeval = self.get_var_value(PIPE_VALUE_NAME, VarAccessMode::Local, false)?;
+          let pipeval = self.get_pipeval()?;
           match pipeval {
             RantValue::Int(i) => SetterKey::Index(i),
             key_val => SetterKey::KeyString(InternalString::from(key_val.to_string()))
@@ -1627,6 +1638,11 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
+  #[inline]
+  fn get_pipeval(&self) -> RuntimeResult<RantValue> {
+    self.pipeval_overlay_stack.last().cloned().map(|v| RuntimeResult::Ok(v)).unwrap_or_else(|| self.get_var_value(PIPE_VALUE_NAME, VarAccessMode::Local, false))
+  }
+
   /// Runs a getter.
   #[inline]
   fn get_value(&mut self, path: Rc<AccessPath>, dynamic_key_count: usize, override_print: bool, prefer_function: bool) -> RuntimeResult<()> {
@@ -1654,7 +1670,7 @@ impl<'rant> VM<'rant> {
           dynamic_keys.next().unwrap()
         },
         Some(AccessPathComponent::PipeValue) => {
-          self.get_var_value(PIPE_VALUE_NAME, VarAccessMode::Local, false)?
+          self.get_pipeval()?
         }
         _ => unreachable!()
     };
@@ -1703,7 +1719,7 @@ impl<'rant> VM<'rant> {
         },
         // Pipeval
         AccessPathComponent::PipeValue => {
-          let pipeval = self.get_var_value(PIPE_VALUE_NAME, VarAccessMode::Local, false)?;
+          let pipeval = self.get_pipeval()?;
           match pipeval {
             RantValue::Int(index) => {
               getter_value = match getter_value.index_get(index) {
@@ -2190,6 +2206,7 @@ impl<'rant> VM<'rant> {
       value_stack_size: self.val_stack.len(),
       block_stack_size: self.resolver.block_stack_len(),
       attr_stack_size: self.resolver.count_attrs(),
+      temp_pipeval_stack_size: self.pipeval_overlay_stack.len(),
     });
   }
 
@@ -2216,6 +2233,11 @@ impl<'rant> VM<'rant> {
       // Unwind attribute stack
       while self.resolver.count_attrs() > state.attr_stack_size {
         self.resolver.pop_attrs();
+      }
+
+      // Unwind temp pipevals
+      while self.pipeval_overlay_stack.len() > state.temp_pipeval_stack_size {
+        self.pipeval_overlay_stack.pop();
       }
     }
 
