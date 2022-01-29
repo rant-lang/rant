@@ -87,7 +87,7 @@ pub enum Intent {
   /// Calls a sequence without an inner variable scope, then pushes its output to the value stack.
   CallOperand { sequence: Rc<Sequence> },
   /// Calls a function for every variant of a temporal argument set and increments the provided temporal state.
-  CallTemporal { func: RantFunctionHandle, args: Rc<Vec<RantValue>>, temporal_state: TemporalSpreadState, },
+  CallTemporal { func: RantFunctionHandle, arg_exprs: Rc<Vec<ArgumentExpr>>, args: Rc<Vec<RantValue>>, temporal_state: TemporalSpreadState, },
   /// Pops value from stack and adds it to a list. If `index` is out of range, prints the list.
   BuildList { init: Rc<Vec<Rc<Sequence>>>, index: usize, list: RantList },
   /// Pops a value from the stack and adds it to `items`. If `index` is out of range, produces a tuple from `items` and prints it.

@@ -501,18 +501,20 @@ impl Display for Varity {
 }
 
 /// Defines spread modes for function arguments.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum ArgumentSpreadMode {
   /// Pass as one argument.
   NoSpread,
   /// Iterate over the value and pass each element as a separate argument.
   Parametric,
   /// Iterate over the value and pass in each item as the argument in separate function calls.
+  /// 
+  /// If `is_complex` is set to `true`, each separate iteration of the argument will also be parametrically spread.
   ///
   /// If multiple arguments are temporal, the receiving function is called for each valid combination between them.
   ///
   /// Temporal arguments with matching labels will be iterated simultaneously.
-  Temporal { label: usize },
+  Temporal { label: usize, is_complex: bool },
 }
 
 /// Describes a function argument expression.
@@ -582,7 +584,7 @@ impl TemporalSpreadState {
     let mut counters = Vec::with_capacity(args.len());
     let mut arg_labels: HashMap<usize, usize> = Default::default();
     for (i, expr) in arg_exprs.iter().enumerate() {
-      if let ArgumentSpreadMode::Temporal { label } = expr.spread_mode {
+      if let ArgumentSpreadMode::Temporal { label, .. } = expr.spread_mode {
         arg_labels.insert(i, label);
         // Since temporal indices are always incremental, we can assume the next label index will only be 1 ahead at most.
         // This way, duplicate labels share the same counter.

@@ -2036,12 +2036,16 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 Some((DoubleStar, ..)) => {
                   is_temporal = true;
                   self.reader.skip_ws();
-                  spread_mode = ArgumentSpreadMode::Temporal { label: cur_temporal_index };
+                  let is_complex = self.reader.eat(RantToken::Star);
+                  self.reader.skip_ws();
+                  spread_mode = ArgumentSpreadMode::Temporal { label: cur_temporal_index, is_complex };
                   cur_temporal_index += 1;
                 },
                 // Labeled temporal spread
                 Some((TemporalLabeled(label_str), ..)) => {
                   is_temporal = true;
+                  self.reader.skip_ws();
+                  let is_complex = self.reader.eat(RantToken::Star);
                   self.reader.skip_ws();
                   let label_index = if let Some(label_index) = temporal_index_labels.get(&label_str) {
                     *label_index
@@ -2051,7 +2055,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                     cur_temporal_index += 1;
                     label_index
                   };
-                  spread_mode = ArgumentSpreadMode::Temporal { label: label_index };
+                  spread_mode = ArgumentSpreadMode::Temporal { label: label_index, is_complex };
                 },
                 Some(_) => unreachable!(),
                 None => {},

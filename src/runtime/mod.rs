@@ -331,26 +331,10 @@ impl<'rant> VM<'rant> {
             let mut args = vec![];
             for arg_expr in arg_exprs.iter() {
               let arg = self.pop_val()?;
-              // When parametric spread is used and the argument is a list, expand its values into individual args
-              if matches!(arg_expr.spread_mode, ArgumentSpreadMode::Parametric) {
-                if arg.is_indexable() {
-                  match &arg {
-                    RantValue::List(list_ref) => {
-                      for spread_arg in list_ref.borrow().iter() {
-                        args.push(spread_arg.clone());
-                      }
-                    },
-                    RantValue::Tuple(tuple_ref) => {
-                      for spread_arg in tuple_ref.iter() {
-                        args.push(spread_arg.clone());
-                      }
-                    },
-                    other => {
-                      for i in 0..(other.len()) {
-                        args.push(other.index_get(i as i64).into_runtime_result()?);
-                      }
-                    }
-                  }
+              // When parametric spread is used and the argument is a collection, expand its values into individual args.
+              // If it's a temporal call, don't do this; spreading is handled by the temporal call handler in this case.
+              if !is_temporal && matches!(arg_expr.spread_mode, ArgumentSpreadMode::Parametric) {
+                if expand_parametric_spread_arg(&mut args, &arg)? {
                   continue
                 }
               }
@@ -374,6 +358,7 @@ impl<'rant> VM<'rant> {
                 self.cur_frame_mut().push_intent(Intent::CallTemporal { 
                   func,
                   temporal_state, 
+                  arg_exprs,
                   args: Rc::new(args),
                 });
               }
@@ -457,26 +442,10 @@ impl<'rant> VM<'rant> {
                 let mut args = vec![];
                 for arg_expr in arg_exprs.iter() {
                   let arg = self.pop_val()?;
-                  // When parametric spread is used and the argument is a list, expand its values into individual args
-                  if matches!(arg_expr.spread_mode, ArgumentSpreadMode::Parametric) {
-                    if arg.is_indexable() {
-                      match &arg {
-                        RantValue::List(list_ref) => {
-                          for spread_arg in list_ref.borrow().iter() {
-                            args.push(spread_arg.clone());
-                          }
-                        },
-                        RantValue::Tuple(tuple_ref) => {
-                          for spread_arg in tuple_ref.iter() {
-                            args.push(spread_arg.clone());
-                          }
-                        },
-                        other => {
-                          for i in 0..(other.len()) {
-                            args.push(other.index_get(i as i64).into_runtime_result()?);
-                          }
-                        }
-                      }
+                  // When parametric spread is used and the argument is a collection, expand its values into individual args
+                  // Defer spreading to the next state if this is a temporal step.
+                  if !step.is_temporal && matches!(arg_expr.spread_mode, ArgumentSpreadMode::Parametric) {
+                    if expand_parametric_spread_arg(&mut args, &arg)? {
                       continue
                     }
                   }
@@ -550,17 +519,16 @@ impl<'rant> VM<'rant> {
               }
             },
             InvokePipeStepState::PreTemporalCall { step_function, args, temporal_state } => {
-              let targs = args.iter().enumerate().map(|(arg_index, arg)| {
-                // Check if this is a temporally spread argument
-                if let Some(tindex) = temporal_state.get(arg_index) {
-                  if arg.is_indexable() {
-                    if let Ok(tval) = arg.index_get(tindex as i64) {
-                      return tval
-                    }
-                  }
+              // Create temporal argument set for this iteration
+              let mut targs = vec![];
+              let arg_exprs = steps[step_index].arguments.as_ref();
+              for (arg_index, arg_expr) in arg_exprs.iter().enumerate() {
+                let arg = &args[arg_index];
+                if expand_complex_arg(&mut targs, arg, arg_index, arg_expr, &temporal_state)? {
+                  continue
                 }
-                arg.clone()
-              }).collect::<Vec<RantValue>>();
+                targs.push(arg.clone());
+              }
 
               // Push continuation intent for temporal call
               self.cur_frame_mut().push_intent(Intent::InvokePipeStep {
@@ -621,21 +589,19 @@ impl<'rant> VM<'rant> {
             },
           }
         },
-        Intent::CallTemporal { func, args, mut temporal_state } => {
-          let targs = args.iter().enumerate().map(|(arg_index, arg)| {
-            // Check if this is a temporally spread argument
-            if let Some(tindex) = temporal_state.get(arg_index) {
-              if arg.is_indexable() {
-                if let Ok(tval) = arg.index_get(tindex as i64) {
-                  return tval
-                }
-              }
+        Intent::CallTemporal { func, arg_exprs, args, mut temporal_state } => {
+          // Create temporal argument set for this iteration
+          let mut targs = vec![];
+          for (arg_index, arg_expr) in arg_exprs.iter().enumerate() {
+            let arg = &args[arg_index];
+            if expand_complex_arg(&mut targs, arg, arg_index, arg_expr, &temporal_state)? {
+              continue
             }
-            arg.clone()
-          }).collect::<Vec<RantValue>>();
+            targs.push(arg.clone());
+          }
 
           if temporal_state.increment() {
-            self.cur_frame_mut().push_intent(Intent::CallTemporal { func: Rc::clone(&func), args, temporal_state });
+            self.cur_frame_mut().push_intent(Intent::CallTemporal { func: Rc::clone(&func), arg_exprs, args, temporal_state });
           }
 
           self.call_func(func, targs, false)?;
@@ -2244,4 +2210,57 @@ impl<'rant> VM<'rant> {
 
     state
   }
+}
+
+fn expand_complex_arg(out_targs: &mut Vec<RantValue>, arg: &RantValue, arg_index: usize, arg_expr: &ArgumentExpr, temporal_state: &TemporalSpreadState) -> RuntimeResult<bool> {
+  // Check if this is a temporally spread argument
+  match (arg_expr.spread_mode, temporal_state.get(arg_index)) {
+    // Argument with temporal/complex spread
+    (ArgumentSpreadMode::Temporal { is_complex, .. }, Some(tindex)) if arg.is_indexable() => {
+      let tval = arg.index_get(tindex as i64).into_runtime_result()?;
+      // Expand it parametrically too if it's a complex spread
+      if is_complex && expand_parametric_spread_arg(out_targs, &tval)? {
+        return Ok(true)
+      } else {
+        out_targs.push(tval);
+      }
+      return Ok(true)
+    },
+    // Argument with parametric spread
+    (ArgumentSpreadMode::Parametric, _) => {
+      if expand_parametric_spread_arg(out_targs, &arg)? {
+        return Ok(true)
+      }
+      out_targs.push(arg.clone());
+      return Ok(true)
+    },
+    // Regular argument
+    _ => {}
+  }
+  Ok(false)
+}
+
+#[inline]
+fn expand_parametric_spread_arg(out_args: &mut Vec<RantValue>, ps_arg: &RantValue) -> RuntimeResult<bool> {
+  if ps_arg.is_indexable() {
+    match &ps_arg {
+      RantValue::List(list_ref) => {
+        for v in list_ref.borrow().iter() {
+          out_args.push(v.clone());
+        }
+      },
+      RantValue::Tuple(tuple_ref) => {
+        for v in tuple_ref.iter() {
+          out_args.push(v.clone());
+        }
+      },
+      other => {
+        for i in 0..(other.len()) {
+          out_args.push(other.index_get(i as i64).into_runtime_result()?);
+        }
+      }
+    }
+    return Ok(true)
+  }
+  Ok(false)
 }

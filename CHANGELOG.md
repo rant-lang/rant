@@ -3,6 +3,7 @@
 ## 4.0.0-alpha.28 (unreleased)
 
 ## New
+* Added complex spread; add a parametric spread to each iteration of a temporal argument with `***` or `*a**`
 * Added assignment pipe; assign pipeval to a new or existing variable at the end of a piped call
 * Added infallible `IntoRant` and `FromRant` traits
 * Added stdlib functions:
@@ -22,6 +23,7 @@
 ## Fixes
 * Fixed runtime error when attempting to use pipeval in a pipecall path
 * Fixed improper tokenization of labeled temporal spread operators
+* Fixed typo in `[to-tuple]` registration
 
 ## 4.0.0-alpha.27
 
