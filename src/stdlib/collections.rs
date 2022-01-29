@@ -236,16 +236,6 @@ pub(crate) fn zip(vm: &mut VM, (list_a, list_b, zip_func): (RantListHandle, Rant
   Ok(())
 }
 
-pub(crate) fn pick(vm: &mut VM, list: RantValue) -> RantStdResult {
-  let n = list.len();
-  if n > 0 {
-    let index = vm.rng().next_usize(n);
-    let item = list.index_get(index as i64).into_runtime_result()?;
-    vm.cur_frame_mut().write(item);
-  }
-  Ok(())
-}
-
 pub(crate) fn join(vm: &mut VM, (list, sep): (Vec<RantValue>, Option<RantValue>)) -> RantStdResult {
   let mut is_first = true;
   let frame = vm.cur_frame_mut();

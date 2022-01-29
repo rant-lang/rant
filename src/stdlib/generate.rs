@@ -162,3 +162,38 @@ pub(crate) fn maybe(vm: &mut VM, p: Option<f64>) -> RantStdResult {
   vm.cur_frame_mut().write(b);
   Ok(())
 }
+
+pub(crate) fn pick(vm: &mut VM, list: RantValue) -> RantStdResult {
+  let n = list.len();
+  if n > 0 {
+    let index = vm.rng().next_usize(n);
+    let item = list.index_get(index as i64).into_runtime_result()?;
+    vm.cur_frame_mut().write(item);
+  }
+  Ok(())
+}
+
+pub(crate) fn pick_sparse(vm: &mut VM, mut items: RequiredVarArgs<RantValue>) -> RantStdResult {
+  let len_sum = items
+    .iter()
+    .map(|v| v.len())
+    .fold(0usize, |acc, x| acc.saturating_add(x));
+
+  let mut rem_sum = len_sum;
+  let sum_pick = vm.rng().next_usize(len_sum);
+
+  for item in items.drain(..) {
+    let item_len = item.len();
+    if rem_sum < item_len {
+      vm.cur_frame_mut().write(if item.is_indexable() { 
+        item.index_get(rem_sum.try_into().unwrap_or(i64::MAX)).into_runtime_result()?
+      } else {
+        item 
+      });
+      break
+    }
+    rem_sum = rem_sum.saturating_sub(item_len);
+  }
+
+  Ok(())
+}

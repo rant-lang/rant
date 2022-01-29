@@ -3150,16 +3150,18 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 _ => unreachable!()
               }
             },
-            // If we hit a '=' here, it's a setter
-            Equals => {
+            // If we hit a setter operator here, it's a setter
+            _op_token @ Equals => {
               self.reader.skip_ws();
               let ParsedSequence {
                 sequence: setter_rhs_expr,
                 end_type: setter_rhs_end,
                 ..
               } = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
-              let assign_end_span = self.reader.last_token_span();
-              let setter_span = super_range(&access_start_span, &assign_end_span);
+              
+              let rhs_end_span = self.reader.last_token_span();
+              let setter_span = super_range(&access_start_span, &rhs_end_span);
+
               // Don't allow setters directly on anonymous values
               if var_path.is_anonymous_target() {
                 self.report_error(Problem::AnonValueAssignment, &setter_span);
@@ -3170,7 +3172,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
               // Assignment is not valid if we're using depth operator
               if is_depth_op {
-                self.report_error(Problem::DepthAssignment, &(cur_token_span.start .. assign_end_span.start));
+                self.report_error(Problem::DepthAssignment, &(cur_token_span.start .. rhs_end_span.start));
               }
 
               match setter_rhs_end {

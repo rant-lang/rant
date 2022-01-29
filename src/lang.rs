@@ -722,8 +722,25 @@ pub struct Getter {
 pub struct Setter {
   /// The path to the target whose value will be set.
   pub path: Rc<AccessPath>,
-  /// The vlaue to set the target to.
+  /// The value to set the target to.
   pub value: Rc<Sequence>,
+}
+
+/// Defines operations that compound setters can perform.
+#[derive(Debug, Copy, Clone)]
+pub enum CompAssignOp {
+  EmptyAssign,
+  Add,
+  Subtract,
+  Multiply,
+  Divide,
+  Modulo,
+  Power,
+  And,
+  Or,
+  Xor,
+  Nand,
+  Nor,
 }
 
 /// Represents a variable definition accessor.

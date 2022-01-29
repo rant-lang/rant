@@ -665,7 +665,7 @@ impl<'rant> VM<'rant> {
           match val_source {
             // Value must be evaluated from an expression
             SetterValueSource::FromExpression(expr) => {
-              self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter { path, write_mode, expr_count, pending_exprs, val_source: SetterValueSource::Consumed });
+              self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter { path, write_mode, expr_count, pending_exprs, val_source: SetterValueSource::FromStack });
               self.push_frame(Rc::clone(&expr), true)?;
               return Ok(true)
             },
@@ -673,8 +673,8 @@ impl<'rant> VM<'rant> {
             SetterValueSource::FromValue(val) => {
               self.push_val(val)?;
             },
-            // Do nothing, it's already taken care of
-            SetterValueSource::Consumed => {}
+            // Do nothing, the value is on the top of the value stack
+            SetterValueSource::FromStack => {}
           }
           
           if let Some(key_expr) = pending_exprs.pop() {
@@ -684,7 +684,7 @@ impl<'rant> VM<'rant> {
               self.cur_frame_mut().push_intent(Intent::SetValue { path, write_mode, expr_count });
             } else {
               // Continue building setter
-              self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter { path, write_mode, expr_count, pending_exprs, val_source: SetterValueSource::Consumed });                
+              self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter { path, write_mode, expr_count, pending_exprs, val_source: SetterValueSource::FromStack });                
             }
             self.push_frame_flavored(Rc::clone(&key_expr), StackFrameFlavor::DynamicKeyExpression)?;
           } else {
@@ -995,14 +995,18 @@ impl<'rant> VM<'rant> {
 
           if exprs.is_empty() {
             // Setter is static, so run it directly
-            self.cur_frame_mut().push_intent(Intent::SetValue { path: Rc::clone(&setter.path), write_mode: VarWriteMode::SetOnly, expr_count: 0 });
+            self.cur_frame_mut().push_intent(Intent::SetValue { 
+              path: Rc::clone(&setter.path), 
+              write_mode: VarWriteMode::SetOnly, 
+              expr_count: 0 
+            });
             self.push_frame(Rc::clone(&setter.value), true)?;
           } else {
             // Build dynamic keys before running setter
             self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter {
-              expr_count: exprs.len(),
-              write_mode: VarWriteMode::SetOnly,
               path: Rc::clone(&setter.path),
+              write_mode: VarWriteMode::SetOnly,
+              expr_count: exprs.len(),
               pending_exprs: exprs,
               val_source: SetterValueSource::FromExpression(Rc::clone(&setter.value))
             });
@@ -1360,6 +1364,8 @@ impl<'rant> VM<'rant> {
     Ok(false)
   }
 
+  /// Given an assignment pipe target and a pipeval, performs the necessary actions to execute an assignment pipe.
+  /// Call sites should interrupt after calling this method.
   #[inline]
   fn handle_assignment_pipe(&mut self, assignment_pipe: &AssignmentPipeTarget, pipeval: RantValue) -> RuntimeResult<()> {
     match assignment_pipe {
@@ -1374,9 +1380,9 @@ impl<'rant> VM<'rant> {
         } else {
           // Build dynamic keys before running setter
           self.cur_frame_mut().push_intent(Intent::BuildDynamicSetter {
-            expr_count: exprs.len(),
-            write_mode: VarWriteMode::SetOnly,
             path: Rc::clone(path),
+            write_mode: VarWriteMode::SetOnly,
+            expr_count: exprs.len(),
             pending_exprs: exprs,
             val_source: SetterValueSource::FromValue(pipeval)
           });
@@ -1511,7 +1517,18 @@ impl<'rant> VM<'rant> {
     Ok(())
   }
 
-  /// Runs a setter.
+  /// Runs a setter. 
+  /// 
+  /// ### Stack transitional behavior
+  /// 1. `dynamic_value_count` values are popped from the value stack and applied to the dynamic parts of the access path in the order they were popped.
+  /// 1. `setter_value` is popped from the value stack.
+  /// 
+  /// #### Deltas
+  /// 
+  /// |Stack type |Total delta               |
+  /// |-----------|--------------------------|
+  /// |Value stack|`-dynamic_value_count - 1`|
+  /// |Call stack |`0`                       |
   #[inline]
   fn set_value(&mut self, path: Rc<AccessPath>, write_mode: VarWriteMode, dynamic_value_count: usize) -> RuntimeResult<()> {
     // Gather evaluated dynamic path components from stack
@@ -1632,7 +1649,18 @@ impl<'rant> VM<'rant> {
     self.pipeval_overlay_stack.last().cloned().map(|v| RuntimeResult::Ok(v)).unwrap_or_else(|| self.get_var_value(PIPE_VALUE_NAME, VarAccessMode::Local, false))
   }
 
-  /// Runs a getter.
+  /// Runs a getter. 
+  /// 
+  /// ### Stack transitional behavior
+  /// 1. `dynamic_value_count` values are popped from the value stack and applied to the dynamic parts of the access path in the order they were popped.
+  /// 1. If `override_print` is `true`, the getter result is pushed to the value stack.
+  /// 
+  /// #### Deltas
+  /// 
+  /// |Stack type |Total delta                                                |
+  /// |-----------|-----------------------------------------------------------|
+  /// |Value stack|`-dynamic_value_count + if override_print { 1 } else { 0 }`|
+  /// |Call stack |`0`                                                        |
   #[inline]
   fn get_value(&mut self, path: Rc<AccessPath>, dynamic_key_count: usize, override_print: bool, prefer_function: bool) -> RuntimeResult<()> {
     let prefer_function = prefer_function && path.len() == 1;

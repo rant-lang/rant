@@ -148,7 +148,7 @@ pub enum RantToken {
   DoubleStar,
   
   /// Labeled temporal operator, e.g. `*a*`
-  #[regex(r"\*[\w\d\-_]+\*", parse_temporal_spread_label)]
+  #[regex(r"\*[\w\-_][\w\d\-_]*\*", parse_temporal_spread_label)]
   TemporalLabeled(InternalString),
 
   /// `*`

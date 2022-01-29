@@ -6,7 +6,9 @@
 * Added assignment pipe; assign pipeval to a new or existing variable at the end of a piped call
 * Added infallible `IntoRant` and `FromRant` traits
 * Added stdlib functions:
+  * `[pick-sparse]`
   * `[string-replace]`
+  * `[tuple]`
 
 ## Changes
 * Renamed stdlib functions:
@@ -16,6 +18,7 @@
 
 ## Fixes
 * Fixed runtime error when attempting to use pipeval in a pipecall path
+* Fixed improper tokenization of labeled temporal spread operators
 
 ## 4.0.0-alpha.27
 

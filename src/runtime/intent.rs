@@ -12,7 +12,7 @@ use super::{RuntimeResult, VM, resolver::Weights};
 /// * "Invoke" means that argument expressions potentially need to be evaluated before the call can proceed;
 /// * "Call" means that all argument values are already known (either in the intent or on the value stack).
 pub enum Intent {
-  /// Pop a value off the value stack and print it to the current frame's output.
+  /// Pops a value off the value stack and print it to the current frame's output.
   PrintLast,
   /// Pops a value off the value stack and returns it from the current function.
   ReturnLast,
@@ -24,28 +24,50 @@ pub enum Intent {
   ImportLastAsModule { module_name: String, descope: usize },
   /// Check if the current block is finished and either continue the block or pop the state from the stack
   TickCurrentBlock,
-  /// Pop a value off the stack and assign it to an existing variable.
+  /// Pops a value off the stack and assign it to an existing variable.
   SetVar { vname: Identifier, access_kind: VarAccessMode, },
-  /// Pop a value off the stack and assign it to a new variable.
+  /// Pops a value off the stack and assign it to a new variable.
   DefVar { vname: Identifier, access_kind: VarAccessMode, is_const: bool },
-  /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `GetValue`.
+  /// Pops a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `GetValue`.
   BuildDynamicGetter { 
-    path: Rc<AccessPath>, dynamic_key_count: usize, pending_exprs: Vec<Rc<Sequence>>, 
-    override_print: bool, prefer_function: bool, fallback: Option<Rc<Sequence>> 
+    path: Rc<AccessPath>, 
+    dynamic_key_count: usize, 
+    pending_exprs: Vec<Rc<Sequence>>, 
+    override_print: bool, 
+    prefer_function: bool,
+    fallback: Option<Rc<Sequence>>,
   },
-  /// Pop `dynamic_key_count` values off the stack and use them for expression fields in a getter.
-  GetValue { path: Rc<AccessPath>, dynamic_key_count: usize, override_print: bool, prefer_function: bool, fallback: Option<Rc<Sequence>> },
-  /// Pop a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `SetValue`.
-  BuildDynamicSetter { path: Rc<AccessPath>, write_mode: VarWriteMode, expr_count: usize, pending_exprs: Vec<Rc<Sequence>>, val_source: SetterValueSource },
-  /// Pop `expr_count` values off the stack and use them for expression fields in a setter.
-  SetValue { path: Rc<AccessPath>, write_mode: VarWriteMode, expr_count: usize },
-  /// Evaluate `arg_exprs` in order, then pop the argument values off the stack, pop a function off the stack, and pass the arguments to the function.
+  /// Pops dynamic key values off the stack and runs a getter. If the getter fails, evaluates the fallback.
+  GetValue { 
+    path: Rc<AccessPath>, 
+    dynamic_key_count: usize, 
+    override_print: bool, 
+    prefer_function: bool,
+    fallback: Option<Rc<Sequence>>, 
+  },
+  /// Used to evaluate a setter path with dynamic keys.
+  /// 
+  /// Pops a block from `pending_exprs` and evaluate it. If there are no expressions left, switch intent to `SetValue`.
+  BuildDynamicSetter { 
+    path: Rc<AccessPath>,
+    write_mode: VarWriteMode, 
+    expr_count: usize, 
+    pending_exprs: Vec<Rc<Sequence>>, 
+    val_source: SetterValueSource,
+  },
+  /// Pops `expr_count` values off the stack and uses them for expression fields in a setter.
+  SetValue { 
+    path: Rc<AccessPath>,
+    write_mode: VarWriteMode,
+    expr_count: usize 
+  },
+  /// Evaluates `arg_exprs` in order, then pops the argument values off the stack, pops a function off the stack, and passes the arguments to the function.
   Invoke { 
     arg_exprs: Rc<Vec<ArgumentExpr>>, 
     arg_eval_count: usize,
     is_temporal: bool, 
   },
-  /// Invoke a single function in a piped function call chain.
+  /// Invokes a single function in a piped function call chain.
   InvokePipeStep { 
     /// All steps in the entire piped function call
     steps: Rc<Vec<FunctionCall>>,
@@ -60,19 +82,19 @@ pub enum Intent {
   },
   /// Evaluates each sequence in `default_arg_exprs` in order and assigns their results to local constants with their associated `Identifier`.
   CreateDefaultArgs { context: RantFunctionHandle, default_arg_exprs: Vec<(Rc<Sequence>, usize)>, eval_index: usize, },
-  /// Pop `argc` args off the stack, then pop a function off the stack and call it with the args.
+  /// Pops `argc` args off the stack, then pops a function off the stack and calls it with the args.
   Call { argc: usize, override_print: bool },
-  /// Call a sequence without an inner variable scope, then push its output to the value stack.
+  /// Calls a sequence without an inner variable scope, then pushes its output to the value stack.
   CallOperand { sequence: Rc<Sequence> },
-  /// Call a function for every variant of a temporal argument set and increment the provided temporal state.
+  /// Calls a function for every variant of a temporal argument set and increments the provided temporal state.
   CallTemporal { func: RantFunctionHandle, args: Rc<Vec<RantValue>>, temporal_state: TemporalSpreadState, },
-  /// Pop value from stack and add it to a list. If `index` is out of range, print the list.
+  /// Pops value from stack and adds it to a list. If `index` is out of range, prints the list.
   BuildList { init: Rc<Vec<Rc<Sequence>>>, index: usize, list: RantList },
-  /// Pop a value from the stack and add it to a vector. If `index` is out of range, produce a tuple from the items and print it.
+  /// Pops a value from the stack and adds it to `items`. If `index` is out of range, produces a tuple from `items` and prints it.
   BuildTuple { init: Rc<Vec<Rc<Sequence>>>, index: usize, items: Vec<RantValue> },
-  /// Pop value and optional key from stack and add them to a map. If `pair_index` is out of range, print the map.
+  /// Pops a value and optional key from stack and adds them to `map`. If `pair_index` is out of range, prints `map`.
   BuildMap { init: Rc<Vec<(MapKeyExpr, Rc<Sequence>)>>, pair_index: usize, map: RantMap },
-  /// Evaluate block weights and then run the block
+  /// Evaluates expressions in `weights` and then runs the block with the computed element weights.
   BuildWeightedBlock { block: Rc<Block>, weights: Weights, pop_next_weight: bool, },
   /// Calls a function that accepts a mutable reference to the current runtime. Optionally interrupts the intent loop to force another tick.
   RuntimeCall { function: Box<dyn FnOnce(&mut VM) -> RuntimeResult<()>>, interrupt: bool },
@@ -183,7 +205,7 @@ impl Intent {
 pub enum LogicShortCircuitHandling {
   /// Pass through the LHS untouched.
   Passthrough,
-  /// Use the specified boolean value.
+  /// Use the specified boolean value as the LHS.
   OverrideWith(bool),
 }
 
@@ -256,6 +278,6 @@ pub enum SetterValueSource {
   FromExpression(Rc<Sequence>),
   /// Setter RHS is a value.
   FromValue(RantValue),
-  /// Setter RHS was already consumed.
-  Consumed
+  /// Setter RHS was already consumed and pushed to the value stack.
+  FromStack
 }
