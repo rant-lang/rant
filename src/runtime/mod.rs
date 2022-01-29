@@ -978,17 +978,6 @@ impl<'rant> VM<'rant> {
           self.push_getter_intents(&getter.path, false, false, getter.fallback.as_ref().map(Rc::clone));
           return Ok(true)
         },
-        Expression::Depth(vname, access_kind, fallback) => {
-          match (self.get_var_depth(vname, *access_kind), fallback) {
-            (Ok(depth), _) => self.cur_frame_mut().write(depth as i64),
-            (Err(_), Some(fallback)) => {
-              self.cur_frame_mut().push_intent(Intent::PrintLast);
-              self.push_frame(Rc::clone(fallback), true)?;
-              return Ok(true)
-            },
-            (Err(err), None) => return Err(err),
-          }
-        },
         Expression::Set(setter) => {
           // Get list of dynamic expressions in path
           let exprs = setter.path.dynamic_exprs();
@@ -1914,11 +1903,6 @@ impl<'rant> VM<'rant> {
   #[inline(always)]
   pub fn get_var_value(&self, varname: &str, access: VarAccessMode, prefer_function: bool) -> RuntimeResult<RantValue> {
     self.call_stack.get_var_value(self.engine, varname, access, prefer_function)
-  }
-
-  #[inline(always)]
-  pub fn get_var_depth(&self, varname: &str, access: VarAccessMode) -> RuntimeResult<usize> {
-    self.call_stack.get_var_depth(self.engine, varname, access)
   }
 
   /// Defines a new variable in the current scope.

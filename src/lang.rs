@@ -781,8 +781,6 @@ pub enum Expression {
   FuncDef(FunctionDef),
   /// Variable definition
   Define(Definition),
-  /// Variable depth
-  Depth(Identifier, VarAccessMode, Option<Rc<Sequence>>),
   /// Getter
   Get(Getter),
   /// Setter
@@ -873,7 +871,6 @@ impl Expression {
       Self::EmptyValue =>                      "emptyval",
       Self::Nop =>                             "no-op",
       Self::Define(..) =>                      "definition",
-      Self::Depth(..) =>                       "variable depth",
       Self::Get(..) =>                         "getter",
       Self::Set(..) =>                         "setter",
       Self::PipedCall(_) =>                    "piped call",

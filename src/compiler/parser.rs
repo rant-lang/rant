@@ -1003,10 +1003,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
           for node in nodes {
             match node {
-              Expression::Get(..) | Expression::Depth(..) => {
-                if is_seq_text {
-                  whitespace!(allow);
-                }
+              Expression::Get(..) => {
+                whitespace!(allow);
               },
               Expression::Set(..) | Expression::Define(..) => {
                 // whitespace!(ignore both);
@@ -3081,22 +3079,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }
       } else {
         // Read the path to what we're accessing
-        let mut is_depth_op = false;
         let mut is_auto_hinted_get = false;
         let (var_path, var_path_span) = self.parse_access_path(true)?;
         
         self.reader.skip_ws();
-
-        // Check for depth operator
-        if let Some((_, depth_op_range)) = self.reader.take_where(|t| matches!(t, Some((And, _)))) {
-          if var_path.is_variable_target() && var_path.var_name().is_some() {
-            is_depth_op = true;
-          } else if var_path.len() == 1 && matches!(var_path.first(), Some(AccessPathComponent::DynamicKey(..))) {
-            self.report_error(Problem::DynamicDepth, &depth_op_range);
-          } else {
-            self.report_error(Problem::InvalidDepthUsage, &depth_op_range);
-          }
-        }
         
         if let Some((token, cur_token_span)) = self.reader.next_solid() {
           match token {
@@ -3104,22 +3090,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             RightAngle => {
               self.track_variable_access(&var_path, false, false, &var_path_span, Some(&mut is_auto_hinted_get));
               is_auto_hinted_accessor |= is_auto_hinted_get;
-              add_accessor!(if is_depth_op {
-                Expression::Depth(var_path.var_name().unwrap(), var_path.mode(), None)
-              } else { 
-                Expression::Get(Getter { path: Rc::new(var_path), fallback: None })
-              });
+              add_accessor!(Expression::Get(Getter { path: Rc::new(var_path), fallback: None }));
               break 'read;
             },
             // If we hit a ';', it's a getter with another accessor chained after it
             Semicolon => {
               self.track_variable_access(&var_path, false, false, &var_path_span, Some(&mut is_auto_hinted_get));
               is_auto_hinted_accessor |= is_auto_hinted_get;
-              add_accessor!(if is_depth_op {
-                Expression::Depth(var_path.var_name().unwrap(), var_path.mode(), None)
-              } else { 
-                Expression::Get(Getter { path: Rc::new(var_path), fallback: None })
-              });
+              add_accessor!(Expression::Get(Getter { path: Rc::new(var_path), fallback: None }));
               continue 'read;
             },
             // If we hit a `?`, it's a getter with a fallback
@@ -3133,11 +3111,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
               self.track_variable_access(&var_path, false, true, &var_path_span, Some(&mut is_auto_hinted_get));
               is_auto_hinted_accessor |= is_auto_hinted_get;
-              add_accessor!(if is_depth_op {
-                Expression::Depth(var_path.var_name().unwrap(), var_path.mode(), Some(Rc::new(fallback_expr)))
-              } else { 
-                Expression::Get(Getter { path: Rc::new(var_path), fallback: Some(Rc::new(fallback_expr)) })
-              });
+              add_accessor!(Expression::Get(Getter { path: Rc::new(var_path), fallback: Some(Rc::new(fallback_expr)) }));
 
               match fallback_end_type {
                 SequenceEndType::AccessorFallbackValueToDelim => continue 'read,
@@ -3169,11 +3143,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
               self.track_variable_access(&var_path, var_path.is_variable_target(), false, &setter_span, None);
               add_accessor!(Expression::Set(Setter { path: Rc::new(var_path), value: Rc::new(setter_rhs_expr) }));
-
-              // Assignment is not valid if we're using depth operator
-              if is_depth_op {
-                self.report_error(Problem::DepthAssignment, &(cur_token_span.start .. rhs_end_span.start));
-              }
 
               match setter_rhs_end {
                 // Accessor was terminated

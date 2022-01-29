@@ -16,6 +16,9 @@
 * Upgraded library dependencies:
   * `quickscope` &rarr; 0.2.0
 
+## Removed
+* Removed depth operator
+
 ## Fixes
 * Fixed runtime error when attempting to use pipeval in a pipecall path
 * Fixed improper tokenization of labeled temporal spread operators

@@ -159,10 +159,6 @@ pub enum RantToken {
   #[token("+")]
   Plus,
 
-  /// `&`
-  #[token("&")]
-  And,
-
   /// `=`
   #[token("=")]
   Equals,

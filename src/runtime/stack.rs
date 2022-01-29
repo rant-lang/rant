@@ -156,31 +156,6 @@ impl<I> CallStack<I> {
     runtime_error!(RuntimeErrorType::InvalidAccess, "variable '{}' not found", id);
   }
 
-  #[inline]
-  pub fn get_var_depth(&self, context: &Rant, id: &str, access: VarAccessMode) -> RuntimeResult<usize> {
-    match access {
-      VarAccessMode::Local => {
-        if let Some(d) = self.locals.depth_of(id) {
-          return Ok(d)
-        }
-      },
-      VarAccessMode::Descope(n) => {
-        if let Some((_, d)) = self.locals.get_parent_depth(id, n) {
-          return Ok(d)
-        }
-      },
-      // Skip locals completely if it's a global accessor
-      VarAccessMode::ExplicitGlobal => {}
-    }
-
-    // Check globals
-    if context.has_global(id) {
-      return Ok(self.locals.depth() - 1)
-    }
-
-    runtime_error!(RuntimeErrorType::InvalidAccess, "variable '{}' not found", id);
-  }
-
   /// Gets a variable's value using the specified access type.
   #[inline]
   pub fn get_var_value(&self, context: &Rant, id: &str, access: VarAccessMode, prefer_function: bool) -> RuntimeResult<RantValue> {
