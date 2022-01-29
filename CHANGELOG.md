@@ -12,6 +12,7 @@
   * `[tuple]`
 
 ## Changes
+* Dynamic keys are now wrapped in `()` instead of `{}`
 * Renamed stdlib functions:
   * `[collect]` &rarr; `[list]`
 * Upgraded library dependencies:

@@ -10,8 +10,7 @@
     # Smaller weights are less likely to be selected
     "uncommon" @weight 0.5
     |
-    # Negative weight values have a weight of 1 / |w| * 10
-    "rare" @weight -1
+    "rare" @weight 0.1
     |
     # Elements with a weight of 0 are never selected.
     # If all elements have weights of 0, the last element is selected.

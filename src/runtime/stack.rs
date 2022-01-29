@@ -380,9 +380,17 @@ impl<I> StackFrame<I> {
     }
   }
 
+  #[inline]
   pub(crate) fn without_scope(self) -> Self {
     let mut frame = self;
     frame.has_scope = false;
+    frame
+  }
+
+  #[inline]
+  pub(crate) fn has_scope(self, has_scope: bool) -> Self {
+    let mut frame = self;
+    frame.has_scope = has_scope;
     frame
   }
 

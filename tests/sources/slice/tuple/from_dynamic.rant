@@ -1,15 +1,15 @@
 <$a = (a; b; c; d; e; f; g; h)>
 
-[assert-eq: <$i = 0; a/{<i>}:>; (a; b; c; d; e; f; g; h)]
-[assert-eq: <$i = 0; a/ {<i>} : >; (a; b; c; d; e; f; g; h)]
-[assert-eq: <$i = -8; a/{<i>}:>; (a; b; c; d; e; f; g; h)]
-[assert-eq: <$i = -8; a/ {<i>} : >; (a; b; c; d; e; f; g; h)]
+[assert-eq: <$i = 0; a/(<i>):>; (a; b; c; d; e; f; g; h)]
+[assert-eq: <$i = 0; a/ (<i>) : >; (a; b; c; d; e; f; g; h)]
+[assert-eq: <$i = -8; a/(<i>):>; (a; b; c; d; e; f; g; h)]
+[assert-eq: <$i = -8; a/ (<i>) : >; (a; b; c; d; e; f; g; h)]
 
-[assert-eq: <$i = 1; a/{<i>}:>; (b; c; d; e; f; g; h)]
-[assert-eq: <$i = 1; a/ {<i>} : >; (b; c; d; e; f; g; h)]
+[assert-eq: <$i = 1; a/(<i>):>; (b; c; d; e; f; g; h)]
+[assert-eq: <$i = 1; a/ (<i>) : >; (b; c; d; e; f; g; h)]
 
-[assert-eq: <$i = -7; a/{<i>}:>; (b; c; d; e; f; g; h)]
-[assert-eq: <$i = -7; a/ {<i>} : >; (b; c; d; e; f; g; h)]
+[assert-eq: <$i = -7; a/(<i>):>; (b; c; d; e; f; g; h)]
+[assert-eq: <$i = -7; a/ (<i>) : >; (b; c; d; e; f; g; h)]
 
-[assert-eq: <$i = -1; a/{<i>}:>; (h;)]
-[assert-eq: <$i = -1; a/ {<i>} : >; (h;)]
+[assert-eq: <$i = -1; a/(<i>):>; (h;)]
+[assert-eq: <$i = -1; a/ (<i>) : >; (h;)]

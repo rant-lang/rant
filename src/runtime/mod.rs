@@ -1985,7 +1985,8 @@ impl<'rant> VM<'rant> {
   /// Pushes a flavored frame onto the call stack.
   #[inline(always)]
   pub fn push_frame_flavored(&mut self, callee: Rc<Sequence>, flavor: StackFrameFlavor) -> RuntimeResult<()> {
-    runtime_trace!("push_frame_flavored");
+    runtime_trace!("push_frame_flavored ({:?})", flavor);
+
     // Check if this push would overflow the stack
     if self.call_stack.len() >= MAX_STACK_SIZE {
       runtime_error!(RuntimeErrorType::StackOverflow, "call stack has overflowed");

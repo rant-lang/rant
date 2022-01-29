@@ -2,7 +2,7 @@
   [rep:[len:<args>]]
   [sep:\s]
   {
-    <args/{[step-index]}>
+    <args/([step-index])>
   }
 }
 

@@ -819,9 +819,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 next_infix_op: None,
               })
             },
-            SequenceParseMode::DynamicKey => {
-              self.report_error(Problem::DynamicKeyBlockMultiElement, &span);
-            },
             SequenceParseMode::FunctionBodyBlock => {
               self.report_error(Problem::FunctionBodyBlockMultiElement, &span);
             },
@@ -834,15 +831,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Ignore pending whitespace
           whitespace!(ignore prev);
           match mode {
-            SequenceParseMode::AnonymousValue => {
-              return Ok(ParsedSequence {
-                sequence: sequence.with_name_str("anonymous accessor value"),
-                end_type: SequenceEndType::AnonymousValueEnd,
-                is_auto_hinted: is_seq_text,
-                extras: None,
-                next_infix_op: None,
-              })
-            },
             SequenceParseMode::BlockElement => {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("block element"),
@@ -861,15 +849,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 next_infix_op: None,
               })
             },
-            SequenceParseMode::DynamicKey => {
-              return Ok(ParsedSequence {
-                sequence: sequence.with_name_str("dynamic key"),
-                end_type: SequenceEndType::DynamicKeyEnd,
-                is_auto_hinted: is_seq_text,
-                extras: None,
-                next_infix_op: None,
-              })
-            }
             _ => unexpected_token_error!()
           }
         }),
@@ -921,6 +900,24 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Collection init termination
         RightParen => no_flags!({
           match mode {
+            SequenceParseMode::AnonymousValue => {
+              return Ok(ParsedSequence {
+                sequence: sequence.with_name_str("anonymous accessor value"),
+                end_type: SequenceEndType::AnonymousValueEnd,
+                is_auto_hinted: is_seq_text,
+                extras: None,
+                next_infix_op: None,
+              })
+            },
+            SequenceParseMode::DynamicKey => {
+              return Ok(ParsedSequence {
+                sequence: sequence.with_name_str("dynamic key"),
+                end_type: SequenceEndType::DynamicKeyEnd,
+                is_auto_hinted: is_seq_text,
+                extras: None,
+                next_infix_op: None,
+              })
+            },
             SequenceParseMode::CollectionInit => {
               return Ok(ParsedSequence {
                 sequence,
@@ -1580,8 +1577,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           loop {
             let key_expr = match self.reader.next_solid() {
               // Allow blocks as dynamic keys
-              Some((LeftBrace, _)) => {
-                Some(MapKeyExpr::Dynamic(Rc::new(self.parse_dynamic_expr(false)?)))
+              Some((LeftParen, _)) => {
+                Some(MapKeyExpr::Dynamic(Rc::new(self.parse_dynamic_key(false)?)))
               },
               // Allow getters as shorthands for both a key AND value, ONLY IF they target a variable
               Some((LeftAngle, _)) => {
@@ -2350,8 +2347,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
     if allow_anonymous && self.reader.eat_where(|t| matches!(t, Some((Bang, ..)))) {
       self.reader.skip_ws();
-      if !self.reader.eat(RantToken::LeftBrace) {
-        self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
+      if !self.reader.eat(RantToken::LeftParen) {
+        self.report_expected_token_error("(", &self.reader.last_token_span());
       }
       self.reader.skip_ws();
       let ParsedSequence {
@@ -2403,8 +2400,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             self.track_pipeval_read(&span);
           }
           // An expression can also be used to provide the variable
-          Some((LeftBrace, _)) => {
-            let dynamic_key_expr = self.parse_dynamic_expr(false)?;
+          Some((LeftParen, _)) => {
+            let dynamic_key_expr = self.parse_dynamic_key(false)?;
             idparts.push(AccessPathComponent::DynamicKey(Rc::new(dynamic_key_expr)));
           },
           // TODO: Check for dynamic slices here too!
@@ -2448,8 +2445,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 Ok(None) => {
                   match self.reader.peek() {
                     // Between-slice with static from-bound + dynamic to-bound
-                    Some((LeftBrace, ..)) => {
-                      let to_expr = Rc::new(self.parse_dynamic_expr(true)?);
+                    Some((LeftParen, ..)) => {
+                      let to_expr = Rc::new(self.parse_dynamic_key(true)?);
                       idparts.push(AccessPathComponent::Slice(SliceExpr::Between(SliceIndex::Static(i), SliceIndex::Dynamic(to_expr))));
                     },
                     // From-slice with static from-bound
@@ -2503,8 +2500,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   Ok(None) => {
                     match self.reader.peek() {
                       // To-slice with dynamic bound
-                      Some((LeftBrace, ..)) => {
-                        let to_expr = Rc::new(self.parse_dynamic_expr(true)?);
+                      Some((LeftParen, ..)) => {
+                        let to_expr = Rc::new(self.parse_dynamic_key(true)?);
                         idparts.push(AccessPathComponent::Slice(SliceExpr::To(SliceIndex::Dynamic(to_expr))));
                       },
                       // Full-slice
@@ -2527,8 +2524,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 }
               },
               // Dynamic key or slice with dynamic from-bound
-              Some((LeftBrace, _)) => {
-                let expr = Rc::new(self.parse_dynamic_expr(false)?);
+              Some((LeftParen, _)) => {
+                let expr = Rc::new(self.parse_dynamic_key(false)?);
                 self.reader.skip_ws();
                 // Look for a colon to see if it's a slice
                 if self.reader.eat_where(|t| matches!(t, Some((Colon, ..)))) {
@@ -2541,8 +2538,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                     Ok(None) => {
                       match self.reader.peek() {
                         // Between-slice with dynamic from- + to-bounds
-                        Some((LeftBrace, ..)) => {
-                          let to_expr = Rc::new(self.parse_dynamic_expr(true)?);
+                        Some((LeftParen, ..)) => {
+                          let to_expr = Rc::new(self.parse_dynamic_key(true)?);
                           idparts.push(AccessPathComponent::Slice(SliceExpr::Between(SliceIndex::Dynamic(expr), SliceIndex::Dynamic(to_expr))));
                         },
                         // From-slice with dynamic bound
@@ -2587,10 +2584,10 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     }
   }
     
-  /// Parses a dynamic expression (a linear block).
-  fn parse_dynamic_expr(&mut self, expect_opening_brace: bool) -> ParseResult<Sequence> {
-    if expect_opening_brace && !self.reader.eat_where(|t| matches!(t, Some((LeftBrace, _)))) {
-      self.report_error(Problem::ExpectedToken("{".to_owned()), &self.reader.last_token_span());
+  /// Parses a dynamic key.
+  fn parse_dynamic_key(&mut self, expect_opening_paren: bool) -> ParseResult<Sequence> {
+    if expect_opening_paren && !self.reader.eat_where(|t| matches!(t, Some((LeftParen, _)))) {
+      self.report_expected_token_error("(", &self.reader.last_token_span());
       return Err(())
     }
     
@@ -2602,7 +2599,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       SequenceEndType::ProgramEnd => {
         // Hard error if block isn't closed
         let err_span = start_span.start .. self.source.len();
-        self.report_error(Problem::UnclosedBlock, &err_span);
+        self.report_error(Problem::UnclosedParens, &err_span);
         return Err(())
       },
       _ => unreachable!()

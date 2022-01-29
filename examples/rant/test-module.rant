@@ -1,6 +1,6 @@
 [require: test-submodule]
 
-<$module = @()>
+<$module = (::)>
 
 [$module/test] {
   Hello from test-module!

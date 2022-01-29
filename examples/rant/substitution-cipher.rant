@@ -7,7 +7,7 @@
     $cipher-rev = [assoc: <sub-letters>; <letters>];
   >
   # Return cipher functions
-  @(
+  (::
     encode = [?: message] {
       [split: <message> |> translate: <cipher> |> sum]
     };

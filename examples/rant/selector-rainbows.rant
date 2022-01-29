@@ -1,5 +1,5 @@
 <$side-len = 32>
-<$sels = (:
+<%sels = (:
   (:: name = Forward; state = [mksel:forward]);
   (:: name = Reverse; state = [mksel:reverse]);
   (:: name = Forward Clamp; state = [mksel:forward-clamp]);
@@ -18,7 +18,7 @@
 [len: <sels> |> rep]
 [sep: \n\n]
 {
-  <%current-sel = <sels/{[step-index]}>>
+  <%current-sel = <sels/([step-index])>>
   <current-sel/name>\:\n
   [rep: <side-len>]
   [sep: \n]
