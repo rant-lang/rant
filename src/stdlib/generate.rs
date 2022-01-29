@@ -179,8 +179,9 @@ pub(crate) fn pick_sparse(vm: &mut VM, mut items: RequiredVarArgs<RantValue>) ->
     .map(|v| v.len())
     .fold(0usize, |acc, x| acc.saturating_add(x));
 
-  let mut rem_sum = len_sum;
-  let sum_pick = vm.rng().next_usize(len_sum);
+  dbg!(len_sum);
+
+  let mut rem_sum = vm.rng().next_usize(len_sum);
 
   for item in items.drain(..) {
     let item_len = item.len();

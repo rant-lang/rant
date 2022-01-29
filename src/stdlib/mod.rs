@@ -125,7 +125,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     asin, sin, acos, cos, atan, atan2, tan, sqrt, 
 
     // Conversion functions
-    to_int as "to-int", to_float as "to-float", to_string as "to-string", to_bool as "to-bool", to_list as "to-list", to_tuple as "to=tuple",
+    to_int as "to-int", to_float as "to-float", to_string as "to-string", to_bool as "to-bool", to_list as "to-list", to_tuple as "to-tuple",
 
     // Generator functions
     alpha, dig, digh, dignz, maybe, pick, pick_sparse as "pick-sparse",
