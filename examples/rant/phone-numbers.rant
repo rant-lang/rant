@@ -10,8 +10,8 @@
 ) |> tuple]>
 
 [%phone-number-us] {
-  [num-fmt-padding: 2]
-  \([pick-sparse: *<us-area-code-ranges>]\)\s[dig:3]\-[dig:4]
+  \(([num-fmt-padding: 3][pick-sparse: *<us-area-code-ranges>])\)\s
+  [dig:3]\-[dig:4]
 }
 
 [rep:10][sep:\n]{[phone-number-us]}
