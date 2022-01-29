@@ -128,7 +128,8 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     to_int as "to-int", to_float as "to-float", to_string as "to-string", to_bool as "to-bool", to_list as "to-list", to_tuple as "to=tuple",
 
     // Generator functions
-    alpha, dig, digh, dignz, maybe, rand, randf, rand_list as "rand-list", randf_list as "randf-list", rand_list_sum as "rand-list-sum",
+    alpha, dig, digh, dignz, maybe, pick, pick_sparse as "pick-sparse",
+    rand, randf, rand_list as "rand-list", randf_list as "randf-list", rand_list_sum as "rand-list-sum",
 
     // Prototype functions
     proto, set_proto as "set-proto",
@@ -136,7 +137,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     // Collection functions
     assoc, augment, augment_self as "augment-self", augment_thru as "augment-thru", chunks, clear, list, tuple, has, keys, index_of as "index-of", insert, last_index_of as "last-index-of", 
     nlist, remove, rev, sift_self as "sift-self", sift_thru as "sift-thru", sift, squish_self as "squish-self", squish_thru as "squish-thru", squish, take, translate, values,
-    pick, filter, join, map, sort_self as "sort-self", sort_thru as "sort-thru", sort, shuffle_self as "shuffle-self", shuffle_thru as "shuffle-thru", shuffle, sum,
+    filter, join, map, sort_self as "sort-self", sort_thru as "sort-thru", sort, shuffle_self as "shuffle-self", shuffle_thru as "shuffle-thru", shuffle, sum,
     list_push as "push", list_pop as "pop", oxford_join as "oxford-join", zip,
 
     // String functions
