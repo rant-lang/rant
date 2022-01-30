@@ -146,7 +146,8 @@ The latest reference documentation can be found at **[docs.rant-lang.org](https:
 
 Since Rant 4 is early in development, some documentation may be outdated/incomplete, but it is actively updated to ensure that it reflects current features with reasonable accuracy.
 
-## [Changelog](https://github.com/rant-lang/rant/blob/master/CHANGELOG.md)
+
+## [Changelog](./CHANGELOG.md)
 
 The changelog is updated constantly throughout the development process, providing a complete summary of upcoming changes at a glance even before the next release.
 
