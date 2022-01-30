@@ -2,6 +2,9 @@
 
 ## 4.0.0-alpha.29 (unreleased)
 
+## Changes
+* `VarArgs<T>` and `RequiredVarArgs<T>` are now public. Use them to add variadic parameters to your native functions!
+
 ## 4.0.0-alpha.28
 
 (1/29/2022)

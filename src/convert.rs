@@ -455,8 +455,10 @@ impl<T: TryFromRant> FromRantArgs for T {
   }
 }
 
-/// Semantic wrapper around a Vec<T> for use in optional variadic argument lists.
-pub(crate) struct VarArgs<T: TryFromRant>(Vec<T>);
+/// Semantic wrapper around a `Vec<T>`.
+/// 
+/// Use this type to add an optional variadic (`*`) parameter to native functions.
+pub struct VarArgs<T: TryFromRant>(Vec<T>);
 
 impl<T: TryFromRant> VarArgs<T> {
   pub fn new(args: Vec<T>) -> Self {
@@ -484,8 +486,10 @@ impl<T: TryFromRant> VarArgs<T> {
   }
 }
 
-/// Semantic wrapper around a Vec<T> for use in required variadic argument lists.
-pub(crate) struct RequiredVarArgs<T: TryFromRant>(Vec<T>);
+/// Semantic wrapper around a `Vec<T>`.
+/// 
+/// Use this type to add a required variadic (`+`) parameter to native functions.
+pub struct RequiredVarArgs<T: TryFromRant>(Vec<T>);
 
 impl<T: TryFromRant> RequiredVarArgs<T> {
   pub fn new(args: Vec<T>) -> Self {
