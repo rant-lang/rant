@@ -1,6 +1,8 @@
 # Changelog
 
-## 4.0.0-alpha.28 (unreleased)
+## 4.0.0-alpha.29 (unreleased)
+
+## 4.0.0-alpha.28
 
 ## New
 * Added complex spread; add a parametric spread to each iteration of a temporal argument with `***` or `*a**`

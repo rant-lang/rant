@@ -82,7 +82,7 @@ Rant's CLI can run Rant code from files or the command line.
 Install it from Cargo with:
 
 ```sh
-$ cargo install rant --version 4.0.0-alpha.27 --features cli
+$ cargo install rant --version 4.0.0-alpha.28 --features cli
 ```
 
 Then run it:
