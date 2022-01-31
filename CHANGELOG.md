@@ -8,6 +8,7 @@
 
 
 ## Changes
+* Changed slice bound separator from `:` to `..`
 * Removed need for `!` in anonymous accessors; just use an expression inside `()`
 * Renamed `CompilerErrorKind` to `CompilerError`
 * Moved `RantOptions::enable_global_modules` and `RantOptions::local_modules_path` to `DefaultModuleResolver`
@@ -16,6 +17,9 @@
 ## Removed
 * Removed ability to specify dynamic variable names in accessors
 * `RantOptions::enable_require`
+
+## Fixes
+* Fixed parsing bug in function call accessors where a dynamic child component followed by arg list start (`:`) was incorrectly parsed as a slice
 
 ## 4.0.0-alpha.28
 

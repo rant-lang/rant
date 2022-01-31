@@ -1,5 +1,5 @@
 <$a = ABCDEFGH>
 
-[assert-eq: <a/(0):4>; ABCD]
-[assert-eq: <a/0:(4)>; ABCD]
-[assert-eq: <a/(4):(8)>; EFGH]
+[assert-eq: <a/(0)..4>; ABCD]
+[assert-eq: <a/0..(4)>; ABCD]
+[assert-eq: <a/(4)..(8)>; EFGH]

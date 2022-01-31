@@ -1026,7 +1026,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
 
         // These symbols are only used in special contexts and can be safely printed
-        Bang | Question | Dollar | Equals
+        Bang | Question | Dollar | Equals | DoubleDot
         => no_flags!(on {
           whitespace!(allow);
           is_seq_text = true;
@@ -2339,7 +2339,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     if let Ok(Some(_)) = self.try_read_signed_int() {
       let span = self.reader.last_token_span();
       self.reader.skip_ws();
-      if self.reader.eat_where(|t| matches!(t, Some((Colon, ..)))) {
+      if self.reader.eat_where(|t| matches!(t, Some((DoubleDot, ..)))) {
         self.report_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
       } else {
         self.report_error(Problem::AccessPathStartsWithIndex, &span);
@@ -2366,7 +2366,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           idparts.push(AccessPathComponent::Expression(Rc::new(anon_value_expr)));
         },
         // First path part can't be a slice
-        Some((Colon, span)) => {
+        Some((DoubleDot, span)) => {
           let _ = self.try_read_signed_int();
           self.report_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
         },
@@ -2393,8 +2393,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           // Index or slice with static from-bound
           Ok(Some(i)) => {
             self.reader.skip_ws();
-            // Look for a colon to see if it's a slice
-            if self.reader.eat_where(|t| matches!(t, Some((Colon, ..)))) {
+            // Look for a slice separator to see if it's a slice
+            if self.reader.eat_where(|t| matches!(t, Some((DoubleDot, ..)))) {
               self.reader.skip_ws();
               match self.try_read_signed_int() {
                 // Between-slice with static from- and to-bounds
@@ -2427,7 +2427,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 Err(()) => {}
               }
             } else {
-              // No colon, so it's an index
+              // No slice separator, so it's an index
               idparts.push(AccessPathComponent::Index(i));
             }
           },
@@ -2449,7 +2449,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 self.track_pipeval_read(&pipeval_span);
               }
               // Full- or to-slice
-              Some((Colon, _)) => {
+              Some((DoubleDot, _)) => {
                 self.reader.skip_ws();
                 match self.try_read_signed_int() {
                   // To-slice with static bound
@@ -2486,8 +2486,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               Some((LeftParen, _)) => {
                 let expr = Rc::new(self.parse_dynamic_key(false)?);
                 self.reader.skip_ws();
-                // Look for a colon to see if it's a slice
-                if self.reader.eat_where(|t| matches!(t, Some((Colon, ..)))) {
+                // Look for a slice separator to see if it's a slice
+                if self.reader.eat_where(|t| matches!(t, Some((DoubleDot, ..)))) {
                   self.reader.skip_ws();
                   match self.try_read_signed_int() {
                     // Between-slice with a dynamic from-bound + static to-bound
@@ -2520,7 +2520,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                     Err(()) => {}
                   }
                 } else {
-                  // No colon, so it's an dynamic key
+                  // No slice separator, so it's an dynamic key
                   idparts.push(AccessPathComponent::Expression(expr));
                 }
               },

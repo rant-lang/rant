@@ -1,6 +1,6 @@
 <$a = ABCDEFGH>
 
-[assert-eq: <a/:(8)>; ABCDEFGH]
-[assert-eq: <a/:(1)>; A]
-[assert-eq: <a/:(4)>; ABCD]
-[assert-eq: <a/:(-1)>; ABCDEFG]
+[assert-eq: <a/..(8)>; ABCDEFGH]
+[assert-eq: <a/..(1)>; A]
+[assert-eq: <a/..(4)>; ABCD]
+[assert-eq: <a/..(-1)>; ABCDEFG]
