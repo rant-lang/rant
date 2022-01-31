@@ -102,6 +102,7 @@ pub struct Rant {
 
 impl Rant {
   /// Creates a new Rant context with the default seed (0) and loads the standard library.
+  #[inline(always)]
   pub fn new() -> Self {
     Self::with_seed(0)
   }
@@ -123,6 +124,7 @@ impl Rant {
   }
 
   /// Creates a new Rant context with the specified options.
+  #[inline(always)]
   pub fn with_options(options: RantOptions) -> Self {
     let mut rant = Self {
       module_resolver: Rc::new(DefaultModuleResolver::default()),
@@ -140,9 +142,9 @@ impl Rant {
     rant
   }
 
-  /// Sets the module resolver.
+  /// Replaces the module resolver.
   #[inline]
-  pub fn with_module_resolver<R: ModuleResolver + 'static>(self, module_resolver: R) -> Self {
+  pub fn using_module_resolver<R: ModuleResolver + 'static>(self, module_resolver: R) -> Self {
     Self {
       module_resolver: Rc::new(module_resolver),
       .. self
@@ -160,7 +162,7 @@ impl Default for Rant {
 impl Rant {
   /// Compiles a source string using the specified reporter.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
-  pub fn compile<R: Reporter>(&self, source: &str, reporter: &mut R) -> Result<RantProgram, CompilerErrorKind> {
+  pub fn compile<R: Reporter>(&self, source: &str, reporter: &mut R) -> Result<RantProgram, CompilerError> {
     compiler::compile_string(source, reporter, self.options.debug_mode, RantProgramInfo {
       name: None,
       path: None,
@@ -169,7 +171,7 @@ impl Rant {
 
   /// Compiles a source string using the specified reporter and source name.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
-  pub fn compile_named<R: Reporter>(&self, source: &str, reporter: &mut R, name: &str) -> Result<RantProgram, CompilerErrorKind> {
+  pub fn compile_named<R: Reporter>(&self, source: &str, reporter: &mut R, name: &str) -> Result<RantProgram, CompilerError> {
     compiler::compile_string(source, reporter, self.options.debug_mode, RantProgramInfo {
       name: Some(name.to_owned()),
       path: None,
@@ -184,7 +186,7 @@ impl Rant {
   ///
   /// If you require this information, use the `compile()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
-  pub fn compile_quiet(&self, source: &str) -> Result<RantProgram, CompilerErrorKind> {
+  pub fn compile_quiet(&self, source: &str) -> Result<RantProgram, CompilerError> {
     compiler::compile_string(source, &mut (), self.options.debug_mode, RantProgramInfo {
       name: None,
       path: None,
@@ -199,7 +201,7 @@ impl Rant {
   ///
   /// If you require this information, use the `compile()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
-  pub fn compile_quiet_named(&self, source: &str, name: &str) -> Result<RantProgram, CompilerErrorKind> {
+  pub fn compile_quiet_named(&self, source: &str, name: &str) -> Result<RantProgram, CompilerError> {
     compiler::compile_string(source, &mut (), self.options.debug_mode, RantProgramInfo {
       name: Some(name.to_owned()),
       path: None,
@@ -208,7 +210,7 @@ impl Rant {
   
   /// Compiles a source file using the specified reporter.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
-  pub fn compile_file<P: AsRef<Path>, R: Reporter>(&self, path: P, reporter: &mut R) -> Result<RantProgram, CompilerErrorKind> {
+  pub fn compile_file<P: AsRef<Path>, R: Reporter>(&self, path: P, reporter: &mut R) -> Result<RantProgram, CompilerError> {
     compiler::compile_file(path, reporter, self.options.debug_mode)
   }
 
@@ -220,7 +222,7 @@ impl Rant {
   ///
   /// If you require this information, use the `compile_file()` method instead.
   #[must_use = "compiling a program without storing or running it achieves nothing"]
-  pub fn compile_file_quiet<P: AsRef<Path>>(&self, path: P) -> Result<RantProgram, CompilerErrorKind> {
+  pub fn compile_file_quiet<P: AsRef<Path>>(&self, path: P) -> Result<RantProgram, CompilerError> {
     compiler::compile_file(path, &mut (), self.options.debug_mode)
   }
 

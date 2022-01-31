@@ -8,6 +8,7 @@
 
 
 ## Changes
+* Renamed `CompilerErrorKind` to `CompilerError`
 * Moved `RantOptions::enable_global_modules` and `RantOptions::local_modules_path` to `DefaultModuleResolver`
 * `VarArgs<T>` and `RequiredVarArgs<T>` are now public. Use them to add variadic parameters to your native functions!
 

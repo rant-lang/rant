@@ -55,10 +55,10 @@ impl ModuleResolver for DefaultModuleResolver {
           Err(ModuleResolveError {
             name: module_path.to_owned(),
             reason: match err{
-              CompilerErrorKind::SyntaxError => {
+              CompilerError::SyntaxError => {
                 ModuleResolveErrorReason::CompileFailed(errors)
               },
-              CompilerErrorKind::IOError(ioerr) => {
+              CompilerError::IOError(ioerr) => {
                 match ioerr {
                   IOErrorKind::NotFound => {
                     ModuleResolveErrorReason::NotFound
