@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.0.0-alpha.29 (unreleased)
+## 4.0.0-alpha.29
 
 ## New
 * Module resolver has been externalized into a separate `ModuleResolver` trait, which you can use to write your own custom resolution logic.
