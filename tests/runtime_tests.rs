@@ -212,18 +212,12 @@ fn dynamic_multi_index_setter() {
 
 #[test]
 fn closure_capture_var() {
-  test_rant_file!(
-    "sources/closure/closure_capture_var.rant",
-    "foo"
-  );
+  test_rant_file!("sources/closure/closure_capture_var.rant");
 }
 
 #[test]
 fn closure_capture_arg() {
-  test_rant_file!(
-    "sources/closure/closure_capture_arg.rant",
-    "foo"
-  );
+  test_rant_file!("sources/closure/closure_capture_arg.rant");
 }
 
 #[test]

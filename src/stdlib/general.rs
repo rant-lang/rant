@@ -9,12 +9,12 @@ use crate::lang::{VarAccessMode};
 ///
 /// Prints the first argument that isn't an `empty`.
 pub(crate) fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> RantStdResult {
-  if !a.is_empty() {
+  if !a.is_emptyval() {
     vm.cur_frame_mut().write(a);
     Ok(())
   } else {
     for val in b.drain(..) {
-      if !val.is_empty() {
+      if !val.is_emptyval() {
         vm.cur_frame_mut().write(val);
         break
       }

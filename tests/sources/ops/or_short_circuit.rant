@@ -13,7 +13,7 @@
 
 # Test @true @or @false
 <lhs = @true; rhs = @false>
-[nop: [get-lhs] @or [get-rhs]]
+[tap: [get-lhs] @or [get-rhs]]
 [assert-eq: <lhs-reads>; 1]
 [assert-eq: <rhs-reads>; 0]
 
@@ -22,6 +22,6 @@
 
 # Test @false @or @true
 <lhs = @false; rhs = @true>
-[nop: [get-lhs] @or [get-rhs]]
+[tap: [get-lhs] @or [get-rhs]]
 [assert-eq: <lhs-reads>; 1]
 [assert-eq: <rhs-reads>; 1]

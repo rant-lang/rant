@@ -2,4 +2,4 @@
   [?: b]{<a> <b>}
 }
 
-[get-func: foo |> ![]: bar]
+[get-func: foo |> ([]): bar]

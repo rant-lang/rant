@@ -11,7 +11,7 @@
 * `[sum]` now accepts any ordered collection type
 * Changed behavior of `RantValue::is_empty()` to match that of `Vec`
 * Changed slice bound separator from `:` to `..`
-* Removed need for `!` in anonymous accessors; just use an expression inside `()`
+* Removed need for `!` in anonymous accessors and function calls; just use an access path!
 * Renamed `CompilerErrorKind` to `CompilerError`
 * Moved `RantOptions::enable_global_modules` and `RantOptions::local_modules_path` to `DefaultModuleResolver`
 * `VarArgs<T>` and `RequiredVarArgs<T>` are now public. Use them to add variadic parameters to your native functions!
@@ -19,7 +19,7 @@
   * `[nop]` &rarr; `[tap]`
 
 ## Removed
-* Removed ability to specify dynamic variable names in accessors
+* Removed ability to specify dynamic variable names in accessors - expressions in the first path component now act as anonymous value sources
 * `RantOptions::enable_require`
 
 ## Fixes

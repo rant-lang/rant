@@ -397,12 +397,6 @@ impl<'rant> VM<'rant> {
                 FunctionCallTarget::Path(path) => {
                   self.push_getter_intents(path, true, true, None);
                 },
-                FunctionCallTarget::Expression(expr) => {
-                  self.push_frame(Rc::clone(expr), true)?;
-                  if let Some(pipeval) = pipeval {
-                    self.def_pipeval(pipeval)?;
-                  }
-                },
               }
               return Ok(true)
             },
@@ -1043,7 +1037,7 @@ impl<'rant> VM<'rant> {
           } = fcall;
 
           match target {
-            // Named function call
+            // Access path
             FunctionCallTarget::Path(path) => {
               // Queue up the function call behind the dynamic keys
               self.cur_frame_mut().push_intent(Intent::Invoke {
@@ -1053,18 +1047,6 @@ impl<'rant> VM<'rant> {
               });
 
               self.push_getter_intents(path, true, true, None);
-            },
-            // Anonymous function call
-            FunctionCallTarget::Expression(expr) => {
-              // Evaluate arguments after function is evaluated
-              self.cur_frame_mut().push_intent(Intent::Invoke {
-                arg_exprs: Rc::clone(arguments),
-                arg_eval_count: 0,
-                is_temporal: *is_temporal,
-              });
-
-              // Push function expression onto stack
-              self.push_frame(Rc::clone(expr), true)?;
             },
           }
           return Ok(true)

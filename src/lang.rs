@@ -529,9 +529,6 @@ pub enum FunctionCallTarget {
   /// Indicates a path to a function variable.
   /// Used for named function calls.
   Path(Rc<AccessPath>),
-  /// Indicates an expression (which returns the function to call).
-  /// Used for anonymous function calls.
-  Expression(Rc<Sequence>),
 }
 
 /// A function call.

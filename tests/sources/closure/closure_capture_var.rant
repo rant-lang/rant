@@ -3,4 +3,4 @@
   [?]{<a>}
 }
 
-[![gen-closure]]
+[([gen-closure]) |> assert-eq: foo]

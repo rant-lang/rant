@@ -148,10 +148,6 @@ enum SequenceParseMode {
   ///
   /// Breaks on `RightBrace`.
   DynamicKey,
-  /// Parse a sequence like an anonymous function expression.
-  ///
-  /// Breaks on `Colon` and `RightBracket`.
-  AnonFunctionExpr,
   /// Parse a sequence like a variable assignment value.
   ///
   /// Breaks on `RightAngle` and `Semi`.
@@ -198,12 +194,6 @@ enum SequenceEndType {
   FunctionBodyEnd,
   /// Dynamic key sequencce was terminated by `RightBrace`.
   DynamicKeyEnd,
-  /// Anonymous function expression was terminated by `Colon`.
-  AnonFunctionExprToArgs,
-  /// Anonymous function expression was terminated by `RightBracket` and does not expect arguments.
-  AnonFunctionExprNoArgs,
-  /// Anonymous function expression was terminated by `PipeOp`.
-  AnonFunctionExprToPipe,
   /// Variable accessor was terminated by `RightAngle`.
   VariableAccessEnd,
   /// Variable assignment expression was terminated by `Semi`. 
@@ -780,15 +770,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 next_infix_op: None,
               })
             },
-            SequenceParseMode::AnonFunctionExpr => {
-              return Ok(ParsedSequence {
-                sequence: sequence.with_name_str("anonymous function expression"),
-                end_type: SequenceEndType::AnonFunctionExprToPipe,
-                is_auto_hinted: is_seq_text,
-                extras: None,
-                next_infix_op: None,
-              })
-            },
             _ => unexpected_token_error!()
           }
         }),
@@ -946,13 +927,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Can be terminator for function args and anonymous function expressions
         RightBracket => no_flags!({
           match mode {
-            SequenceParseMode::AnonFunctionExpr => return Ok(ParsedSequence {
-              sequence: sequence.with_name_str("anonymous function expression"),
-              end_type: SequenceEndType::AnonFunctionExprNoArgs,
-              is_auto_hinted: true,
-              extras: None,
-              next_infix_op: None,
-            }),
             SequenceParseMode::FunctionArg => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("argument"),
               end_type: SequenceEndType::FunctionArgEndBreak,
@@ -1146,13 +1120,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             SequenceParseMode::Condition => return Ok(ParsedSequence {
               sequence: sequence.with_name_str("condition"),
               end_type: SequenceEndType::ConditionEnd,
-              is_auto_hinted: is_seq_text,
-              extras: None,
-              next_infix_op: None,
-            }),
-            SequenceParseMode::AnonFunctionExpr => return Ok(ParsedSequence {
-              sequence: sequence.with_name_str("anonymous function expression"),
-              end_type: SequenceEndType::AnonFunctionExprToArgs,
               is_auto_hinted: is_seq_text,
               extras: None,
               next_infix_op: None,
@@ -1992,8 +1959,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         let mut temporal_index_labels: HashMap<InternalString, usize> = Default::default();
         // Next temporal index to be consumed
         let mut cur_temporal_index: usize = 0;
-        // Anonymous call flag
-        let is_anonymous = self.reader.eat_where(|t| matches!(t, Some((Bang, ..))));
         // Temporal call flag
         let mut is_temporal = false;
         // Do the user-supplied args use the pipe value?
@@ -2169,110 +2134,62 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         
         self.reader.skip_ws();
 
-        // What kind of function call is this?
-        if is_anonymous {
-          // Anonymous function call
-          let ParsedSequence {
-            sequence: func_expr,
-            end_type: func_expr_end,
-            ..
-          } = if is_piped {
-            self.var_stack.push_layer();
-            // Track pipe value inside anonymous function access scope
-            let pipeval_stats = VarStats::new(VarRole::PipeValue, Default::default(), true);
-            self.var_stack.define(Identifier::from(PIPE_VALUE_NAME), pipeval_stats);
-            let seq = self.parse_sequence_inner(SequenceParseMode::AnonFunctionExpr, PREC_SEQUENCE)?;
-            is_pipeval_used |= self.var_stack.get(PIPE_VALUE_NAME).unwrap().reads > 0;
-            self.analyze_top_vars();
-            self.var_stack.pop_layer();
-            seq
-          } else {
-            self.parse_sequence(SequenceParseMode::AnonFunctionExpr)?
-          };
-          
-          // Parse arguments if available
-          match func_expr_end {
+        let old_pipeval = if is_piped {
+          let old = self.var_stack.remove(PIPE_VALUE_NAME);
+          self.var_stack.define(PIPE_VALUE_NAME.into(), VarStats::new(VarRole::PipeValue, Default::default(), true));
+          old
+        } else {
+          None
+        };
+
+        // Read function access path
+        let (func_path, func_path_span) = self.parse_access_path(true)?;
+        
+        if let Some(pipeval_stats) = self.var_stack.get(PIPE_VALUE_NAME) {
+          is_pipeval_used |= pipeval_stats.reads > 0;
+        }
+        
+        if let Some((token, _)) = self.reader.next_solid() {
+          match token {
             // No args, fall through
-            SequenceEndType::AnonFunctionExprNoArgs => {
+            RightBracket => {
               is_finished = true;
             },
             // Parse arguments
-            SequenceEndType::AnonFunctionExprToArgs => parse_args!(),
+            Colon => parse_args!(),
             // Pipe without args
-            SequenceEndType::AnonFunctionExprToPipe => {
+            PipeOp => {
               is_piped = true;
             }
-            _ => unreachable!()
+            _ => {
+              self.report_unexpected_last_token_error();
+              return Err(())
+            }
           }
 
           fallback_pipe!();
           
-          // Create final node for anon function call
+          // Record access to function
+          self.track_variable_access(&func_path, false, false, &func_path_span, Some(&mut is_auto_hinted));
+          
+          // Create final node for function call
           let fcall = FunctionCall {
-            target: FunctionCallTarget::Expression(Rc::new(func_expr)),
+            target: FunctionCallTarget::Path(Rc::new(func_path)),
             arguments: Rc::new(func_args),
             is_temporal,
           };
 
           calls.push(fcall);
         } else {
-          let old_pipeval = if is_piped {
-            let old = self.var_stack.remove(PIPE_VALUE_NAME);
-            self.var_stack.define(PIPE_VALUE_NAME.into(), VarStats::new(VarRole::PipeValue, Default::default(), true));
-            old
-          } else {
-            None
-          };
+          // Found EOF instead of end of function call, emit hard error
+          self.report_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
+          return Err(())
+        }
 
-          // Named function call
-          let (func_path, func_path_span) = self.parse_access_path(false)?;
-          
-          if let Some(pipeval_stats) = self.var_stack.get(PIPE_VALUE_NAME) {
-            is_pipeval_used |= pipeval_stats.reads > 0;
-          }
-          
-          if let Some((token, _)) = self.reader.next_solid() {
-            match token {
-              // No args, fall through
-              RightBracket => {
-                is_finished = true;
-              },
-              // Parse arguments
-              Colon => parse_args!(),
-              // Pipe without args
-              PipeOp => {
-                is_piped = true;
-              }
-              _ => {
-                self.report_unexpected_last_token_error();
-                return Err(())
-              }
-            }
-
-            fallback_pipe!();
-            
-            // Record access to function
-            self.track_variable_access(&func_path, false, false, &func_path_span, Some(&mut is_auto_hinted));
-            
-            // Create final node for function call
-            let fcall = FunctionCall {
-              target: FunctionCallTarget::Path(Rc::new(func_path)),
-              arguments: Rc::new(func_args),
-              is_temporal,
-            };
-
-            calls.push(fcall);
-          } else {
-            // Found EOF instead of end of function call, emit hard error
-            self.report_error(Problem::UnclosedFunctionCall, &self.reader.last_token_span());
-            return Err(())
-          }
-
-          if is_piped {
-            self.var_stack.remove(PIPE_VALUE_NAME);
-            if let Some(old_pipeval) = old_pipeval {
-              self.var_stack.define(PIPE_VALUE_NAME.into(), old_pipeval);
-            }
+        if is_piped {
+          self.var_stack.remove(PIPE_VALUE_NAME);
+          if let Some(old_pipeval) = old_pipeval {
+            self.var_stack.define(PIPE_VALUE_NAME.into(), old_pipeval);
           }
         }
 

@@ -4,4 +4,4 @@
   }
 }
 
-[![gen-closure:foo]]
+[([gen-closure:foo]) |> assert-eq: foo]
