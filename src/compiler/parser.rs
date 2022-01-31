@@ -168,10 +168,6 @@ enum SequenceParseMode {
   ///
   /// Breaks on `Semi` and `RightParen`.
   CollectionInit,
-  /// Parse a sequence like an anonymous value block.
-  /// 
-  /// Breaks on `RightBrace`.
-  AnonymousValue,
   /// Parses an if-statement condition.
   /// 
   /// Breaks on `Colon`.
@@ -228,8 +224,6 @@ enum SequenceEndType {
   Operator,
   /// Condition was terminated by `Colon`.
   ConditionEnd,
-  /// Anonymous value block was terminated by `RightBrace`.
-  AnonymousValueEnd,
 }
 
 /// Used to track variable usages during compilation.
@@ -900,15 +894,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         // Collection init termination
         RightParen => no_flags!({
           match mode {
-            SequenceParseMode::AnonymousValue => {
-              return Ok(ParsedSequence {
-                sequence: sequence.with_name_str("anonymous accessor value"),
-                end_type: SequenceEndType::AnonymousValueEnd,
-                is_auto_hinted: is_seq_text,
-                extras: None,
-                next_infix_op: None,
-              })
-            },
             SequenceParseMode::DynamicKey => {
               return Ok(ParsedSequence {
                 sequence: sequence.with_name_str("dynamic key"),
@@ -2343,80 +2328,54 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
     self.reader.skip_ws();
     let mut idparts = vec![];
     let start_span = self.reader.last_token_span();
-    let mut access_kind = VarAccessMode::Local;
 
-    if allow_anonymous && self.reader.eat_where(|t| matches!(t, Some((Bang, ..)))) {
+    // Check for global/descope specifiers
+    let access_mode = self.parse_access_mode();
+
+    self.reader.skip_ws();
+
+    // Parse the first part of the path
+    // Check for certain index/slice forms and disallow them
+    if let Ok(Some(_)) = self.try_read_signed_int() {
+      let span = self.reader.last_token_span();
       self.reader.skip_ws();
-      if !self.reader.eat(RantToken::LeftParen) {
-        self.report_expected_token_error("(", &self.reader.last_token_span());
+      if self.reader.eat_where(|t| matches!(t, Some((Colon, ..)))) {
+        self.report_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
+      } else {
+        self.report_error(Problem::AccessPathStartsWithIndex, &span);
       }
-      self.reader.skip_ws();
-      let ParsedSequence {
-        sequence: anon_expr,
-        end_type: anon_end_type,
-        ..
-      } = self.parse_sequence(SequenceParseMode::AnonymousValue)?;
-      match anon_end_type {
-        SequenceEndType::AnonymousValueEnd => {
-          idparts.push(AccessPathComponent::AnonymousValue(Rc::new(anon_expr)));
+    } else {        
+      match self.reader.next() {
+        // Variable name
+        Some((Fragment, span)) => {
+          let varname = Identifier::new(self.reader.last_token_string());
+          if is_valid_ident(varname.as_str()) {
+            idparts.push(AccessPathComponent::Name(varname));
+          } else {
+            self.report_error(Problem::InvalidIdentifier(varname.to_string()), &span);
+          }
         },
-        SequenceEndType::ProgramEnd => {
-          self.report_error(Problem::UnclosedBlock, &self.reader.last_token_span());
-          return Err(())
-        },
-        _ => unreachable!(),
-      }
-    } else {
-      // Check for global/descope specifiers
-      access_kind = self.parse_access_mode();
-
-      self.reader.skip_ws();
-
-      // Parse the first part of the path
-
-      // Check for certain index/slice forms and disallow them
-      if let Ok(Some(_)) = self.try_read_signed_int() {
-        let span = self.reader.last_token_span();
-        self.reader.skip_ws();
-        if self.reader.eat_where(|t| matches!(t, Some((Colon, ..)))) {
-          self.report_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
-        } else {
-          self.report_error(Problem::AccessPathStartsWithIndex, &span);
+        // Pipeval can be directly accessed here too
+        Some((PipeValue, span)) => {
+          idparts.push(AccessPathComponent::PipeValue);
+          self.track_pipeval_read(&span);
         }
-      } else {        
-        match self.reader.next() {
-          // The first part of the path may only be a variable name (for now)
-          Some((Fragment, span)) => {
-            let varname = Identifier::new(self.reader.last_token_string());
-            if is_valid_ident(varname.as_str()) {
-              idparts.push(AccessPathComponent::Name(varname));
-            } else {
-              self.report_error(Problem::InvalidIdentifier(varname.to_string()), &span);
-            }
-          },
-          // Pipeval can be directly accessed here too
-          Some((PipeValue, span)) => {
-            idparts.push(AccessPathComponent::PipeValue);
-            self.track_pipeval_read(&span);
-          }
-          // An expression can also be used to provide the variable
-          Some((LeftParen, _)) => {
-            let dynamic_key_expr = self.parse_dynamic_key(false)?;
-            idparts.push(AccessPathComponent::DynamicKey(Rc::new(dynamic_key_expr)));
-          },
-          // TODO: Check for dynamic slices here too!
-          // First path part can't be a slice
-          Some((Colon, span)) => {
-            let _ = self.try_read_signed_int();
-            self.report_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
-          },
-          Some((.., span)) => {
-            self.report_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span);
-          },
-          None => {
-            self.report_error(Problem::MissingIdentifier, &start_span);
-            return Err(())
-          }
+        // An expression can also be used to provide the variable
+        Some((LeftParen, _)) if allow_anonymous => {
+          let anon_value_expr = self.parse_dynamic_key(false)?;
+          idparts.push(AccessPathComponent::Expression(Rc::new(anon_value_expr)));
+        },
+        // First path part can't be a slice
+        Some((Colon, span)) => {
+          let _ = self.try_read_signed_int();
+          self.report_error(Problem::AccessPathStartsWithSlice, &super_range(&span, &self.reader.last_token_span()));
+        },
+        Some((.., span)) => {
+          self.report_error(Problem::InvalidIdentifier(self.reader.last_token_string().to_string()), &span);
+        },
+        None => {
+          self.report_error(Problem::MissingIdentifier, &start_span);
+          return Err(())
         }
       }
     }
@@ -2562,7 +2521,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   }
                 } else {
                   // No colon, so it's an dynamic key
-                  idparts.push(AccessPathComponent::DynamicKey(expr));
+                  idparts.push(AccessPathComponent::Expression(expr));
                 }
               },
               Some((.., span)) => {
@@ -2579,7 +2538,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }
         
       } else {
-        return Ok((AccessPath::new(idparts, access_kind), start_span.start .. self.reader.last_token_span().start))
+        return Ok((AccessPath::new(idparts, access_mode), start_span.start .. self.reader.last_token_span().start))
       }
     }
   }

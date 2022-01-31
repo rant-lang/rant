@@ -8,11 +8,13 @@
 
 
 ## Changes
+* Removed need for `!` in anonymous accessors; just use an expression inside `()`
 * Renamed `CompilerErrorKind` to `CompilerError`
 * Moved `RantOptions::enable_global_modules` and `RantOptions::local_modules_path` to `DefaultModuleResolver`
 * `VarArgs<T>` and `RequiredVarArgs<T>` are now public. Use them to add variadic parameters to your native functions!
 
 ## Removed
+* Removed ability to specify dynamic variable names in accessors
 * `RantOptions::enable_require`
 
 ## 4.0.0-alpha.28

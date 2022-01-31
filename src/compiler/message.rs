@@ -279,7 +279,7 @@ impl Problem {
     match self {
       Self::AccessPathStartsWithIndex => rmsg!("access paths cannot start with an index; consider using a variable or anonymous value here instead"),
       Self::AccessPathStartsWithSlice => rmsg!("access paths cannot start with a slice; consider using a variable or anonymous value here instead"),
-      Self::AnonValueAssignment => rmsg!("can't assign directly to anonymous value; try assigning to a key or index instead"),
+      Self::AnonValueAssignment => rmsg!("can't assign a value to an expression; try assigning to a child of it instead"),
       Self::ConstantReassignment(cname) => rmsg!("reassignment of known constant '{}'", cname),
       Self::ConstantRedefinition(cname) => rmsg!("redefinition of known constant '{}'", cname),
       Self::DuplicateParameter(pname) => rmsg!("duplicate parameter '{}' in function signature", pname),
@@ -338,7 +338,6 @@ impl Problem {
     Some(match self {
       Self::AccessPathStartsWithIndex => rmsg!("nothing to index"),
       Self::AccessPathStartsWithSlice => rmsg!("nothing to slice"),
-      Self::AnonValueAssignment => rmsg!("direct assignment impossible"),
       Self::DuplicateParameter(_) => rmsg!("rename parameter to something unique"),
       Self::DynamicKeyBlockMultiElement => rmsg!("multiple elements not allowed here"),
       Self::ExpectedToken(token) => rmsg!("expected '{}'", token),

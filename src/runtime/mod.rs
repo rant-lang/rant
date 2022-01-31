@@ -1506,11 +1506,7 @@ impl<'rant> VM<'rant> {
       Some(AccessPathComponent::Name(vname)) => {
         Some(SetterKey::KeyRef(vname.as_str()))
       },
-      Some(AccessPathComponent::DynamicKey(_)) => {
-        let key = InternalString::from(dynamic_values.next().unwrap().to_string());
-        Some(SetterKey::KeyString(key))
-      },
-      Some(AccessPathComponent::AnonymousValue(_)) => {
+      Some(AccessPathComponent::Expression(_)) => {
         setter_target = Some(dynamic_values.next().unwrap());
         None
       },
@@ -1545,7 +1541,7 @@ impl<'rant> VM<'rant> {
           SetterKey::Slice(slice)
         },
         // Dynamic key
-        AccessPathComponent::DynamicKey(_) => {
+        AccessPathComponent::Expression(_) => {
           match dynamic_values.next().unwrap() {
             RantValue::Int(index) => {
               SetterKey::Index(index)
@@ -1562,10 +1558,6 @@ impl<'rant> VM<'rant> {
             RantValue::Int(i) => SetterKey::Index(i),
             key_val => SetterKey::KeyString(InternalString::from(key_val.to_string()))
           }
-        },
-        // Anonymous value (not allowed)
-        AccessPathComponent::AnonymousValue(_) => {
-          runtime_error!(RuntimeErrorType::InvalidOperation, "anonymous values may only appear as the first component in an access path")
         },
       })
     }
@@ -1633,11 +1625,7 @@ impl<'rant> VM<'rant> {
         Some(AccessPathComponent::Name(vname)) => {
           self.get_var_value(vname.as_str(), path.mode(), prefer_function)?
         },
-        Some(AccessPathComponent::DynamicKey(_)) => {
-          let key = dynamic_keys.next().unwrap().to_string();
-          self.get_var_value(key.as_str(), path.mode(), prefer_function)?
-        },
-        Some(AccessPathComponent::AnonymousValue(_)) => {
+        Some(AccessPathComponent::Expression(_)) => {
           dynamic_keys.next().unwrap()
         },
         Some(AccessPathComponent::PipeValue) => {
@@ -1664,7 +1652,7 @@ impl<'rant> VM<'rant> {
           }
         },
         // Dynamic key
-        AccessPathComponent::DynamicKey(_) => {
+        AccessPathComponent::Expression(_) => {
           let key = dynamic_keys.next().unwrap();
           match key {
             RantValue::Int(index) => {
@@ -1705,10 +1693,6 @@ impl<'rant> VM<'rant> {
               };
             }
           }
-        },
-        // Anonymous value (not allowed)
-        AccessPathComponent::AnonymousValue(_) => {
-          runtime_error!(RuntimeErrorType::InvalidOperation, "anonymous values may only appear as the first component in an access path")
         },
       }
     }

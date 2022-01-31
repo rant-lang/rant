@@ -2,7 +2,7 @@
 
 [$get-list] {<list>}
 
-<!([get-list])/0 = baz>
-<!([get-list])/1 = qux>
+<([get-list])/0 = baz>
+<([get-list])/1 = qux>
 
 <list/0> <list/1>

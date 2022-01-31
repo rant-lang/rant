@@ -679,16 +679,6 @@ fn const_shadow() {
 }
 
 #[test]
-fn reassign_const() {
-  test_rant_file!("sources/const/reassign_const.rant" raises InvalidAccess);
-}
-
-#[test]
-fn reassign_const_parent() {
-  test_rant_file!("sources/const/reassign_const_parent.rant" raises InvalidAccess);
-}
-
-#[test]
 fn list_autoconcat() {
   test_rant_file!("sources/collections/list_autoconcat.rant");
 }

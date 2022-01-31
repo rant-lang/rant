@@ -156,10 +156,8 @@ pub enum AccessPathComponent {
   Index(i64),
   /// Slice
   Slice(SliceExpr),
-  /// Dynamic key
-  DynamicKey(Rc<Sequence>),
-  /// Anonymous value
-  AnonymousValue(Rc<Sequence>),
+  /// An expression; either an anonymous source value or dynamic key, depending on the position in the path
+  Expression(Rc<Sequence>),
   /// Pipeval
   PipeValue,
 }
@@ -167,11 +165,10 @@ pub enum AccessPathComponent {
 impl Display for AccessPathComponent {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::Name(name) => write!(f, "{}", name),
-      Self::Index(i) => write!(f, "{}", i),
-      Self::Slice(slice_expr) => write!(f, "{}", slice_expr),
-      Self::DynamicKey(expr) => write!(f, "{{{}...}}", expr.name().map(|name| name.as_str()).unwrap_or("")),
-      Self::AnonymousValue(expr) => write!(f, "!{{{}...}}", expr.name().map(|name| name.as_str()).unwrap_or("")),
+      Self::Name(name) => write!(f, "{name}"),
+      Self::Index(i) => write!(f, "{i}"),
+      Self::Slice(slice_expr) => write!(f, "{slice_expr}"),
+      Self::Expression(expr) => write!(f, "({}...)", expr.name().map(|name| name.as_str()).unwrap_or("")),
       Self::PipeValue => write!(f, "[]"),
     }
   }
@@ -229,19 +226,19 @@ impl AccessPath {
   /// Determines whether the root of the access path is an inline value.
   #[inline]
   pub fn is_anonymous(&self) -> bool {
-    matches!(self.first(), Some(AccessPathComponent::AnonymousValue(..) | AccessPathComponent::PipeValue))
+    matches!(self.first(), Some(AccessPathComponent::Expression(..) | AccessPathComponent::PipeValue))
   }
 
   /// Determines whether the access path targets *only* a variable (i.e. no child access).
   #[inline]
   pub fn is_variable_target(&self) -> bool {
-    self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::Name(..) | AccessPathComponent::DynamicKey(..) | AccessPathComponent::PipeValue))
+    self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::Name(..) | AccessPathComponent::Expression(..) | AccessPathComponent::PipeValue))
   }
 
   /// Determines whether the access path targets *only* an anonymous (non-variable) value (i.e. no child access).
   #[inline]
   pub fn is_anonymous_target(&self) -> bool {
-    self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::AnonymousValue(..) | AccessPathComponent::PipeValue))
+    self.len() == 1 && matches!(self.first(), Some(AccessPathComponent::Expression(..) | AccessPathComponent::PipeValue))
   }
 
   /// Gets the kind access path this is.
@@ -257,7 +254,7 @@ impl AccessPath {
     let mut exprs = vec![];
     for component in self.iter() {
       match component {
-        DynamicKey(expr) | AnonymousValue(expr) => exprs.push(Rc::clone(expr)),
+        Expression(expr) => exprs.push(Rc::clone(expr)),
         Slice(SliceExpr::From(SliceIndex::Dynamic(expr)))
         | Slice(SliceExpr::To(SliceIndex::Dynamic(expr))) 
         | Slice(SliceExpr::Between(SliceIndex::Static(_), SliceIndex::Dynamic(expr)))
