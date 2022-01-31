@@ -266,17 +266,15 @@ pub(crate) fn oxford_join(vm: &mut VM, (comma, conj, comma_conj, list): (RantVal
   Ok(())
 }
 
-pub(crate) fn sum(vm: &mut VM, list: RantListHandle) -> RantStdResult {
-  let list = list.borrow();
-  if list.is_empty() {
+pub(crate) fn sum(vm: &mut VM, collection: RantOrderedCollection) -> RantStdResult {
+  if collection.is_empty() {
     return Ok(())
   }
 
-  let mut iter = list.iter().cloned();
-  let mut sum = iter.next().unwrap();
+  let mut sum = RantValue::Empty;
   
-  for val in iter {
-    sum = sum + val;
+  for i in 0..collection.len() {
+    sum = sum + collection.index_get(i as i64).into_runtime_result()?;
   }
 
   vm.cur_frame_mut().write(sum);

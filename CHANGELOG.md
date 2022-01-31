@@ -8,6 +8,8 @@
 
 
 ## Changes
+* `[sum]` now accepts any ordered collection type
+* Changed behavior of `RantValue::is_empty()` to match that of `Vec`
 * Changed slice bound separator from `:` to `..`
 * Removed need for `!` in anonymous accessors; just use an expression inside `()`
 * Renamed `CompilerErrorKind` to `CompilerError`
@@ -23,6 +25,7 @@
 ## Fixes
 * Fixed parsing bug in function call accessors where a dynamic child component followed by arg list start (`:`) was incorrectly parsed as a slice
 * Fixed incorrect behavior in `[shuffle-thru]`
+* Fixed incorrect infix operator associativity
 
 ## 4.0.0-alpha.28
 

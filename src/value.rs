@@ -3,6 +3,7 @@ use crate::{collections::*, TryFromRant};
 use crate::runtime::resolver::*;
 use crate::runtime::*;
 use crate::util::*;
+use std::ops::Deref;
 use std::{fmt::{Display, Debug}, ops::{Add, Div, Mul, Neg, Not, Rem, Sub}, rc::Rc};
 use std::error::Error;
 use std::cmp::Ordering;
@@ -107,8 +108,8 @@ impl RantValue {
 
   /// Returns true if the value is of type `empty`.
   #[inline]
-  pub fn is_empty(&self) -> bool {
-    matches!(self, Self::Empty)
+  pub fn is_emptyval(&self) -> bool {
+    matches!(self, RantValue::Empty)
   }
 
   /// Returns true if the value is NaN (Not a Number).
@@ -269,6 +270,12 @@ impl RantValue {
       // Treat everything else as length 1, since all other value types are primitives
       _ => 1
     }
+  }
+
+  /// Returns true if the length of the value is 0.
+  #[inline]
+  pub fn is_empty(&self) -> bool {
+    self.len() == 0
   }
 
   #[inline]
@@ -758,7 +765,7 @@ impl TryFromRant for RantNumber {
       RantValue::Float(f) => Ok(RantNumber::Float(f)),
       other => Err(ValueError::InvalidConversion {
         from: other.type_name(),
-        to: "number",
+        to: "[number]",
         message: None,
       })
     }
@@ -766,6 +773,34 @@ impl TryFromRant for RantNumber {
 
   fn is_optional_param_type() -> bool {
     false
+  }
+}
+
+/// Filter type that represents any indexable (ordered) Rant collection type.
+/// 
+/// Use on native functions to accept any ordered collection type. Derefs to `RantValue`.
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct RantOrderedCollection(RantValue);
+
+impl Deref for RantOrderedCollection {
+  type Target = RantValue;
+
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl TryFromRant for RantOrderedCollection {
+  fn try_from_rant(val: RantValue) -> Result<Self, ValueError> {
+    if val.is_indexable() {
+      Ok(Self(val))
+    } else {
+      Err(ValueError::InvalidConversion {
+        from: val.type_name(),
+        to: "[ordered collection]",
+        message: Some(format!("type '{}' is not an ordered collection type", val.type_name())),
+      })
+    }
   }
 }
 

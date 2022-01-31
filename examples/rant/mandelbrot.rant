@@ -1,35 +1,33 @@
 # I wrote this mostly as a joke. It's very slow.
 
-[%vlen: vec] { [map: <vec>; [?: x] { <x> ** 2 } |> sum |> sqrt] }
-[%vadd: vec-a; vec-b] { [zip: <vec-a>; <vec-b>; <add>] }
-[%vsub: vec-a; vec-b] { [zip: <vec-a>; <vec-b>; <sub>] }
-[%vmulf: vec; b] { [map: <vec>; [?: x] { <x> * <b> }] }
-[%vdivf: vec; b] { [map: <vec>; [?: x] { <x> / <b>}] }
+[%vlen: v] { [sum: [pow: **<v>; 2.0 |> tuple] |> sqrt] }
+
+<%iter-colors = (🟫;🟥;🟧;🟨;🟩;🟦;🟪)>
 
 [%mandelbrot: w; h; n] {
   [rep: <h>][sep: \n]
   {
-    <$y = [step-index |> to-float]>
+    <%y = [step-index |> to-float]>
     [rep: <w>]
     {
       <
-        $x = [step-index |> to-float] * 0.35;
-        $c = [vdivf: (: <x>; <y>); <h> |> vmulf: 2.0 |> vsub: (: 2.0; 1.0)];
-        $z = (: 0.0; 0.0);
-        $out = \s;
+        %x = [step-index] * 0.35;
+        %c = (<x> * 7.75 / <w> - 2.0; <y> * 2.0 / <h> - 1.0);
+        $z = (0.0; 0.0);
+        $out = ⬛;
       >
 
       [rep: <n>]
       {
-        <z = [vadd: 
-          (: [pow: <z/0>; 2 |> sub: [pow: <z/1>; 2]]; [mul: <z/0>; <z/1> |> mul: 2.0]); 
-          <c>
-        ]>
-        [if: [vlen: <z> |> gt: 2.0]] { <out = \#> @break }
+        <z = (<z/0> ** 2 - <z/1> ** 2 + <c/0>; <z/0> * <z/1> * 2.0 + <c/1>)>
+        <%i = [step-index]>
+        @if [vlen: <z>] @gt 2.0: {
+          <out = <iter-colors/(<i> % [len: <iter-colors>])>> @break
+        }
       }
       <out>
     }
   }
 }
 
-[mandelbrot: 200; 48; 20]
+[mandelbrot: 75; 50; 20]

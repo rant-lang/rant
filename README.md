@@ -66,6 +66,8 @@ Passively format text output with automatic capitalization, whitespace normaliza
 🧩 **Simple module system** <br/> 
 Sharing code between Rant programs is trivial. Just write your module script and `@require` it elsewhere.
 
+Need custom module resolution logic? No problem. You can write your own resolver and just plug it in.
+
 📚 **Rant Standard Library** <br/> 
 A comprehensive standard library provides the tools needed to quickly iterate on your ideas.
 

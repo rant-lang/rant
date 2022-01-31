@@ -1,30 +1,20 @@
-<$side-len = 32>
-<%sels = (:
-  (:: name = Forward; state = [mksel:forward]);
-  (:: name = Reverse; state = [mksel:reverse]);
-  (:: name = Forward Clamp; state = [mksel:forward-clamp]);
-  (:: name = Reverse Clamp; state = [mksel:reverse-clamp]);
-  (:: name = Forward Mirror; state = [mksel:forward-mirror]);
-  (:: name = Reverse Mirror; state = [mksel:reverse-mirror]);
-  (:: name = Deck; state = [mksel:deck]);
-  (:: name = Deck Loop; state = [mksel:deck-loop]);
-  (:: name = Deck Clamp; state = [mksel:deck-clamp]);
-  (:: name = Deck Mirror; state = [mksel:deck-mirror]);
-  (:: name = One; state = [mksel:one]);
-  (:: name = Ping; state = [mksel:ping]);
-  (:: name = Pong; state = [mksel:pong]);
-  (:: name = Random; state = [mksel:random])
-)>
+<%width = 16; %height = 6>
+<%sels = [
+  cat: **(: random; one; forward; forward-mirror; forward-clamp; reverse; reverse-mirror; reverse-clamp; deck; deck-loop; deck-clamp; deck-mirror; ping; pong; no-double)
+  |> cat: (:: name = []; state = [mksel: []]) 
+  |> list
+]>
+
 [len: <sels> |> rep]
-[sep: \n\n]
+[mut: [?: el] { \n [el] \n }]
 {
   <%current-sel = <sels/([step-index])>>
   <current-sel/name>\:\n
-  [rep: <side-len>]
+  [rep: <height>]
   [sep: \n]
   {
-    [rep:<side-len>]
-    [sel:<current-sel/state>]
-    {⬛|🟫|🟥|🟧|🟨|🟩|🟦|🟪}
+    [rep: <width>]
+    [sel: <current-sel/state>]
+    {⚫|🟤|🔴|🟠|🟡|🟢|🔵|🟣}
   }
 }

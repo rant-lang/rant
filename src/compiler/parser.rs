@@ -99,7 +99,7 @@ impl OrderedOperator {
     })
   }
 
-  #[inline(always)]
+  #[inline]
   fn precedence(&self) -> usize {
     match self {
       Self::Negate =>       PREC_PREFIX,
@@ -1275,8 +1275,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                     self.report_error(Problem::MissingLeftOperand, &span);
                   }
                   
-                  // If this operator has lower precedence, stop reading the sequence.
-                  if op_precedence < precedence {
+                  // If this operator has lower or equal precedence, stop reading the sequence.
+                  if op_precedence <= precedence {
                     break
                   }
 
@@ -3085,7 +3085,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               }
             },
             // If we hit a setter operator here, it's a setter
-            _op_token @ Equals => {
+            Equals => {
               self.reader.skip_ws();
               let ParsedSequence {
                 sequence: setter_rhs_expr,

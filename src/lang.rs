@@ -728,17 +728,27 @@ pub struct Setter {
 /// Defines operations that compound setters can perform.
 #[derive(Debug, Copy, Clone)]
 pub enum CompAssignOp {
-  EmptyAssign,
+  /// Addition assignment
   Add,
+  /// Subtraction assignment
   Subtract,
+  /// Multiplication assignment
   Multiply,
+  /// Division assignment
   Divide,
+  /// Modulo assignment
   Modulo,
+  /// Exponentiation assignment
   Power,
+  /// Logical AND assignment
   And,
+  /// Logical OR assignment
   Or,
+  /// Logical XOR assignment
   Xor,
+  /// Logical NAND assignment
   Nand,
+  /// Logical NOR assignment
   Nor,
 }
 
