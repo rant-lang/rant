@@ -82,7 +82,7 @@ pub enum RantToken {
   
   /// Sequence of non-printable whitespace characters
   #[regex(r"[\r\n]+\s*|\s*[\r\n]+", logos::skip, priority = 3)]
-  Blackspace,
+  IgnoredWhitespace,
 
   #[token("-", priority = 10)]
   Minus,
