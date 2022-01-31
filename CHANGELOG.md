@@ -259,6 +259,8 @@
 
 ## 4.0.0-alpha.21
 
+(4/13/2021)
+
 ### New
 * Added new number format system: `alpha`
 * Added "depth operator" to determine originating scope of a variable
@@ -276,6 +278,8 @@
 * Fixed `[require]` not assigning module constants when retrieving from cache
 
 ## 4.0.0-alpha.20
+
+(4/10/2021)
 
 ### New
 * Added number formatter
@@ -308,6 +312,8 @@
 
 ## 4.0.0-alpha.19
 
+(4/3/2021)
+
 ### New
 * Add `[rev]` support to the `block` type
 * Add slice support to `block` type
@@ -325,6 +331,8 @@
 
 ## 4.0.0-alpha.18
 
+(2/16/2021)
+
 ### New
 * Added "charms": right-associative operators for control flow
 * Added block weights using the `@weight` charm
@@ -334,6 +342,8 @@
 * Removed from stdlib: `[return]`, `[continue]`, `[break]`
 
 ## 4.0.0-alpha.17
+
+(2/7/2021)
 
 ### New
 * Added `range` type
@@ -360,6 +370,8 @@
 
 ## 4.0.0-alpha.16
 
+(1/26/2021)
+
 ### New
 * Added temporal argument spreading
 * Standard Library items:
@@ -378,6 +390,8 @@
 * Fixed incorrect whitespace print behavior around unflagged function calls
 
 ## 4.0.0-alpha.15
+
+(1/15/2021)
 
 ### New
 * Added support for constants
@@ -424,6 +438,8 @@
 
 ## 4.0.0-alpha.14
 
+(1/9/2021)
+
 ### New
 * Add support for spread notation in function calls
 * Add support for slice notation in getters and setters
@@ -442,6 +458,8 @@
 
 ## 4.0.0-alpha.13
 
+(10/19/2020)
+
 ### Changes
 * Renamed `ErrorKind` to `CompilerErrorKind` in `rant::compiler`
 * Exposed the `rant::runtime` module and several types inside
@@ -451,6 +469,8 @@
 * Fixed several stdlib functions not being registered
 
 ## 4.0.0-alpha.12 (yanked)
+
+(10/19/2020)
 
 ### New
 * Added `RuntimeErrorType::AssertError`
@@ -485,6 +505,8 @@
 
 ## 4.0.0-alpha.11
 
+(10/14/2020)
+
 ### New
 * Getters can now accept an optional fallback value
 * Added function call piping
@@ -499,6 +521,8 @@
 * CLI now trims trailing whitespace from REPL input
 
 ## 4.0.0-alpha.10
+
+(10/11/2020)
 
 ### New
 * Added inverse indices in accessors
@@ -517,6 +541,8 @@
 
 ## 4.0.0-alpha.9
 
+(10/10/2020)
+
 ### New
 * Added `RuntimeErrorType::TypeError`
 * Added `Rant.run_with()`, `Rant.run_into_string_with()`
@@ -533,6 +559,8 @@
 * Fixed sinks not being honored on native function calls
 
 ## 4.0.0-alpha.8
+
+(10/7/2020)
 
 ### New
 * Added `RantProgramInfo` struct
@@ -560,6 +588,8 @@
 
 ## 4.0.0-alpha.7
 
+(10/1/2020)
+
 ### New
 * Added new stdlib functions:
   * `[break]`
@@ -580,6 +610,8 @@
 
 ## 4.0.0-alpha.6
 
+(9/22/2020)
+
 ### New
 * Modules are now cached by the executing context in a global map
 * Added support for variable capturing in closures
@@ -592,6 +624,8 @@
 * Upgraded `quickscope` to 0.1.3
 
 ## 4.0.0-alpha.5
+
+(9/21/2020)
 
 ### New
 * Added `Rant::with_random_seed()` constructor
@@ -614,6 +648,8 @@
   * Consecutive duplicate stack frames are now combined
 
 ## 4.0.0-alpha.4
+
+(9/12/2020)
 
 ### New
 * Added descope and explicit global modifiers to accessors
@@ -639,6 +675,8 @@
 * Removed `_GLOBALS` from stdlib
 
 ## 4.0.0-alpha.3
+
+(8/29/2020)
 
 ### New
 * Added initial support for optional debug symbols. Enable them via `debug_mode` option in `RantOptions`.
@@ -676,6 +714,8 @@
 
 ## 4.0.0-alpha.2
 
+(8/26/2020)
+
 ### New
 * Added support for some block attributes: conditional value, repetitions, separator
 * Added a lot of new stdlib functions
@@ -692,5 +732,7 @@
 * Hid some modules that don't need to be user-facing.
 
 ## 4.0.0-alpha.1
+
+(8/24/2020)
 
 * Initial alpha release.
