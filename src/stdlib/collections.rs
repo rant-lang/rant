@@ -300,7 +300,7 @@ pub(crate) fn shuffle_self(vm: &mut VM, list: RantListHandle) -> RantStdResult {
 
 pub(crate) fn shuffle_thru(vm: &mut VM, list: RantListHandle) -> RantStdResult {
   let list_ref_clone = RantListHandle::clone(&list);
-  shuffle(vm, list)?;
+  shuffle_self(vm, list)?;
   vm.cur_frame_mut().write(list_ref_clone);
   Ok(())
 }
@@ -421,7 +421,7 @@ pub(crate) fn sift_self(vm: &mut VM, (list, size): (RantListHandle, usize)) -> R
 
 pub(crate) fn sift_thru(vm: &mut VM, (list, size): (RantListHandle, usize)) -> RantStdResult {
   let list_ref_clone = RantListHandle::clone(&list);
-  sift(vm, (list, size))?;
+  sift_self(vm, (list, size))?;
   vm.cur_frame_mut().write(list_ref_clone);
   Ok(())
 }

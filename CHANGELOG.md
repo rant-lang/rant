@@ -20,6 +20,7 @@
 
 ## Fixes
 * Fixed parsing bug in function call accessors where a dynamic child component followed by arg list start (`:`) was incorrectly parsed as a slice
+* Fixed incorrect behavior in `[shuffle-thru]`
 
 ## 4.0.0-alpha.28
 
