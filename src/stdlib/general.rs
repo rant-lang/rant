@@ -105,10 +105,8 @@ pub(crate) fn unfork(vm: &mut VM, _: ()) -> RantStdResult {
   Ok(())
 }
 
-/// `[$nop]`
-///
-/// Does absolutely nothing. Intended for use as a default/placeholder callback.
-pub(crate) fn nop(vm: &mut VM, _: VarArgs<RantEmpty>) -> RantStdResult {
+/// Does nothing and takes any number of arguments. Use this as a no-op or non-printing temporal pipe.
+pub(crate) fn tap(vm: &mut VM, _: VarArgs<RantEmpty>) -> RantStdResult {
   Ok(())
 }
 
