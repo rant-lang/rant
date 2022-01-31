@@ -79,7 +79,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
 
   load_funcs!(
     // General functions
-    alt, call, cat, data, either, len, get_type as "type", seed, nop, print, range, irange, fork, unfork, try_ as "try",
+    alt, call, cat, data, either, len, get_type as "type", seed, nop, print, range, require, irange, fork, unfork, try_ as "try",
 
     // Assertion functions
     assert as "assert", assert_not as "assert-not", assert_eq as "assert-eq", assert_neq as "assert-neq",
@@ -146,11 +146,6 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     // Error functions
     error
   );
-
-  // Load [require] function if requested
-  if context.options.enable_require {
-    load_func!(require);
-  }
 
   // Constants
   context.set_global_force("RANT_VERSION", RantValue::String(RANT_LANG_VERSION.into()), true);

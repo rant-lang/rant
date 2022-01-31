@@ -2,8 +2,17 @@
 
 ## 4.0.0-alpha.29 (unreleased)
 
+## New
+* Module resolver has been externalized into a separate `ModuleResolver` trait, which you can use to write your own custom resolution logic.
+  * 2 impls included: `DefaultModuleResolver` (default), `NoModuleResolver` (to disable modules completely)
+
+
 ## Changes
+* Moved `RantOptions::enable_global_modules` and `RantOptions::local_modules_path` to `DefaultModuleResolver`
 * `VarArgs<T>` and `RequiredVarArgs<T>` are now public. Use them to add variadic parameters to your native functions!
+
+## Removed
+* `RantOptions::enable_require`
 
 ## 4.0.0-alpha.28
 

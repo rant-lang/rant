@@ -42,6 +42,7 @@ mod convert;
 mod format;
 mod func;
 mod lang;
+mod modres;
 mod rng;
 mod stdlib;
 mod string;
@@ -56,13 +57,15 @@ pub use crate::string::*;
 pub use crate::value::*;
 pub use crate::func::*;
 pub use crate::var::*;
+pub use crate::modres::*;
 
 use crate::compiler::*;
 use crate::lang::Sequence;
 use crate::rng::RantRng;
 use crate::runtime::{RuntimeResult, IntoRuntimeResult, RuntimeError, RuntimeErrorType, VM};
 
-use std::{path::Path, rc::Rc, cell::RefCell, fmt::Display, path::PathBuf, io::ErrorKind, collections::HashMap};
+use std::error::Error;
+use std::{path::Path, rc::Rc, cell::RefCell, fmt::Display, path::PathBuf, collections::HashMap};
 use std::env;
 use data::DataSource;
 use fnv::FnvBuildHasher;
@@ -74,9 +77,6 @@ pub(crate) type InternalString = smartstring::alias::CompactString;
 
 /// The build version according to the crate metadata at the time of compiling.
 pub const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// The name of the environment variable that Rant checks when checking the global modules path.
-pub const ENV_MODULES_PATH_KEY: &str = "RANT_MODULES_PATH";
 
 /// The Rant language version implemented by this library.
 pub const RANT_LANG_VERSION: &str = "4.0";
@@ -90,13 +90,11 @@ pub const RANT_FILE_EXTENSION: &str = "rant";
 /// Name of global variable that stores cached modules.
 pub(crate) const MODULES_CACHE_KEY: &str = "__MODULES";
 
-/// Result type used by the module loader.
-pub(crate) type ModuleLoadResult = Result<RantProgram, ModuleLoadError>;
-
 /// A Rant execution context.
 #[derive(Debug)]
 pub struct Rant {
   options: RantOptions,
+  module_resolver: Rc<dyn ModuleResolver>,
   rng: Rc<RantRng>,
   data_sources: HashMap<InternalString, Box<dyn DataSource>, FnvBuildHasher>,
   globals: HashMap<InternalString, RantVar, FnvBuildHasher>,
@@ -127,6 +125,7 @@ impl Rant {
   /// Creates a new Rant context with the specified options.
   pub fn with_options(options: RantOptions) -> Self {
     let mut rant = Self {
+      module_resolver: Rc::new(DefaultModuleResolver::default()),
       globals: Default::default(),
       data_sources: Default::default(),
       rng: Rc::new(RantRng::new(options.seed)),
@@ -139,6 +138,15 @@ impl Rant {
     }
 
     rant
+  }
+
+  /// Sets the module resolver.
+  #[inline]
+  pub fn with_module_resolver<R: ModuleResolver + 'static>(self, module_resolver: R) -> Self {
+    Self {
+      module_resolver: Rc::new(module_resolver),
+      .. self
+    }
   }
 }
 
@@ -359,111 +367,53 @@ impl Rant {
     VM::new(self.rng.clone(), self, program).run_with(args)
   }
 
-  /// Attempts to load and compile a module with the specified name.
-  pub(crate) fn try_read_module(&mut self, module_path: &str, caller_origin: Rc<RantProgramInfo>) -> ModuleLoadResult {
-    if !self.options.enable_require {
-      return Err(ModuleLoadError {
-        name: module_path.to_owned(),
-        reason: ModuleLoadErrorReason::NotAllowed,
-      })
-    }
-
-    // Try to find module path that exists
-    if let Some(full_module_path) = self.find_module_path(module_path, caller_origin.path.as_deref()) {
-      let mut errors = vec![];
-      let compile_result = self.compile_file(full_module_path, &mut errors);
-      match compile_result {
-        Ok(module) => Ok(module),
-        Err(err) => {
-          Err(ModuleLoadError {
-            name: module_path.to_owned(),
-            reason: match err{
-              CompilerErrorKind::SyntaxError => {
-                ModuleLoadErrorReason::CompileFailed(errors)
-              },
-              CompilerErrorKind::IOError(ioerr) => {
-                match ioerr {
-                  IOErrorKind::NotFound => {
-                    ModuleLoadErrorReason::NotFound
-                  },
-                  IOErrorKind::PermissionDenied => {
-                    ModuleLoadErrorReason::NotAllowed
-                  },
-                  _ => ModuleLoadErrorReason::FileIOError(ioerr)
-                }
-              }
-            }
-          })
-        }
+  pub fn try_load_global_module(&mut self, module_path: &str) -> Result<(), ModuleLoadError> {
+    if let Some(module_name) = 
+    PathBuf::from(&module_path)
+    .with_extension("")
+    .file_name()
+    .map(|name| name.to_str())
+    .flatten()
+    .map(|name| name.to_owned())
+    {
+      // Check if module is cached; if so, don't do anything
+      if self.get_cached_module(module_name.as_ref()).is_some() {
+        return Ok(())
       }
+
+      let module_resolver = Rc::clone(&self.module_resolver);
+
+      // Resolve and load the module
+      let module = match module_resolver.try_resolve(self, module_path, None) {
+        Ok(module_program) => match self.run(&module_program) {
+          Ok(module) => Ok(module),
+          Err(err) => Err(ModuleLoadError::RuntimeError(Rc::new(err))),
+        },
+        Err(err) => Err(ModuleLoadError::ResolveError(err)),
+      }?;
+
+      // Cache the module
+      if let Some(RantValue::Map(module_cache_ref)) = self.get_global(MODULES_CACHE_KEY) {
+        module_cache_ref.borrow_mut().raw_set(&module_name, module.clone());
+      } else {
+        let mut cache = RantMap::new();
+        cache.raw_set(&module_name, module.clone());
+        self.set_global(MODULES_CACHE_KEY, RantValue::Map(RantMap::from(cache).into_handle()));
+      }
+
+      Ok(())
     } else {
-      Err(ModuleLoadError {
-        name: module_path.to_owned(),
-        reason: ModuleLoadErrorReason::NotFound,
-      })
+      Err(ModuleLoadError::InvalidPath(format!("missing module name from path: '{module_path}'")))
     }
   }
 
   #[inline]
-  fn find_module_path(&self, module_path: &str, dependant_path: Option<&str>) -> Option<PathBuf> {
-    let module_path = PathBuf::from(
-        module_path.replace("/", &String::from(std::path::MAIN_SEPARATOR))
-      )
-      .with_extension(RANT_FILE_EXTENSION);
-
-    macro_rules! search_for_module {
-      ($path:expr) => {
-        let path = $path;
-        // Construct full path to module
-        if let Ok(full_module_path) = path
-          .join(&module_path)
-          .canonicalize() 
-        {
-          // Verify file is still in modules directory and it exists
-          if full_module_path.starts_with(path) 
-          && full_module_path.exists() 
-          {
-            return Some(full_module_path)
-          }
-        }
+  pub(crate) fn get_cached_module(&self, module_name: &str) -> Option<RantValue> {
+    if let Some(RantValue::Map(module_cache_ref)) = self.get_global(MODULES_CACHE_KEY) {
+      if let Some(module @ RantValue::Map(..)) = module_cache_ref.borrow().raw_get(module_name) {
+        return Some(module.clone())
       }
     }
-
-    // Search path of dependant running program
-    if let Some(program_path) = 
-      dependant_path
-      .map(PathBuf::from)
-      .as_deref()
-      .and_then(|p| p.parent())
-    {
-      search_for_module!(program_path);
-    }
-
-    // Search local modules path
-    if let Some(local_modules_path) = 
-      self.options.local_modules_path
-      .as_ref()
-      .map(PathBuf::from)
-      .or_else(||
-        env::current_dir()
-        .ok()
-      )
-      .and_then(|p| p.canonicalize().ok())
-    {
-      search_for_module!(local_modules_path);
-    }
-
-    // Check global modules, if enabled
-    if self.options.enable_global_modules {
-      if let Some(global_modules_path) = 
-        env::var_os(ENV_MODULES_PATH_KEY)
-        .map(PathBuf::from)
-        .and_then(|p| p.canonicalize().ok())
-      {
-        search_for_module!(global_modules_path);
-      }
-    }
-    
     None
   }
 }
@@ -477,13 +427,6 @@ pub struct RantOptions {
   pub debug_mode: bool,
   /// The initial seed to pass to the RNG. Defaults to 0.
   pub seed: u64,
-  /// Enables the [require] function, allowing modules to be loaded.
-  pub enable_require: bool,
-  /// Enables loading modules from RANT_MODULES_PATH.
-  pub enable_global_modules: bool,
-  /// Specifies a preferred module loading path with higher precedence than the global module path.
-  /// If not specified, looks in the current working directory.
-  pub local_modules_path: Option<String>,
 }
 
 impl Default for RantOptions {
@@ -492,9 +435,6 @@ impl Default for RantOptions {
       use_stdlib: true,
       debug_mode: false,
       seed: 0,
-      enable_require: true,
-      enable_global_modules: true,
-      local_modules_path: None,
     }
   }
 }
@@ -554,62 +494,25 @@ impl RantProgramInfo {
   }
 }
 
-/// Represents an error that occurred when attempting to load a Rant module.
+/// Represents error states that occur when loading a module.
 #[derive(Debug)]
-pub struct ModuleLoadError {
-  name: String,
-  reason: ModuleLoadErrorReason,
-}
-
-impl ModuleLoadError {
-  /// Gets the name of the module that failed to load.
-  #[inline]
-  pub fn name(&self) -> &str {
-    &self.name
-  }
-
-  /// Gets the reason for the module load failure.
-  #[inline]
-  pub fn reason(&self) -> &ModuleLoadErrorReason {
-    &self.reason
-  }
-}
-
-/// Represents the reason for which a Rant module failed to load.
-#[derive(Debug)]
-pub enum ModuleLoadErrorReason {
-  /// The module could not load because the calling context has module loading disabled.
-  NotAllowed,
-  /// The module was not found.
-  NotFound,
-  /// The module could not be compiled.
-  CompileFailed(Vec<CompilerMessage>),
-  /// The module could not load due to a file I/O error.
-  FileIOError(ErrorKind),
+pub enum ModuleLoadError {
+  /// The specified path was invalid; see attached reason. 
+  InvalidPath(String),
+  /// The module failed to load because it encountered a runtime error during initialization.
+  RuntimeError(Rc<RuntimeError>),
+  /// The module failed to load because it couldn't be resolved.
+  ResolveError(ModuleResolveError),
 }
 
 impl Display for ModuleLoadError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self.reason() {
-      ModuleLoadErrorReason::NotAllowed => write!(f, "module loading is disabled"),
-      ModuleLoadErrorReason::NotFound => write!(f, "module '{}' not found", self.name()),
-      ModuleLoadErrorReason::CompileFailed(msgs) => write!(f, "module '{}' failed to compile: {}",
-      self.name(),
-      msgs.iter().fold(String::new(), |mut acc, msg| {
-        acc.push_str(&format!("[{}] {}\n", msg.severity(), msg.message())); 
-        acc
-      })),
-      ModuleLoadErrorReason::FileIOError(ioerr) => write!(f, "file I/O error ({:?})", ioerr),
+    match self {
+      ModuleLoadError::InvalidPath(errmsg) => write!(f, "{}", errmsg),
+      ModuleLoadError::RuntimeError(err) => write!(f, "runtime error while loading module: {}", err),
+      ModuleLoadError::ResolveError(err) => write!(f, "unable to resolve module: {}", err),
     }
   }
 }
 
-impl IntoRuntimeResult<RantProgram> for ModuleLoadResult {
-  fn into_runtime_result(self) -> RuntimeResult<RantProgram> {
-    self.map_err(|err| RuntimeError {
-      error_type: RuntimeErrorType::ModuleLoadError(err),
-      description: None,
-      stack_trace: None,
-    })
-  }
-}
+impl Error for ModuleLoadError {}

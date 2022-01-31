@@ -175,21 +175,24 @@ pub(crate) fn require(vm: &mut VM, module_path: String) -> RantStdResult {
     .map(|name| name.to_owned())
   {
     // Check if module is cached; if so, don't do anything
-    if let Some(RantValue::Map(module_cache_ref)) = vm.context().get_global(crate::MODULES_CACHE_KEY) {
-      if let Some(module @ RantValue::Map(..)) = module_cache_ref.borrow().raw_get(&module_name) {
-        vm.def_var_value(module_name.as_str(), VarAccessMode::Descope(1), module.clone(), true)?;
-        return Ok(())
-      }
+    if let Some(cached_module) = vm.context().get_cached_module(&module_name) {
+      vm.def_var_value(module_name.as_str(), VarAccessMode::Descope(1), cached_module.clone(), true)?;
+      return Ok(())
     }
 
-    // If not cached, attempt to load it from file and run its root sequence
-    let caller_origin = Rc::clone(vm.cur_frame().origin());
-    let module_pgm = vm.context_mut().try_read_module(&module_path, caller_origin).into_runtime_result()?;
-    vm.cur_frame_mut().push_intent(Intent::ImportLastAsModule { module_name, descope: 1 });
-    vm.push_frame_flavored(Rc::clone(&module_pgm.root), StackFrameFlavor::FunctionBody)?;
-    Ok(())
+    // If not cached, attempt to resolve it and load the module
+    let dependant = Rc::clone(vm.cur_frame().origin());
+    let module_resolver = Rc::clone(&vm.context().module_resolver);
+    match module_resolver.try_resolve(vm.context_mut(), module_path.as_str(), Some(&dependant.as_ref())) {
+      Ok(module_program) => {
+        vm.cur_frame_mut().push_intent(Intent::ImportLastAsModule { module_name, descope: 1 });
+        vm.push_frame_flavored(Rc::clone(&module_program.root), StackFrameFlavor::FunctionBody)?;
+        Ok(())
+      },
+      Err(err) => runtime_error!(RuntimeErrorType::ModuleError(err)),
+    }
   } else {
-    runtime_error!(RuntimeErrorType::ArgumentError, "module name is missing from path");
+    runtime_error!(RuntimeErrorType::ArgumentError, "missing module name from path: {}", module_path);
   }
 }
 

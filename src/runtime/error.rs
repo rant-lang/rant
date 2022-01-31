@@ -1,6 +1,6 @@
 use std::{error::Error, fmt::Display};
 
-use crate::{IndexError, KeyError, ModuleLoadError, SliceError, ValueError, data::DataSourceError};
+use crate::{IndexError, KeyError, ModuleResolveError, SliceError, ValueError, data::DataSourceError};
 
 use super::{resolver::SelectorError};
 
@@ -110,7 +110,7 @@ pub enum RuntimeErrorType {
   /// Error occurred while trying to load a module
   ///
   /// Rant error ID: `MODULE_ERROR`
-  ModuleLoadError(ModuleLoadError),
+  ModuleError(ModuleResolveError),
   /// Error manually triggered by program
   ///
   /// Rant error ID: `USER_ERROR`
@@ -144,7 +144,7 @@ impl RuntimeErrorType {
       Self::KeyError(_) => "KEY_ERROR",
       Self::SliceError(_) => "SLICE_ERROR",
       Self::SelectorError(_) => "SELECTOR_ERROR",
-      Self::ModuleLoadError(_) => "MODULE_ERROR",
+      Self::ModuleError(_) => "MODULE_ERROR",
       Self::ControlFlowError => "CONTROL_FLOW_ERROR",
       Self::DataSourceError(_) => "DATA_SOURCE_ERROR",
     }
@@ -159,7 +159,7 @@ impl Display for RuntimeErrorType {
       Self::KeyError(e) => write!(f, "{}", e),
       Self::SliceError(e) => write!(f, "{}", e),
       Self::SelectorError(e) => write!(f, "{}", e),
-      Self::ModuleLoadError(e) => write!(f, "{}", e),
+      Self::ModuleError(e) => write!(f, "{}", e),
       Self::DataSourceError(e) => write!(f, "{}", e),
       _ => write!(f, "{}", self.id()),
     }
