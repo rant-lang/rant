@@ -141,9 +141,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 ```
 
-## [Examples](./examples/rant/)
+## [Examples](./examples/)
 
-This repository contains a directory of example programs written in Rant for you to learn from. Check them out!
+This repository includes a collection of example Rant scripts for you to learn from. Check them out!
 
 ## Documentation
 
