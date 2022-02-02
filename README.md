@@ -37,7 +37,7 @@ No getting lost in configuration hell. Integrating Rant into your project only t
 💻 **Cross-platform** <br/> 
 Write once, run anywhere! The runtime works the same across Windows, Mac, Linux, and WebAssembly.
 
-🖨 **Templating that does more** <br/>
+✍ **Templating that does more** <br/>
 Rant is all about "printing": each lexical scope has an output to print (append values) to, which then prints itself to the parent output, and so on.
 This enables you to intuitively build strings, collections, and more in a familiar templating setting.
 
@@ -63,6 +63,9 @@ Rant's powerful piping syntax lets you perform complex operations with shorter, 
 📝 **Automatic text formatting** <br/>
 Passively format text output with automatic capitalization, whitespace normalization, and number formatting &mdash; including built-in support for numerous writing systems.
 
+📦 **Data sources** <br/>
+Attach custom data sources to your Rant execution context to give your scripts controlled access to external resources.
+
 🧩 **Simple module system** <br/> 
 Sharing code between Rant programs is trivial. Just write your module script and `@require` it elsewhere.
 
@@ -71,7 +74,7 @@ Need custom module resolution logic? No problem. You can write your own resolver
 📚 **Rant Standard Library** <br/> 
 A comprehensive standard library provides the tools needed to quickly iterate on your ideas.
 
-🛠 **Use integrated or standalone** <br/>
+🧪 **Use integrated or standalone** <br/>
 Whether you want to integrate Rant directly into a product or use it as a standalone tool to assist with writing, Rant has a place in any part of your workflow.
 
 ## Getting started

@@ -327,9 +327,16 @@ impl Rant {
     self.rng = Rc::new(RantRng::new(seed));
   }
 
-  /// Adds a data source to the context, making it available to scripts.
-  pub fn add_data_source(&mut self, name: &str, data_source: impl DataSource + 'static) -> Option<Box<dyn DataSource + 'static>> {
-    self.data_sources.insert(name.into(), Box::new(data_source))
+  /// Registers a data source to the context, making it available to scripts.
+  pub fn add_data_source(&mut self, data_source: impl DataSource + 'static) -> Result<(), DataSourceRegisterError> {
+    let id = data_source.type_id();
+
+    if self.has_data_source(id) {
+      return Err(DataSourceRegisterError::AlreadyExists(id.into()))
+    }
+
+    self.data_sources.insert(id.into(), Box::new(data_source));
+    Ok(())
   }
 
   /// Removes the data source with the specified name from the context, making it no longer available to scripts.
@@ -496,7 +503,7 @@ impl RantProgramInfo {
   }
 }
 
-/// Represents error states that occur when loading a module.
+/// Represents error states that can occur when loading a module.
 #[derive(Debug)]
 pub enum ModuleLoadError {
   /// The specified path was invalid; see attached reason. 
@@ -518,3 +525,21 @@ impl Display for ModuleLoadError {
 }
 
 impl Error for ModuleLoadError {}
+
+/// Represents error states that can occur when registering a data source on a Rant execution context.
+#[derive(Debug)]
+pub enum DataSourceRegisterError {
+  /// The type ID provided by the data source was invalid.
+  InvalidTypeId(String),
+  /// A data source with the specified type ID was already registered on the context.
+  AlreadyExists(String),
+}
+
+impl Display for DataSourceRegisterError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::InvalidTypeId(id) => write!(f, "the type id '{id}' is invalid"),
+      Self::AlreadyExists(id) => write!(f, "the type id '{id}' was already registered on the context"),
+    }
+  }
+}

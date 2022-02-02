@@ -3,12 +3,12 @@
 <$personality = 
   [assoc:
     (ope; con; ext; agr; neu);
-    [shred: 50; 5; [rand: 1; 10]] # Use random variance to reduce trait deviation
+    [rand-list-sum: 50; 5; [rand: 1; 10]] # Use random variance to reduce trait deviation
   ]
 >
 
 # Print the values
-[whitespace-fmt:verbatim]
+[ws-fmt:verbatim]
 "Openness to experience:"   <personality/ope>\n
 "Conscientiousness:"        <personality/con>\n
 "Extraversion:"             <personality/ext>\n

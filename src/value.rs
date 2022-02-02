@@ -1,5 +1,5 @@
 use crate::{RantFunction, RantString, lang::Slice, util};
-use crate::{collections::*, TryFromRant};
+use crate::{collections::*, TryFromRant, IntoRant};
 use crate::runtime::resolver::*;
 use crate::runtime::*;
 use crate::util::*;
@@ -249,6 +249,16 @@ impl RantValue {
       (Self::Boolean(a), Self::Int(b)) => Self::Int(bi64(a).saturating_add(b)),
       (Self::Boolean(a), Self::Float(b)) => Self::Float(bf64(a) + b),
       (Self::List(a), Self::List(b)) => Self::List(RantList::from(a.borrow().iter().cloned().chain(b.borrow().iter().cloned()).collect::<Vec<RantValue>>()).into_handle()),
+      (Self::Map(a), Self::Map(b)) => {
+        let mut map = RantMap::new();
+        for (k, v) in a.borrow().raw_pairs_internal() {
+          map.raw_set(k, v.clone());
+        }
+        for (k, v) in b.borrow().raw_pairs_internal() {
+          map.raw_set(k, v.clone());
+        }
+        map.into_rant()
+      },
       (lhs, rhs) => Self::String(RantString::from(format!("{}{}", lhs, rhs)))
     }
   }
@@ -901,7 +911,7 @@ fn get_display_string(value: &RantValue, max_depth: usize) -> String {
     },
     RantValue::Special(_) => "[special]".to_owned(),
     RantValue::Range(range) => range.to_string(),
-    RantValue::Empty => (if max_depth < MAX_DISPLAY_STRING_DEPTH { "~" } else { "" }).to_owned(),
+    RantValue::Empty => (if max_depth < MAX_DISPLAY_STRING_DEPTH { "<>" } else { "" }).to_owned(),
   }
 }
 

@@ -68,6 +68,14 @@ pub enum PositiveIntegerToken {
   OutOfRange,
 }
 
+/// Represents an escape sequence output.
+#[derive(Debug, PartialEq)]
+pub enum ParsedEscape {
+  Char(char),
+  InvalidChar(char),
+  InvalidUnicode(String),
+}
+
 #[derive(Logos, Debug, PartialEq)]
 pub enum RantToken {
   /// Sequence of printable non-whitespace characters that isn't a number
@@ -166,10 +174,6 @@ pub enum RantToken {
   /// `=`
   #[token("=")]
   Equals,
-
-  /// `!`
-  #[token("!")]
-  Bang,
   
   /// `?`
   #[token("?")]
@@ -226,8 +230,11 @@ pub enum RantToken {
   
   /// Represents any escape sequence
   #[regex(r"\\\S", parse_escape, priority = 10)]
-  #[regex(r"\\x[0-9a-fA-F][0-9a-fA-F]", parse_code_point_escape, priority = 7)]
-  Escape(char),
+  #[regex(r"\\x\S\S", parse_byte_escape, priority = 11)]
+  #[regex(r"\\u\S\S\S\S", parse_unicode_escape, priority = 11)]
+  #[regex(r"\\U\S\S\S\S\S\S\S\S", parse_unicode_escape, priority = 11)]
+  #[regex(r"\\U\(\S+\)", parse_unicode_unsized_escape, priority = 12)]
+  Escape(ParsedEscape),
   
   /// Represents a verbatim string literal, e.g. `"hello world"`
   #[regex(r#""(""|[^"])*""#, parse_string_literal)]
@@ -283,21 +290,51 @@ fn filter_bs(lex: &mut Lexer<RantToken>) -> Filter<()> {
   Filter::Skip
 }
 
-fn parse_escape(lex: &mut Lexer<RantToken>) -> Option<char> {
+fn parse_escape(lex: &mut Lexer<RantToken>) -> ParsedEscape {
   let slice = lex.slice();
-  Some(match slice.chars().nth(1)? {
+  ParsedEscape::Char(match slice.chars().nth(1).unwrap() {
     'r' => '\r',
     'n' => '\n',
     't' => '\t',
     '0' => '\0',
     's' => ' ',
-    other => other
+    c @ (
+      '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | 
+      '\\' | '@' | ':' | ';' | '|' |
+      '+' | '-' | '*' | '/' | '$' | '%' | '`' | '~' | '^'
+    ) => c,
+    c => return ParsedEscape::InvalidChar(c)
   })
 }
 
-fn parse_code_point_escape(lex: &mut Lexer<RantToken>) -> Option<char> {
-  let codepoint = u8::from_str_radix(&lex.slice()[2..], 16).ok()?;
-  Some(codepoint as char)
+fn parse_byte_escape(lex: &mut Lexer<RantToken>) -> ParsedEscape {
+  let slice = &lex.slice()[2..];
+  let c = u8::from_str_radix(slice, 16).ok().map(|cp| char::from(cp));
+  match c {
+    Some(c) => ParsedEscape::Char(c),
+    None => ParsedEscape::InvalidUnicode(slice.to_owned()),
+  }
+}
+
+fn parse_unicode_escape(lex: &mut Lexer<RantToken>) -> ParsedEscape {
+  let slice = &lex.slice()[2..];
+  let c = u32::from_str_radix(slice, 16).ok().and_then(char::from_u32);
+  match c {
+    Some(c) => ParsedEscape::Char(c),
+    None => ParsedEscape::InvalidUnicode(slice.to_owned()),
+  }
+}
+
+fn parse_unicode_unsized_escape(lex: &mut Lexer<RantToken>) -> ParsedEscape {
+  let len = lex.slice().len();
+  let codepoint_len = len - 4;
+  let slice = &lex.slice()[3..(len - 1)];
+  if codepoint_len > 8 { return ParsedEscape::InvalidUnicode(slice.to_owned()) }
+  let c = u32::from_str_radix(slice, 16).ok().and_then(char::from_u32);
+  match c {
+    Some(c) => ParsedEscape::Char(c),
+    None => ParsedEscape::InvalidUnicode(slice.to_owned()),
+  }
 }
 
 fn parse_float(lex: &mut Lexer<RantToken>) -> PositiveFloatToken {

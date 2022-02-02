@@ -1,6 +1,26 @@
 # Changelog
 
+## 4.0.0-alpha.30 (unreleased)
+
+## New
+* Added three new Unicode escape formats
+  * 16-bit: `\uXXXX`
+  * 32-bit: `\UXXXXXXXX`
+  * Unsized (max 1-8 digits): `\U(XXXXXXXX)`
+* Added stdlib functions
+  * `[ds-query-sources]`
+
+## Changes
+* The escape sequence parser is now more strict, and will create a compiler error if you escape non-reserved characters
+* Renamed stdlib functions:
+  * `[data]` &rarr; `[ds-request]`
+
+## Fixes
+* Fixed `RantValue::concat()` not supporting maps
+
 ## 4.0.0-alpha.29
+
+(1/31/2022)
 
 ## New
 * Module resolver has been externalized into a separate `ModuleResolver` trait, which you can use to write your own custom resolution logic.
@@ -77,6 +97,7 @@
   * List: `(:)`, `(: A)`, `(: A; B)`, ...
   * Map: `(::)`, `(:: A=1)`, `(:: A=1; B=2)`, ...
 * Renamed stdlib functions:
+  * `[whitespace-fmt]` &rarr; `[ws-fmt]`
   * `[squish]` &rarr; `[squish-self]`
   * `[squished]` &rarr; `[squish]`
 

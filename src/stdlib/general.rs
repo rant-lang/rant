@@ -206,15 +206,21 @@ pub(crate) fn try_(vm: &mut VM, (context, handler): (RantValue, Option<RantFunct
   Ok(())
 }
 
-pub(crate) fn data(vm: &mut VM, (data_source_name, data_source_args): (InternalString, VarArgs<RantValue>)) -> RantStdResult {
-  match vm.context().data_source(data_source_name.as_str()) {
+pub(crate) fn ds_request(vm: &mut VM, (dsid, args): (InternalString, VarArgs<RantValue>)) -> RantStdResult {
+  match vm.context().data_source(dsid.as_str()) {
     Some(ds) => {
-      let result = ds.request_data(data_source_args.into_vec()).into_runtime_result()?;
+      let result = ds.request_data(args.into_vec()).into_runtime_result()?;
       vm.cur_frame_mut().write(result);
     },
     None => {
-      runtime_error!(RuntimeErrorType::DataSourceError(DataSourceError::User(format!("data source '{}' not found", &data_source_name))))
+      runtime_error!(RuntimeErrorType::DataSourceError(DataSourceError::User(format!("data source '{}' not found", &dsid))))
     }
   }
+  Ok(())
+}
+
+pub(crate) fn ds_query_sources(vm: &mut VM, _: ()) -> RantStdResult {
+  let sources = vm.context().iter_data_sources().map(|(id, _)| id.into_rant()).collect::<RantList>();
+  vm.cur_frame_mut().write(sources);
   Ok(())
 }

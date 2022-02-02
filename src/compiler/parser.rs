@@ -581,9 +581,17 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       /// Eats as many fragments / escape sequences as possible and combines their string representations into the input `String`.
       macro_rules! consume_fragments {
         ($s:ident) => {
-          while let Some((token, _)) = self.reader.take_where(|t| matches!(t, Some((Escape(..) | Fragment, ..)))) {
+          while let Some((token, span)) = self.reader.take_where(|t| matches!(t, Some((Escape(..) | Fragment, ..)))) {
             match token {
-              Escape(ch) => $s.push(ch),
+              Escape(ch) => match ch {
+                ParsedEscape::Char(ch) => $s.push(ch),
+                ParsedEscape::InvalidChar(ch) => {
+                  self.report_error(Problem::InvalidEscapeChar(ch), &span);
+                },
+                ParsedEscape::InvalidUnicode(cp) => {
+                  self.report_error(Problem::InvalidEscapeCodePoint(cp), &span);
+                },
+              },
               _ => $s.push_str(&self.reader.last_token_string()),
             }
           }
@@ -1000,7 +1008,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
 
         // These symbols are only used in special contexts and can be safely printed
-        Bang | Question | Dollar | Equals | DoubleDot
+        Question | Dollar | Equals | DoubleDot
         => no_flags!(on {
           whitespace!(allow);
           is_seq_text = true;
@@ -1027,11 +1035,21 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Escape sequences
-        Escape(ch) => no_flags!(on {
+        Escape(esc) => no_flags!(on {
           whitespace!(allow);
           is_seq_text = true;
           let mut frag = InternalString::new();
-          frag.push(ch);
+          match esc {
+            ParsedEscape::Char(c) => {
+              frag.push(c);
+            },
+            ParsedEscape::InvalidChar(c) => {
+              self.report_error(Problem::InvalidEscapeChar(c), &span);    
+            },
+            ParsedEscape::InvalidUnicode(cp) => {
+              self.report_error(Problem::InvalidEscapeCodePoint(cp), &span);
+            },
+          }
           consume_fragments!(frag);
           Expression::Fragment(frag)
         }),

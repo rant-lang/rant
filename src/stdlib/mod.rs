@@ -62,11 +62,11 @@ pub(crate) fn load_stdlib(context: &mut Rant)
 {
   macro_rules! load_func {
     ($fname:ident) => {{
-      let func = $fname.as_rant_func();
+      let func = $fname.into_rant_func();
       context.set_global_force(stringify!($fname), RantValue::Function(Rc::new(func)), true);
     }};
     ($fname:ident, $id:literal) => {{
-      let func = $fname.as_rant_func();
+      let func = $fname.into_rant_func();
       context.set_global_force($id, RantValue::Function(Rc::new(func)), true);
     }};
   }
@@ -79,7 +79,10 @@ pub(crate) fn load_stdlib(context: &mut Rant)
 
   load_funcs!(
     // General functions
-    alt, call, cat, data, either, len, get_type as "type", seed, tap, print, range, require, irange, fork, unfork, try_ as "try",
+    alt, call, cat, either, len, get_type as "type", seed, tap, print, range, require, irange, fork, unfork, try_ as "try",
+
+    // Data source functions
+    ds_request as "ds-request", ds_query_sources as "ds-query-sources",
 
     // Assertion functions
     assert as "assert", assert_not as "assert-not", assert_eq as "assert-eq", assert_neq as "assert-neq",
