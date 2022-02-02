@@ -300,7 +300,7 @@ fn parse_escape(lex: &mut Lexer<RantToken>) -> ParsedEscape {
     's' => ' ',
     c @ (
       '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | 
-      '\\' | '@' | ':' | ';' | '|' |
+      '\\' | '@' | ':' | ';' | '|' | '"' |
       '+' | '-' | '*' | '/' | '$' | '%' | '`' | '~' | '^'
     ) => c,
     c => return ParsedEscape::InvalidChar(c)
