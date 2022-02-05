@@ -1,6 +1,8 @@
 # Changelog
 
-## 4.0.0-alpha.30 (unreleased)
+## 4.0.0-alpha.30
+
+(2/5/2022)
 
 ## New
 * Added three new Unicode escape formats
