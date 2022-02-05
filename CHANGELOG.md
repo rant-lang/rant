@@ -17,6 +17,7 @@
 
 ## Fixes
 * Fixed `RantValue::concat()` not supporting maps
+* Fixed field visibility on `ModuleResolveError`
 
 ## 4.0.0-alpha.29
 

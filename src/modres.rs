@@ -165,8 +165,8 @@ impl ModuleResolver for NoModuleResolver {
 /// Represents an error that occurred when attempting to load a Rant module.
 #[derive(Debug)]
 pub struct ModuleResolveError {
-  name: String,
-  reason: ModuleResolveErrorReason,
+  pub name: String,
+  pub reason: ModuleResolveErrorReason,
 }
 
 impl Error for ModuleResolveError {}
