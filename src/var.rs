@@ -20,7 +20,7 @@ pub enum RantVar {
 
 impl Default for RantVar {
   fn default() -> Self {
-    Self::ByVal(RantValue::Empty)
+    Self::ByVal(RantValue::Nothing)
   }
 }
 

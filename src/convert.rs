@@ -198,7 +198,7 @@ macro_rules! converts_into_rant {
 
 rant_fallible_int_conversions! { u8, i8, u16, i16, u32, i32, u64, i64, isize, usize }
 
-converts_from_rant!(v -> RantEmpty { Self });
+converts_from_rant!(v -> RantNothing { Self });
 converts_from_rant!(v -> RantValue { v });
 converts_from_rant!(v -> bool { v.to_bool() });
 converts_from_rant!(v -> InternalString { v.to_string().into() });
@@ -206,7 +206,7 @@ converts_from_rant!(v -> RantString { v.to_string().into() });
 converts_from_rant!(v -> String { v.to_string() });
 
 converts_into_rant!(v: RantValue { v });
-converts_into_rant!(v: RantEmpty { RantValue::Empty });
+converts_into_rant!(v: RantNothing { RantValue::Nothing });
 converts_into_rant!(v: bool { RantValue::Boolean(v) });
 converts_into_rant!(v: f32 { RantValue::Float(v as f64) });
 converts_into_rant!(v: f64 { RantValue::Float(v) });
@@ -370,7 +370,7 @@ impl TryFromRant for RantFunctionHandle {
 impl<T: TryFromRant> TryFromRant for Option<T> {
   fn try_from_rant(val: RantValue) -> ValueResult<Self> {
     match val {
-      RantValue::Empty => Ok(None),
+      RantValue::Nothing => Ok(None),
       other => Ok(Some(T::try_from_rant(other)?))
     }
   }
@@ -383,7 +383,7 @@ impl<T: TryIntoRant> TryIntoRant for Option<T> {
   fn try_into_rant(self) -> ValueResult<RantValue> {
     match self {
       Some(val) => Ok(val.try_into_rant()?),
-      None => Ok(RantValue::Empty),
+      None => Ok(RantValue::Nothing),
     }
   }
 }
@@ -392,7 +392,7 @@ impl<T: IntoRant> IntoRant for Option<T> {
   fn into_rant(self) -> RantValue {
     match self {
       Some(val) => val.into_rant(),
-      None => RantValue::Empty,
+      None => RantValue::Nothing,
     }
   }
 }
@@ -435,7 +435,7 @@ pub trait FromRantArgs: Sized {
 impl<T: TryFromRant> FromRantArgs for T {
   fn from_rant_args(args: Vec<RantValue>) -> ValueResult<Self> {
     let mut args = args.into_iter();
-    T::try_from_rant(args.next().unwrap_or(RantValue::Empty))
+    T::try_from_rant(args.next().unwrap_or(RantValue::Nothing))
   }
 
   fn as_rant_params() -> Vec<Parameter> {
@@ -516,7 +516,7 @@ macro_rules! impl_from_rant_args {
     impl<$($generic_types: TryFromRant,)*> FromRantArgs for ($($generic_types,)*) {
       fn from_rant_args(args: Vec<RantValue>) -> ValueResult<Self> {
         let mut args = args.into_iter();
-        Ok(($($generic_types::try_from_rant(args.next().unwrap_or(RantValue::Empty))?,)*))
+        Ok(($($generic_types::try_from_rant(args.next().unwrap_or(RantValue::Nothing))?,)*))
       }
 
       fn as_rant_params() -> Vec<Parameter> {
@@ -534,7 +534,7 @@ macro_rules! impl_from_rant_args {
       fn from_rant_args(mut args: Vec<RantValue>) -> ValueResult<Self> {
         let mut args = args.drain(..);
         Ok(
-          ($($generic_types::try_from_rant(args.next().unwrap_or(RantValue::Empty))?,)*
+          ($($generic_types::try_from_rant(args.next().unwrap_or(RantValue::Nothing))?,)*
           VarArgs::new(args
             .map(VarArgItem::try_from_rant)
             .collect::<ValueResult<Vec<VarArgItem>>>()?
@@ -562,7 +562,7 @@ macro_rules! impl_from_rant_args {
       fn from_rant_args(mut args: Vec<RantValue>) -> ValueResult<Self> {
         let mut args = args.drain(..);
         Ok(
-          ($($generic_types::try_from_rant(args.next().unwrap_or(RantValue::Empty))?,)*
+          ($($generic_types::try_from_rant(args.next().unwrap_or(RantValue::Nothing))?,)*
           RequiredVarArgs::new(args
             .map(VarArgItem::try_from_rant)
             .collect::<ValueResult<Vec<VarArgItem>>>()?

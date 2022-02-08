@@ -133,7 +133,7 @@ pub enum RantToken {
 
   /// `<>`
   #[token("<>")]
-  EmptyValue,
+  NothingLiteral,
 
   /// `<`
   #[token("<")]

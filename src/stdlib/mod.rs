@@ -118,7 +118,7 @@ pub(crate) fn load_stdlib(context: &mut Rant)
 
     // Verification functions
     is_string as "is-string", is_int as "is-int", is_float as "is-float", 
-    is_number as "is-number", is_bool as "is-bool", is_empty as "is-empty", is_nan as "is-nan",
+    is_number as "is-number", is_bool as "is-bool", is_nothing as "is-empty", is_nan as "is-nan",
     is_odd as "is-odd", is_even as "is-even", is_factor as "is-factor",
     is_between as "is-between", is_some as "is-some", is,
 

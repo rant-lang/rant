@@ -1,10 +1,20 @@
 # Changelog
 
+## 4.0.0-alpha.31 (unreleased)
+
+### Changes
+* Renamed type `empty` to `nothing` to make its meaning clearer and avoid API confusion
+* Renamed stdlib functions:
+  * `[is-empty]` &rarr; `[is-nothing]`
+
+### Fixes
+* CLI: Fixed accidental REPL activation when launched with redirected stdin
+
 ## 4.0.0-alpha.30
 
 (2/5/2022)
 
-## New
+### New
 * Added three new Unicode escape formats
   * 16-bit: `\uXXXX`
   * 32-bit: `\UXXXXXXXX`
@@ -12,12 +22,12 @@
 * Added stdlib functions
   * `[ds-query-sources]`
 
-## Changes
+### Changes
 * The escape sequence parser is now more strict, and will create a compiler error if you escape non-reserved characters
 * Renamed stdlib functions:
   * `[data]` &rarr; `[ds-request]`
 
-## Fixes
+### Fixes
 * Fixed `RantValue::concat()` not supporting maps
 * Fixed field visibility on `ModuleResolveError`
 
@@ -25,12 +35,12 @@
 
 (1/31/2022)
 
-## New
+### New
 * Module resolver has been externalized into a separate `ModuleResolver` trait, which you can use to write your own custom resolution logic.
   * 2 impls included: `DefaultModuleResolver` (default), `NoModuleResolver` (to disable modules completely)
 
 
-## Changes
+### Changes
 * `[sum]` now accepts any ordered collection type
 * Changed behavior of `RantValue::is_empty()` to match that of `Vec`
 * Changed slice bound separator from `:` to `..`
@@ -41,11 +51,11 @@
 * Renamed stdlib functions:
   * `[nop]` &rarr; `[tap]`
 
-## Removed
+### Removed
 * Removed ability to specify dynamic variable names in accessors - expressions in the first path component now act as anonymous value sources
 * `RantOptions::enable_require`
 
-## Fixes
+### Fixes
 * Fixed parsing bug in function call accessors where a dynamic child component followed by arg list start (`:`) was incorrectly parsed as a slice
 * Fixed incorrect behavior in `[shuffle-thru]`
 * Fixed incorrect infix operator associativity
@@ -54,7 +64,7 @@
 
 (1/29/2022)
 
-## New
+### New
 * Added complex spread; add a parametric spread to each iteration of a temporal argument with `***` or `*a**`
 * Added assignment pipe; assign pipeval to a new or existing variable at the end of a piped call
 * Added infallible `IntoRant` and `FromRant` traits
@@ -63,17 +73,17 @@
   * `[string-replace]`
   * `[tuple]`
 
-## Changes
+### Changes
 * Dynamic keys are now wrapped in `()` instead of `{}`
 * Renamed stdlib functions:
   * `[collect]` &rarr; `[list]`
 * Upgraded library dependencies:
   * `quickscope` &rarr; 0.2.0
 
-## Removed
+### Removed
 * Removed depth operator
 
-## Fixes
+### Fixes
 * Fixed runtime error when attempting to use pipeval in a pipecall path
 * Fixed improper tokenization of labeled temporal spread operators
 * Fixed typo in `[to-tuple]` registration
@@ -82,7 +92,7 @@
 
 (1/26/2022)
 
-## New
+### New
 * Added the `tuple` type, along with tuple initialization syntax:
   * `()`, `(A;)`, `(A; B)`, `(A; B; C)`, ...
 * Added stdlib functions:
@@ -90,7 +100,7 @@
   * `[to-tuple]`
 * Added several Rust API functions to support conversion to and from tuples and other collection types
 
-## Changes
+### Changes
 * Renamed `FromRant` to `TryFromRant` (and adjusted member names)
 * Renamed `IntoRant` to `TryIntoRant` (and adjusted member names)
 * Renamed `lang::Rst` to `lang::Expression` to better reflect its purpose
@@ -104,7 +114,7 @@
   * `[squish]` &rarr; `[squish-self]`
   * `[squished]` &rarr; `[squish]`
 
-## Fixes
+### Fixes
 * Fixed `[augment]` accidentally mutating the original instance of the destination map
 * Fixed `[to-list]` not working on tuples
 
@@ -112,7 +122,7 @@
 
 (1/25/2022)
 
-## New
+### New
 * Added map initializer shorthands; specify both a key and value with a single variable getter
 * Added stdlib functions:
   * `[augment]`
@@ -122,7 +132,7 @@
   * `[sift-thru]`
   * `[shuffle-thru]`
 
-## Changes
+### Changes
 * Hints/sinks on string literals are allowed
 * Renamed stdlib functions:
   * `[sort]` &rarr; `[sort-self]`
@@ -132,14 +142,14 @@
   * `[shuffle]` &rarr; `[shuffle-self]`
   * `[shuffled]` &rarr; `[shuffle]`
 
-## Removed
+### Removed
 * Removed inner-protected blocks
 * Removed stdlib functions:
   * `[push-attrs]`
   * `[pop-attrs]`
   * `[count-attrs]`
 
-## Fixes
+### Fixes
 * Fixed hints/sinks being rejected on accessors
 * Fixed key setters accidentally tripping constant reassignment error
 

@@ -453,7 +453,7 @@ impl Default for AttributeFrame {
       prev_condval: None,
       no_propagate_condval: false,
       reps: Reps::Once,
-      separator: RantValue::Empty,
+      separator: RantValue::Nothing,
       selector: None,
       mutator: None,
     }

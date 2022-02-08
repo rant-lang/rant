@@ -870,7 +870,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             _ => {
               // TODO: Use a more descriptive error here
               self.report_unexpected_last_token_error();
-              emit!(Expression::EmptyValue);
+              emit!(Expression::NothingVal);
             },
           }
         },
@@ -1065,18 +1065,18 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               RantToken::IntegerPositive(nt) => match nt {
                 PositiveIntegerToken::Value(n) => match self.try_sign_unsigned_int(n, true, &number_token_span) {
                   Ok(n) => Expression::Integer(n),
-                  Err(_) => Expression::EmptyValue
+                  Err(_) => Expression::NothingVal
                 },
                 PositiveIntegerToken::OutOfRange => {
                   self.report_error(Problem::IntegerLiteralOutOfRange, &span);
-                  Expression::EmptyValue
+                  Expression::NothingVal
                 }
               },
               RantToken::FloatPositive(nt) => match nt {
                 PositiveFloatToken::Value(n) => Expression::Float(-n),
                 PositiveFloatToken::OutOfRange => {
                   self.report_error(Problem::FloatLiteralOutOfRange, &span);
-                  Expression::EmptyValue
+                  Expression::NothingVal
                 },
               },
               _ => unreachable!()
@@ -1094,12 +1094,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               Ok(n) => Expression::Integer(n),
               Err(_) => {
                 self.report_error(Problem::IntegerLiteralOutOfRange, &span);
-                Expression::EmptyValue
+                Expression::NothingVal
               }
             },
             PositiveIntegerToken::OutOfRange => {
               self.report_error(Problem::IntegerLiteralOutOfRange, &span);
-              Expression::EmptyValue
+              Expression::NothingVal
             }
           }
         }),
@@ -1111,14 +1111,14 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             PositiveFloatToken::Value(n) => Expression::Float(n),
             PositiveFloatToken::OutOfRange => {
               self.report_error(Problem::FloatLiteralOutOfRange, &span);
-              Expression::EmptyValue
+              Expression::NothingVal
             }
           }
         }),
         
         // Empty
-        EmptyValue => no_flags!(on {
-          Expression::EmptyValue
+        NothingLiteral => no_flags!(on {
+          Expression::NothingVal
         }),
         
         // Verbatim string literals

@@ -271,7 +271,7 @@ pub(crate) fn sum(vm: &mut VM, collection: RantOrderedCollection) -> RantStdResu
     return Ok(())
   }
 
-  let mut sum = RantValue::Empty;
+  let mut sum = RantValue::Nothing;
   
   for i in 0..collection.len() {
     sum = sum + collection.index_get(i as i64).into_runtime_result()?;
@@ -397,7 +397,7 @@ pub(crate) fn list_push(vm: &mut VM, (list, value): (RantListHandle, RantValue))
 }
 
 pub(crate) fn list_pop(vm: &mut VM, list: RantListHandle) -> RantStdResult {
-  let value = list.borrow_mut().pop().unwrap_or(RantValue::Empty);
+  let value = list.borrow_mut().pop().unwrap_or(RantValue::Nothing);
   vm.cur_frame_mut().write(value);
   Ok(())
 }
@@ -474,7 +474,7 @@ pub(crate) fn index_of(vm: &mut VM, (list, value): (RantListHandle, RantValue)) 
     .iter()
     .position(|v| v == &value)
     .map(|i| RantValue::Int(i as i64))
-    .unwrap_or(RantValue::Empty);
+    .unwrap_or(RantValue::Nothing);
 
     vm.cur_frame_mut().write(index);
     Ok(())
@@ -486,7 +486,7 @@ pub(crate) fn last_index_of(vm: &mut VM, (list, value): (RantListHandle, RantVal
     .iter()
     .rposition(|v| v == &value)
     .map(|i| RantValue::Int(i as i64))
-    .unwrap_or(RantValue::Empty);
+    .unwrap_or(RantValue::Nothing);
 
     vm.cur_frame_mut().write(index);
     Ok(())

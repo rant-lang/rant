@@ -9,12 +9,12 @@ use crate::lang::{VarAccessMode};
 ///
 /// Prints the first argument that isn't an `empty`.
 pub(crate) fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> RantStdResult {
-  if !a.is_emptyval() {
+  if !a.is_nothing() {
     vm.cur_frame_mut().write(a);
     Ok(())
   } else {
     for val in b.drain(..) {
-      if !val.is_emptyval() {
+      if !val.is_nothing() {
         vm.cur_frame_mut().write(val);
         break
       }
@@ -106,7 +106,7 @@ pub(crate) fn unfork(vm: &mut VM, _: ()) -> RantStdResult {
 }
 
 /// Does nothing and takes any number of arguments. Use this as a no-op or non-printing temporal pipe.
-pub(crate) fn tap(vm: &mut VM, _: VarArgs<RantEmpty>) -> RantStdResult {
+pub(crate) fn tap(vm: &mut VM, _: VarArgs<RantNothing>) -> RantStdResult {
   Ok(())
 }
 

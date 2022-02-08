@@ -1,5 +1,6 @@
 #![allow(clippy::single_component_path_imports)]
 
+use atty::Stream;
 use clap::{App, Arg};
 use codemap_diagnostic::{ColorConfig, Emitter, SpanLabel, SpanStyle, Diagnostic, Level};
 use codemap::CodeMap;
@@ -11,7 +12,7 @@ use rand::Rng;
 use rant::*;
 use rant::compiler::CompilerMessage;
 use std::{path::Path, time::Instant};
-use std::io::{self, Write};
+use std::io::{self, Write, Read};
 use std::process;
 use std::sync::mpsc;
 
@@ -107,7 +108,6 @@ fn main() {
     // Run inline code from cmdline args
     let code = run_rant(&mut rant, ProgramSource::Inline(code.to_owned()), &opts);
     process::exit(code);
-    
   } else if let Some(path) = in_file {
     // Run input file from cmdline args
     if !Path::new(path).exists() {
@@ -115,6 +115,16 @@ fn main() {
       process::exit(exitcode::NOINPUT);
     }
     let code = run_rant(&mut rant, ProgramSource::FilePath(path.to_owned()), &opts);
+    process::exit(code);
+  } else if atty::isnt(Stream::Stdin) {
+    // Run piped input from stdin
+    let mut buf = vec![];
+    if let Err(err) =  io::stdin().read_to_end(&mut buf) {
+      log_error!("failed to read from stdin: {}", err);
+      process::exit(exitcode::SOFTWARE);
+    }
+    let source = String::from_utf8_lossy(&buf).into_owned();
+    let code = run_rant(&mut rant, ProgramSource::Stdin(source), &opts);
     process::exit(code);
   }
 

@@ -6,9 +6,7 @@
 [![Docs.rs](https://docs.rs/rant/badge.svg)](https://docs.rs/rant)
 [![Discord](https://img.shields.io/discord/332251452334669834?color=6C8BD5&label=discord&logo=discord&logoColor=%23fff)](https://discord.gg/U8Bj6gSshJ)
 
-
-
-**Rant** is a high-level procedural templating language with a diverse toolset for easily creating dynamic code templates, game dialogue, stories, name generators, test data, and much more.
+**Rant** is a dynamically-typed, multi-paradigm templating language designed primarily for procedural generation. It is designed with scalability in mind: it can handle tasks ranging from simple randomized string generation to more complex workloads such as procedural dialogue, character generation, and worldbuilding.
 
 ***
 
@@ -17,7 +15,7 @@
 > **This project is in alpha.**
 > **This means that the API is unstable, functionality may be broken/missing, and everything is subject to change.**
 >
-> **Please do try it out and give feedback; however, _do not_ use in production environments until a stable version is released.**
+> **Please dont hesitate to try it out and give feedback; however, _do not_ use in production environments until a stable version is released.**
 >
 > **Features may appear/disappear at any time for any reason. Assume that every alpha release will have breaking changes.**
 

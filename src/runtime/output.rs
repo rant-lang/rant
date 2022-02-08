@@ -57,7 +57,7 @@ impl OutputWriter {
   /// Writes a value to the output.
   #[inline]
   pub fn write_value(&mut self, value: RantValue) {
-    if !matches!(value, RantValue::Empty) {
+    if !matches!(value, RantValue::Nothing) {
       self.write_buffer(OutputBuffer::Value(value));
     }
   }
@@ -148,14 +148,14 @@ impl OutputWriter {
   pub fn render_value(mut self) -> RantValue { 
     match self.buffers.len() {
       // An empty output always returns an empty value
-      0 => RantValue::Empty,
+      0 => RantValue::Nothing,
       // Single buffer is always returned unchanged
       1 => {
         let buffer = self.buffers.pop().unwrap();
         match buffer {
           OutputBuffer::Fragment(s) | OutputBuffer::Whitespace(s) => RantValue::String(s.as_str().into()),
           OutputBuffer::Value(v) => v,
-          _ => RantValue::Empty,
+          _ => RantValue::Nothing,
         }
       },
       _ => {
@@ -175,7 +175,7 @@ impl OutputWriter {
             if has_any_nonempty {
               RantValue::String(output.as_str().into())
             } else {
-              RantValue::Empty
+              RantValue::Nothing
             }
           },
           OutputPrintMode::List => {
@@ -212,7 +212,7 @@ impl OutputWriter {
             RantValue::Map(RantMap::from(output).into_handle())
           },
           OutputPrintMode::Concat => {
-            let mut val = RantValue::Empty;
+            let mut val = RantValue::Nothing;
             for buf in self.buffers {
               if let OutputBuffer::Value(bufval) = buf {
                 val = val.concat(bufval);
@@ -264,7 +264,7 @@ impl OutputBuffer {
     Some(match self {
       Self::Fragment(s) => s,
       Self::Whitespace(s) => s,
-      Self::Value(RantValue::Empty) => return None,
+      Self::Value(RantValue::Nothing) => return None,
       Self::Value(RantValue::Int(n)) => format.num_format.format_integer(n),
       Self::Value(RantValue::Float(n)) => format.num_format.format_float(n),
       Self::Value(v) => InternalString::from(v.to_string()),

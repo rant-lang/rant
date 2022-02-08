@@ -175,8 +175,8 @@ fn override_shadowed_locals_with_multi_descope() {
 }
 
 #[test]
-fn multi_accessor_empty_defs() {
-  test_rant!(r#"<$foo; $bar> `[type:<foo>] `[type:<bar>]"#, "empty empty");
+fn empty_def() {
+  test_rant_file!("sources/access/empty-def.rant");
 }
 
 #[test]

@@ -58,13 +58,13 @@ pub(crate) fn is(vm: &mut VM, (value, type_name): (RantValue, String)) -> RantSt
   Ok(())
 }
 
-pub(crate) fn is_empty(vm: &mut VM, value: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write(value.is_emptyval());
+pub(crate) fn is_nothing(vm: &mut VM, value: RantValue) -> RantStdResult {
+  vm.cur_frame_mut().write(value.is_nothing());
   Ok(())
 }
 
 pub(crate) fn is_some(vm: &mut VM, value: RantValue) -> RantStdResult {
-  vm.cur_frame_mut().write(!value.is_emptyval());
+  vm.cur_frame_mut().write(!value.is_nothing());
   Ok(())
 }
 

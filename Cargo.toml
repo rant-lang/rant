@@ -34,7 +34,7 @@ path = "src/tools/cli/main.rs"
 required-features = ["cli"]
 
 [features]
-cli = ["clap", "codemap", "codemap-diagnostic", "colored", "ctrlc", "embedded-triple", "exitcode"]
+cli = ["atty", "clap", "codemap", "codemap-diagnostic", "colored", "ctrlc", "embedded-triple", "exitcode"]
 vm-trace = []
 
 
@@ -54,6 +54,7 @@ smartstring = "0.2.6"             # String optimization used throughout Rant.
 unicode-segmentation = "1.7.1"    # Used by Rant to index strings by grapheme cluster.
 
 # CLI
+atty = { version = "0.2.14", optional = true }
 clap = { version = "2.33.3", optional = true }
 codemap = { version = "0.1.3", optional = true }
 codemap-diagnostic = { version = "0.1.1", optional = true }

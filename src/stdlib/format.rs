@@ -10,7 +10,7 @@ pub(crate) fn ws_fmt(vm: &mut VM, (mode, custom): (Option<String>, Option<RantVa
       "default" =>    WhitespaceNormalizationMode::Default,
       "ignore-all" => WhitespaceNormalizationMode::IgnoreAll,
       "verbatim" =>   WhitespaceNormalizationMode::Verbatim,
-      "custom" =>     WhitespaceNormalizationMode::Custom(custom.unwrap_or(RantValue::Empty)),
+      "custom" =>     WhitespaceNormalizationMode::Custom(custom.unwrap_or(RantValue::Nothing)),
       bad_mode => runtime_error!(RuntimeErrorType::ArgumentError, "invalid whitespace normalization mode: '{}'", bad_mode),
     };
     vm.parent_frame_mut(1).unwrap().output_mut().format_mut().ws_norm_mode = mode;

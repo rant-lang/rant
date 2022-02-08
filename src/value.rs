@@ -9,6 +9,18 @@ use std::error::Error;
 use std::cmp::Ordering;
 use cast::*;
 
+pub const TYPENAME_STRING: &str = "string";
+pub const TYPENAME_INT: &str = "int";
+pub const TYPENAME_FLOAT: &str = "float";
+pub const TYPENAME_BOOL: &str = "bool";
+pub const TYPENAME_TUPLE: &str = "tuple";
+pub const TYPENAME_LIST: &str = "list";
+pub const TYPENAME_MAP: &str = "map";
+pub const TYPENAME_FUNCTION: &str = "function";
+pub const TYPENAME_SPECIAL: &str = "special";
+pub const TYPENAME_RANGE: &str = "range";
+pub const TYPENAME_NOTHING: &str = "nothing";
+
 const MAX_DISPLAY_STRING_DEPTH: usize = 4;
 
 /// Adds a barebones `Error` implementation to the specified type.
@@ -60,8 +72,8 @@ pub type ValueSliceSetResult = Result<(), SliceError>;
 /// Type alias for `Rc<RantFunction>`
 pub type RantFunctionHandle = Rc<RantFunction>;
 
-/// Rant's "empty" value.
-pub struct RantEmpty;
+/// Rant's "nothing" value.
+pub struct RantNothing;
 
 /// A dynamically-typed Rant value.
 ///
@@ -92,8 +104,8 @@ pub enum RantValue {
   Range(RantRange),
   /// A Rant value of type `special`. Passed by-value.
   Special(RantSpecial),
-  /// A Rant unit value of type `empty`. Passed by-value.
-  Empty,
+  /// A Rant unit value of type `nothing`. Passed by-value.
+  Nothing,
 }
 
 impl RantValue {
@@ -106,10 +118,10 @@ impl RantValue {
   pub const MIN_INT: Self = Self::Int(i64::MIN);
   pub const MAX_INT: Self = Self::Int(i64::MAX);
 
-  /// Returns true if the value is of type `empty`.
+  /// Returns true if the value is of type `nothing`.
   #[inline]
-  pub fn is_emptyval(&self) -> bool {
-    matches!(self, RantValue::Empty)
+  pub fn is_nothing(&self) -> bool {
+    matches!(self, RantValue::Nothing)
   }
 
   /// Returns true if the value is NaN (Not a Number).
@@ -153,7 +165,7 @@ impl RantValue {
       Self::Map(m) => !m.borrow().is_empty(),
       Self::Range(r) => !r.is_empty(),
       Self::Special(_) => true,
-      Self::Empty => false,
+      Self::Nothing => false,
     }
   }
 
@@ -172,11 +184,11 @@ impl RantValue {
       Self::String(s) => {
         match s.as_str().parse() {
           Ok(n) => Self::Int(n),
-          Err(_) => Self::Empty,
+          Err(_) => Self::Nothing,
         }
       },
       Self::Boolean(b) => Self::Int(bi64(b)),
-      _ => Self::Empty
+      _ => Self::Nothing
     }
   }
 
@@ -189,11 +201,11 @@ impl RantValue {
       Self::String(s) => {
         match s.as_str().parse() {
           Ok(n) => Self::Float(n),
-          Err(_) => Self::Empty,
+          Err(_) => Self::Nothing,
         }
       },
       Self::Boolean(b) => Self::Float(bf64(b)),
-      _ => Self::Empty
+      _ => Self::Nothing
     }
   }
 
@@ -214,7 +226,7 @@ impl RantValue {
       Self::String(s) => s.to_rant_list(),
       Self::Range(range) => range.to_rant_list(),
       list @ Self::List(_) => return list,
-      _ => return RantValue::Empty,
+      _ => return RantValue::Nothing,
     }.into_handle())
   }
 
@@ -226,7 +238,7 @@ impl RantValue {
       Self::List(list) => list.borrow().to_rant_tuple(),
       Self::Range(range) => range.to_rant_tuple(),
       tuple @ RantValue::Tuple(_) => return tuple,
-      _ => return RantValue::Empty,
+      _ => return RantValue::Nothing,
     }.into_handle())
   }
 
@@ -234,9 +246,9 @@ impl RantValue {
   #[inline]
   pub fn concat(self, rhs: Self) -> Self {
     match (self, rhs) {
-      (Self::Empty, Self::Empty) => Self::Empty,
-      (lhs, Self::Empty) => lhs,
-      (Self::Empty, rhs) => rhs,
+      (Self::Nothing, Self::Nothing) => Self::Nothing,
+      (lhs, Self::Nothing) => lhs,
+      (Self::Nothing, rhs) => rhs,
       (Self::Int(a), Self::Int(b)) => Self::Int(a.saturating_add(b)),
       (Self::Int(a), Self::Float(b)) => Self::Float(f64(a) + b),
       (Self::Int(a), Self::Boolean(b)) => Self::Int(a.saturating_add(bi64(b))),
@@ -325,7 +337,7 @@ impl RantValue {
       Self::Map(_) =>        RantValueType::Map,
       Self::Range(_) =>      RantValueType::Range,
       Self::Special(_) =>    RantValueType::Special,
-      Self::Empty =>         RantValueType::Empty,
+      Self::Nothing =>         RantValueType::Nothing,
     }
   }
   
@@ -561,7 +573,7 @@ impl RantValue {
 impl Default for RantValue {
   /// Gets the default RantValue (`empty`).
   fn default() -> Self {
-    Self::Empty
+    Self::Nothing
   }
 }
 
@@ -589,25 +601,25 @@ pub enum RantValueType {
   Special,
   /// The `range` type.
   Range,
-  /// The `empty` type.
-  Empty
+  /// The `nothing` type.
+  Nothing
 }
 
 impl RantValueType {
   /// Gets a string slice representing the type.
   pub fn name(&self) -> &'static str {
     match self {
-      Self::String =>      "string",
-      Self::Float =>       "float",
-      Self::Int =>         "int",
-      Self::Boolean =>     "bool",
-      Self::Function =>    "function",
-      Self::List =>        "list",
-      Self::Tuple =>       "tuple",
-      Self::Map =>         "map",
-      Self::Special =>     "special",
-      Self::Range =>       "range",
-      Self::Empty =>       "empty",
+      Self::String =>      TYPENAME_STRING,
+      Self::Float =>       TYPENAME_FLOAT,
+      Self::Int =>         TYPENAME_INT,
+      Self::Boolean =>     TYPENAME_BOOL,
+      Self::Function =>    TYPENAME_FUNCTION,
+      Self::List =>        TYPENAME_LIST,
+      Self::Tuple =>       TYPENAME_TUPLE,
+      Self::Map =>         TYPENAME_MAP,
+      Self::Special =>     TYPENAME_SPECIAL,
+      Self::Range =>       TYPENAME_RANGE,
+      Self::Nothing =>     TYPENAME_NOTHING,
     }
   }
 }
@@ -827,7 +839,7 @@ impl Debug for RantValue {
       Self::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
       Self::Range(range) => write!(f, "{}", range),
       Self::Special(special) => write!(f, "[special({:?})]", special),
-      Self::Empty => write!(f, "[empty]"),
+      Self::Nothing => write!(f, "[empty]"),
     }
   }
 }
@@ -911,7 +923,7 @@ fn get_display_string(value: &RantValue, max_depth: usize) -> String {
     },
     RantValue::Special(_) => "[special]".to_owned(),
     RantValue::Range(range) => range.to_string(),
-    RantValue::Empty => (if max_depth < MAX_DISPLAY_STRING_DEPTH { "<>" } else { "" }).to_owned(),
+    RantValue::Nothing => (if max_depth < MAX_DISPLAY_STRING_DEPTH { "<>" } else { "" }).to_owned(),
   }
 }
 
@@ -924,7 +936,7 @@ impl Display for RantValue {
 impl PartialEq for RantValue {
   fn eq(&self, other: &Self) -> bool {
     match (self, other) {
-      (Self::Empty, Self::Empty) => true,
+      (Self::Nothing, Self::Nothing) => true,
       (Self::String(a), Self::String(b)) => a == b,
       (Self::Int(a), Self::Int(b)) => a == b,
       (Self::Int(a), Self::Float(b)) => *a as f64 == *b,
@@ -946,7 +958,7 @@ impl Eq for RantValue {}
 impl PartialOrd for RantValue {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     match (self, other) {
-      (Self::Empty, _) | (_, Self::Empty) => None,
+      (Self::Nothing, _) | (_, Self::Nothing) => None,
       (Self::Int(a), Self::Int(b)) => a.partial_cmp(b),
       (Self::Float(a), Self::Float(b)) => a.partial_cmp(b),
       (Self::Float(a), Self::Int(b)) => a.partial_cmp(&(*b as f64)),
@@ -980,9 +992,9 @@ impl Add for RantValue {
   type Output = Self;
   fn add(self, rhs: Self) -> Self::Output {
     match (self, rhs) {
-      (Self::Empty, Self::Empty) => Self::Empty,
-      (lhs, Self::Empty) => lhs,
-      (Self::Empty, rhs) => rhs,
+      (Self::Nothing, Self::Nothing) => Self::Nothing,
+      (lhs, Self::Nothing) => lhs,
+      (Self::Nothing, rhs) => rhs,
       (Self::Int(a), Self::Int(b)) => Self::Int(a.saturating_add(b)),
       (Self::Int(a), Self::Float(b)) => Self::Float(f64(a) + b),
       (Self::Int(a), Self::Boolean(b)) => Self::Int(a.saturating_add(bi64(b))),
@@ -1005,9 +1017,9 @@ impl Sub for RantValue {
   type Output = Self;
   fn sub(self, rhs: Self) -> Self::Output {
     match (self, rhs) {
-      (Self::Empty, Self::Empty) => Self::Empty,
-      (lhs, Self::Empty) => lhs,
-      (Self::Empty, rhs) => -rhs,
+      (Self::Nothing, Self::Nothing) => Self::Nothing,
+      (lhs, Self::Nothing) => lhs,
+      (Self::Nothing, rhs) => -rhs,
       (Self::Int(a), Self::Int(b)) => Self::Int(a.saturating_sub(b)),
       (Self::Int(a), Self::Float(b)) => Self::Float((a as f64) - b),
       (Self::Int(a), Self::Boolean(b)) => Self::Int(a - bi64(b)),
@@ -1026,7 +1038,7 @@ impl Mul for RantValue {
   type Output = Self;
   fn mul(self, rhs: Self) -> Self::Output {
     match (self, rhs) {
-      (Self::Empty, _) | (_, Self::Empty) => Self::Empty,
+      (Self::Nothing, _) | (_, Self::Nothing) => Self::Nothing,
       (Self::Int(a), Self::Int(b)) => Self::Int(a.saturating_mul(b)),
       (Self::Int(a), Self::Float(b)) => Self::Float((a as f64) * b),
       (Self::Int(a), Self::Boolean(b)) => Self::Int(a * bi64(b)),
@@ -1046,7 +1058,7 @@ impl Div for RantValue {
   type Output = ValueResult<Self>;
   fn div(self, rhs: Self) -> Self::Output {
     Ok(match (self, rhs) {
-      (Self::Empty, _) | (_, Self::Empty) => Self::Empty,
+      (Self::Nothing, _) | (_, Self::Nothing) => Self::Nothing,
       (_, Self::Int(0)) | (_, Self::Boolean(false)) => return Err(ValueError::DivideByZero),
       (Self::Int(a), Self::Int(b)) => Self::Int(a / b),
       (Self::Int(a), Self::Float(b)) => Self::Float((a as f64) / b),
@@ -1066,7 +1078,7 @@ impl Rem for RantValue {
   type Output = ValueResult<Self>;
   fn rem(self, rhs: Self) -> Self::Output {
     Ok(match (self, rhs) {
-      (Self::Empty, _) | (_, Self::Empty) => Self::Empty,
+      (Self::Nothing, _) | (_, Self::Nothing) => Self::Nothing,
       (_, Self::Int(0)) | (_, Self::Boolean(false)) => return Err(ValueError::DivideByZero),
       (Self::Int(a), Self::Int(b)) => Self::Int(a % b),
       (Self::Int(a), Self::Float(b)) => Self::Float((a as f64) % b),
@@ -1104,7 +1116,7 @@ impl RantValue {
       (Self::Float(lhs), Self::Float(rhs)) => {
         Ok(Self::Float(lhs.powf(rhs)))
       },
-      _ => Ok(Self::Empty)
+      _ => Ok(Self::Nothing)
     }
   }
 

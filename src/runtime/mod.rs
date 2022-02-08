@@ -197,7 +197,7 @@ impl<'rant> VM<'rant> {
                 RantValue::Int(n) => n as f64,
                 RantValue::Float(n) => n,
                 RantValue::Boolean(b) => bf64(b),
-                RantValue::Empty => 1.0,
+                RantValue::Nothing => 1.0,
                 other => runtime_error!(RuntimeErrorType::ArgumentError, format!("weight values cannot be of type '{}'", other.type_name())),
               });
               pop_next_weight = false;
@@ -931,7 +931,7 @@ impl<'rant> VM<'rant> {
             return Ok(true)
           } else {
             // If there's no assignment, just set it to empty value
-            self.def_var_value(def.name.as_str(), def.access_mode, RantValue::Empty, def.is_const)?;
+            self.def_var_value(def.name.as_str(), def.access_mode, RantValue::Nothing, def.is_const)?;
           }
         },
         Expression::Get(getter) => {
@@ -1072,7 +1072,7 @@ impl<'rant> VM<'rant> {
         Expression::Whitespace(ws) => self.cur_frame_mut().write_ws(ws),
         Expression::Integer(n) => self.cur_frame_mut().write(*n),
         Expression::Float(n) => self.cur_frame_mut().write(*n),
-        Expression::EmptyValue => self.cur_frame_mut().write(RantEmpty),
+        Expression::NothingVal => self.cur_frame_mut().write(RantNothing),
         Expression::Boolean(b) => self.cur_frame_mut().write(*b),
         Expression::Nop => {},
         Expression::Return(expr) => {

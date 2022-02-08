@@ -804,7 +804,7 @@ pub enum Expression {
   /// Boolean value
   Boolean(bool),
   /// Empty value
-  EmptyValue,
+  NothingVal,
   /// Return
   Return(Option<Rc<Sequence>>),
   /// Continue
@@ -874,7 +874,7 @@ impl Expression {
       Self::Integer(_) =>                      "integer",
       Self::Float(_) =>                        "float",
       Self::Boolean(_) =>                      "bool",
-      Self::EmptyValue =>                      "emptyval",
+      Self::NothingVal =>                      "nothing_val",
       Self::Nop =>                             "no-op",
       Self::Define(..) =>                      "definition",
       Self::Get(..) =>                         "getter",
