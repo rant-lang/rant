@@ -132,6 +132,8 @@ fn main() {
 }
 
 fn repl(rant: &mut Rant, opts: &RantCliOptions) {
+  println!("{}", format!("Rant {} (build {})", rant::RANT_LANG_VERSION, rant::BUILD_VERSION).white());
+  println!("{}\n", "Write a Rant expression and press Enter to run it.".truecolor(148, 148, 148).italic());
   loop {
     print!("{} ", ">>".cyan());
     io::stdout().flush().unwrap();
@@ -139,7 +141,7 @@ fn repl(rant: &mut Rant, opts: &RantCliOptions) {
     
     match io::stdin().read_line(&mut input) {
       Ok(_) => {
-        run_rant(rant, ProgramSource::Stdin(input.trim_end().to_owned()), opts);
+        run_rant(rant, ProgramSource::Stdin(input), opts);
       },
       Err(_) => log_error!("failed to read input")
     }
