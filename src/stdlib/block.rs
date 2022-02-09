@@ -74,14 +74,14 @@ pub fn mksel(vm: &mut VM, mode: SelectorMode) -> RantStdResult {
 }
 
 pub fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
-  vm.resolver_mut().attrs_mut().selector = match selector {
+  match selector {
     Some(RantValue::Special(RantSpecial::Selector(selector))) => {
-      Some(Rc::clone(&selector))
+      vm.resolver_mut().attrs_mut().selector = Some(Rc::clone(&selector));
     },
     Some(val @ RantValue::String(_)) => {
       let mode = SelectorMode::try_from_rant(val).into_runtime_result()?;
       let selector = Rc::new(RefCell::new(Selector::new(mode)));
-      Some(selector)
+      vm.resolver_mut().attrs_mut().selector = Some(selector);
     },
     Some(val) => {
       return Err(RuntimeError {
@@ -94,8 +94,15 @@ pub fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
         stack_trace: None,
       })
     },
-    None => None,
-  };
+    None => {
+      let selector = vm.resolver().attrs().selector
+        .as_ref()
+        .map(Rc::clone)
+        .map(|s| RantValue::Special(RantSpecial::Selector(s)))
+        .unwrap_or(RantValue::Nothing);
+      vm.cur_frame_mut().write(selector);
+    },
+  }
   Ok(())
 }
 

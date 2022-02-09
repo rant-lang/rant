@@ -12,6 +12,7 @@
 * Renamed type `empty` to `nothing` to make its meaning clearer and avoid API confusion
 * Renamed stdlib functions:
   * `[is-empty]` &rarr; `[is-nothing]`
+* Changed behavior of `[sel]` so that it now prints the current selector when no arguments are passed
 
 ### Fixes
 * CLI: Fixed accidental REPL activation when launched with redirected stdin
