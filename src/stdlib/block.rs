@@ -118,7 +118,7 @@ pub fn sel_freeze(vm: &mut VM, (selector, frozen): (RantValue, Option<bool>)) ->
     let mut sel = sel.borrow_mut();
     sel.set_frozen(frozen.unwrap_or(true));
   } else {
-    runtime_error!(RuntimeErrorType::ArgumentError, "sel-skip only works on selectors, but a value of type '{}' was provided", selector.type_name())
+    runtime_error!(RuntimeErrorType::ArgumentError, "sel-freeze only works on selectors, but a value of type '{}' was provided", selector.type_name())
   }
   Ok(())
 }
@@ -128,7 +128,7 @@ pub fn sel_frozen(vm: &mut VM, (selector, frozen): (RantValue, bool)) -> RantStd
     let sel = sel.borrow();
     vm.cur_frame_mut().write(sel.is_frozen());
   } else {
-    runtime_error!(RuntimeErrorType::ArgumentError, "sel-skip only works on selectors, but a value of type '{}' was provided", selector.type_name())
+    runtime_error!(RuntimeErrorType::ArgumentError, "sel-frozen only works on selectors, but a value of type '{}' was provided", selector.type_name())
   }
   Ok(())
 }
