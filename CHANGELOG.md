@@ -2,6 +2,12 @@
 
 ## 4.0.0-alpha.31 (unreleased)
 
+### New
+* Added stdlib functions:
+  * `[sel-skip]`
+  * `[sel-freeze]`
+  * `[sel-frozen]`
+
 ### Changes
 * Renamed type `empty` to `nothing` to make its meaning clearer and avoid API confusion
 * Renamed stdlib functions:

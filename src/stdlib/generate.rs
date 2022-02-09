@@ -1,18 +1,18 @@
 use super::*;
 
-pub(crate) fn rand(vm: &mut VM, (a, b): (i64, i64)) -> RantStdResult {
+pub fn rand(vm: &mut VM, (a, b): (i64, i64)) -> RantStdResult {
   let n = vm.rng().next_i64(a, b);
   vm.cur_frame_mut().write(n);
   Ok(())
 }
 
-pub(crate) fn randf(vm: &mut VM, (a, b): (f64, f64)) -> RantStdResult {
+pub fn randf(vm: &mut VM, (a, b): (f64, f64)) -> RantStdResult {
   let n = vm.rng().next_f64(a, b);
   vm.cur_frame_mut().write(n);
   Ok(())
 }
 
-pub(crate) fn rand_list(vm: &mut VM, (a, b, n): (i64, i64, usize)) -> RantStdResult {
+pub fn rand_list(vm: &mut VM, (a, b, n): (i64, i64, usize)) -> RantStdResult {
   let mut list = RantList::new();
   let rng = vm.rng();
   for _ in 0..n {
@@ -22,7 +22,7 @@ pub(crate) fn rand_list(vm: &mut VM, (a, b, n): (i64, i64, usize)) -> RantStdRes
   Ok(())
 }
 
-pub(crate) fn randf_list(vm: &mut VM, (a, b, n): (f64, f64, usize)) -> RantStdResult {
+pub fn randf_list(vm: &mut VM, (a, b, n): (f64, f64, usize)) -> RantStdResult {
   let mut list = RantList::new();
   let rng = vm.rng();
   for _ in 0..n {
@@ -32,7 +32,7 @@ pub(crate) fn randf_list(vm: &mut VM, (a, b, n): (f64, f64, usize)) -> RantStdRe
   Ok(())
 }
 
-pub(crate) fn alpha(vm: &mut VM, count: Option<usize>) -> RantStdResult {
+pub fn alpha(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   const CHARS: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
   let count = count.unwrap_or(1);
   let mut s = String::with_capacity(count);
@@ -45,7 +45,7 @@ pub(crate) fn alpha(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn digh(vm: &mut VM, count: Option<usize>) -> RantStdResult {
+pub fn digh(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   const CHARS: &[u8] = b"0123456789abcdef";
   let count = count.unwrap_or(1);
   let mut s = String::with_capacity(count);
@@ -58,7 +58,7 @@ pub(crate) fn digh(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn dig(vm: &mut VM, count: Option<usize>) -> RantStdResult {
+pub fn dig(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   const CHARS: &[u8] = b"0123456789";
   let count = count.unwrap_or(1);
   let mut s = String::with_capacity(count);
@@ -71,7 +71,7 @@ pub(crate) fn dig(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn dignz(vm: &mut VM, count: Option<usize>) -> RantStdResult {
+pub fn dignz(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   const CHARS: &[u8] = b"123456789";
   let count = count.unwrap_or(1);
   let mut s = String::with_capacity(count);
@@ -84,7 +84,7 @@ pub(crate) fn dignz(vm: &mut VM, count: Option<usize>) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn rand_list_sum(vm: &mut VM, (value, n, variance): (RantValue, i64, Option<f64>)) -> RantStdResult {
+pub fn rand_list_sum(vm: &mut VM, (value, n, variance): (RantValue, i64, Option<f64>)) -> RantStdResult {
   if n <= 0 {
     return Err(RuntimeError {
       error_type: RuntimeErrorType::ArgumentError,
@@ -157,13 +157,13 @@ pub(crate) fn rand_list_sum(vm: &mut VM, (value, n, variance): (RantValue, i64, 
   Ok(())
 }
 
-pub(crate) fn maybe(vm: &mut VM, p: Option<f64>) -> RantStdResult {
+pub fn maybe(vm: &mut VM, p: Option<f64>) -> RantStdResult {
   let b = vm.rng().next_bool(p.unwrap_or(0.5));
   vm.cur_frame_mut().write(b);
   Ok(())
 }
 
-pub(crate) fn pick(vm: &mut VM, list: RantValue) -> RantStdResult {
+pub fn pick(vm: &mut VM, list: RantValue) -> RantStdResult {
   let n = list.len();
   if n > 0 {
     let index = vm.rng().next_usize(n);
@@ -173,7 +173,7 @@ pub(crate) fn pick(vm: &mut VM, list: RantValue) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn pick_sparse(vm: &mut VM, mut items: RequiredVarArgs<RantValue>) -> RantStdResult {
+pub fn pick_sparse(vm: &mut VM, mut items: RequiredVarArgs<RantValue>) -> RantStdResult {
   let len_sum = items
     .iter()
     .map(|v| v.len())

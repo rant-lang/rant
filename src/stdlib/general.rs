@@ -8,7 +8,7 @@ use crate::lang::{VarAccessMode};
 /// `[$alt: a (any); b+ (any)]`
 ///
 /// Prints the first argument that isn't an `empty`.
-pub(crate) fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> RantStdResult {
+pub fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> RantStdResult {
   if !a.is_nothing() {
     vm.cur_frame_mut().write(a);
     Ok(())
@@ -23,7 +23,7 @@ pub(crate) fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue
   }
 }
 
-pub(crate) fn call(vm: &mut VM, (func, args): (RantFunctionHandle, Option<Vec<RantValue>>)) -> RantStdResult {
+pub fn call(vm: &mut VM, (func, args): (RantFunctionHandle, Option<Vec<RantValue>>)) -> RantStdResult {
   vm.push_val(RantValue::Function(Rc::clone(&func)))?;
   let argc = args.as_ref().map(|args| args.len()).unwrap_or(0);
   if let Some(mut args) = args {
@@ -35,7 +35,7 @@ pub(crate) fn call(vm: &mut VM, (func, args): (RantFunctionHandle, Option<Vec<Ra
   Ok(())
 }
 
-pub(crate) fn cat(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult {
+pub fn cat(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult {
   let frame = vm.cur_frame_mut();
   for val in args.drain(..) {
     frame.write(val);
@@ -44,7 +44,7 @@ pub(crate) fn cat(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn print(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult {
+pub fn print(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult {
   if args.len() < 2 {
     let frame = vm.cur_frame_mut();
     for val in args.drain(..) {
@@ -62,7 +62,7 @@ pub(crate) fn print(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult 
 /// `[$copy: val (any)]`
 ///
 /// Returns a copy of a value.
-pub(crate) fn copy(vm: &mut VM, val: RantValue) -> RantStdResult {
+pub fn copy(vm: &mut VM, val: RantValue) -> RantStdResult {
   vm.cur_frame_mut().write(val.shallow_copy());
   Ok(())
 }
@@ -70,7 +70,7 @@ pub(crate) fn copy(vm: &mut VM, val: RantValue) -> RantStdResult {
 /// `[$either: cond (bool); a (any); b (any)]`
 ///
 /// Prints `a` if `cond` is true, or `b` otherwise.
-pub(crate) fn either(vm: &mut VM, (cond, a, b): (bool, RantValue, RantValue)) -> RantStdResult {
+pub fn either(vm: &mut VM, (cond, a, b): (bool, RantValue, RantValue)) -> RantStdResult {
   let val = if cond { a } else { b };
   vm.cur_frame_mut().write(val);
   Ok(())
@@ -79,7 +79,7 @@ pub(crate) fn either(vm: &mut VM, (cond, a, b): (bool, RantValue, RantValue)) ->
 /// `$[fork: seed? (string|int)]`
 ///
 /// Forks the RNG with the specified seed.
-pub(crate) fn fork(vm: &mut VM, seed: Option<RantValue>) -> RantStdResult {
+pub fn fork(vm: &mut VM, seed: Option<RantValue>) -> RantStdResult {
   let rng = match seed {
     Some(RantValue::Int(i)) => vm.rng().fork_i64(i),
     Some(RantValue::String(s)) => vm.rng().fork_str(s.as_str()),
@@ -90,7 +90,7 @@ pub(crate) fn fork(vm: &mut VM, seed: Option<RantValue>) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn get_type(vm: &mut VM, val: RantValue) -> RantStdResult {
+pub fn get_type(vm: &mut VM, val: RantValue) -> RantStdResult {
   vm.cur_frame_mut().write_frag(val.type_name());
   Ok(())
 }
@@ -98,7 +98,7 @@ pub(crate) fn get_type(vm: &mut VM, val: RantValue) -> RantStdResult {
 /// `$[unfork]`
 ///
 /// Unforks the RNG down one level.
-pub(crate) fn unfork(vm: &mut VM, _: ()) -> RantStdResult {
+pub fn unfork(vm: &mut VM, _: ()) -> RantStdResult {
   if vm.pop_rng().is_none() {
     runtime_error!(RuntimeErrorType::InvalidOperation, "cannot unfork root seed");
   }
@@ -106,14 +106,14 @@ pub(crate) fn unfork(vm: &mut VM, _: ()) -> RantStdResult {
 }
 
 /// Does nothing and takes any number of arguments. Use this as a no-op or non-printing temporal pipe.
-pub(crate) fn tap(vm: &mut VM, _: VarArgs<RantNothing>) -> RantStdResult {
+pub fn tap(vm: &mut VM, _: VarArgs<RantNothing>) -> RantStdResult {
   Ok(())
 }
 
 /// `[$seed]`
 ///
 /// Prints the RNG seed currently in use.
-pub(crate) fn seed(vm: &mut VM, _: ()) -> RantStdResult {
+pub fn seed(vm: &mut VM, _: ()) -> RantStdResult {
   let signed_seed = unsafe {
     mem::transmute::<u64, i64>(vm.rng().seed())
   };
@@ -122,12 +122,12 @@ pub(crate) fn seed(vm: &mut VM, _: ()) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn len(vm: &mut VM, val: RantValue) -> RantStdResult {
+pub fn len(vm: &mut VM, val: RantValue) -> RantStdResult {
   vm.cur_frame_mut().write(val.len().try_into_rant().into_runtime_result()?);
   Ok(())
 }
 
-pub(crate) fn error(vm: &mut VM, msg: Option<String>) -> RantStdResult {
+pub fn error(vm: &mut VM, msg: Option<String>) -> RantStdResult {
   const DEFAULT_ERROR_MESSAGE: &str = "user error";
   Err(RuntimeError {
     error_type: RuntimeErrorType::UserError,
@@ -136,7 +136,7 @@ pub(crate) fn error(vm: &mut VM, msg: Option<String>) -> RantStdResult {
   })
 }
 
-pub(crate) fn range(vm: &mut VM, (a, b, step): (i64, Option<i64>, Option<u64>)) -> RantStdResult {
+pub fn range(vm: &mut VM, (a, b, step): (i64, Option<i64>, Option<u64>)) -> RantStdResult {
   let step = step.unwrap_or(1);
   
   let range = if let Some(b) = b {
@@ -149,7 +149,7 @@ pub(crate) fn range(vm: &mut VM, (a, b, step): (i64, Option<i64>, Option<u64>)) 
   Ok(())
 }
 
-pub(crate) fn irange(vm: &mut VM, (a, b, step): (i64, Option<i64>, Option<u64>)) -> RantStdResult {
+pub fn irange(vm: &mut VM, (a, b, step): (i64, Option<i64>, Option<u64>)) -> RantStdResult {
   let step = step.unwrap_or(1);
   
   let range = if let Some(b) = b {
@@ -162,7 +162,7 @@ pub(crate) fn irange(vm: &mut VM, (a, b, step): (i64, Option<i64>, Option<u64>))
   Ok(())
 }
 
-pub(crate) fn require(vm: &mut VM, module_path: String) -> RantStdResult {
+pub fn require(vm: &mut VM, module_path: String) -> RantStdResult {
   // Get name of module from path
   if let Some(module_name) = 
     PathBuf::from(&module_path)
@@ -194,7 +194,7 @@ pub(crate) fn require(vm: &mut VM, module_path: String) -> RantStdResult {
   }
 }
 
-pub(crate) fn try_(vm: &mut VM, (context, handler): (RantValue, Option<RantFunctionHandle>)) -> RantStdResult {
+pub fn try_(vm: &mut VM, (context, handler): (RantValue, Option<RantFunctionHandle>)) -> RantStdResult {
   vm.push_unwind_state(handler);
   vm.cur_frame_mut().push_intent(Intent::DropStaleUnwinds);
   match context {
@@ -206,7 +206,7 @@ pub(crate) fn try_(vm: &mut VM, (context, handler): (RantValue, Option<RantFunct
   Ok(())
 }
 
-pub(crate) fn ds_request(vm: &mut VM, (dsid, args): (InternalString, VarArgs<RantValue>)) -> RantStdResult {
+pub fn ds_request(vm: &mut VM, (dsid, args): (InternalString, VarArgs<RantValue>)) -> RantStdResult {
   match vm.context().data_source(dsid.as_str()) {
     Some(ds) => {
       let result = ds.request_data(args.into_vec()).into_runtime_result()?;
@@ -219,7 +219,7 @@ pub(crate) fn ds_request(vm: &mut VM, (dsid, args): (InternalString, VarArgs<Ran
   Ok(())
 }
 
-pub(crate) fn ds_query_sources(vm: &mut VM, _: ()) -> RantStdResult {
+pub fn ds_query_sources(vm: &mut VM, _: ()) -> RantStdResult {
   let sources = vm.context().iter_data_sources().map(|(id, _)| id.into_rant()).collect::<RantList>();
   vm.cur_frame_mut().write(sources);
   Ok(())

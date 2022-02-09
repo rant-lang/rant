@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) fn split(vm: &mut VM, (s, at): (String, Option<String>)) -> RantStdResult {
+pub fn split(vm: &mut VM, (s, at): (String, Option<String>)) -> RantStdResult {
   let list = if at.as_ref().map(|s| s.is_empty()).unwrap_or(true) {
     s.chars()
       .map(|c| c.to_string())
@@ -16,13 +16,13 @@ pub(crate) fn split(vm: &mut VM, (s, at): (String, Option<String>)) -> RantStdRe
   Ok(())
 }
 
-pub(crate) fn lines(vm: &mut VM, s: String) -> RantStdResult {
+pub fn lines(vm: &mut VM, s: String) -> RantStdResult {
   let lines: Vec<RantValue> = s.lines().map(|line| RantValue::String(line.into())).collect();
   vm.cur_frame_mut().write(lines);
   Ok(())
 }
 
-pub(crate) fn indent(vm:  &mut VM, (text, indent): (String, String)) -> RantStdResult {
+pub fn indent(vm:  &mut VM, (text, indent): (String, String)) -> RantStdResult {
   let frame = vm.cur_frame_mut();
   let mut first = true;
   for line in text.lines() {
@@ -37,17 +37,17 @@ pub(crate) fn indent(vm:  &mut VM, (text, indent): (String, String)) -> RantStdR
   Ok(())
 }
 
-pub(crate) fn upper(vm: &mut VM, s: String) -> RantStdResult {
+pub fn upper(vm: &mut VM, s: String) -> RantStdResult {
   vm.cur_frame_mut().write_frag(s.to_uppercase().as_str());
   Ok(())
 }
 
-pub(crate) fn lower(vm: &mut VM, s: String) -> RantStdResult {
+pub fn lower(vm: &mut VM, s: String) -> RantStdResult {
   vm.cur_frame_mut().write_frag(s.to_lowercase().as_str());
   Ok(())
 }
 
-pub(crate) fn string_replace(vm: &mut VM, (input, query, replacement): (RantString, RantString, RantString)) -> RantStdResult {
+pub fn string_replace(vm: &mut VM, (input, query, replacement): (RantString, RantString, RantString)) -> RantStdResult {
   vm.cur_frame_mut().write_frag(input.as_str().replace(query.as_str(), replacement.as_str()).as_str());
   Ok(())
 }

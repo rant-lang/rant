@@ -14,7 +14,6 @@ mod block;
 mod boolean;
 mod collections;
 mod compare;
-mod control;
 mod convert;
 mod format;
 mod general;
@@ -26,7 +25,7 @@ mod verify;
 
 use self::{
   assertion::*, block::*, boolean::*, collections::*, 
-  compare::*, control::*, convert::*, format::*, 
+  compare::*, convert::*, format::*, 
   general::*, generate::*, math::*, proto::*, 
   strings::*, verify::*
 };
@@ -58,12 +57,13 @@ macro_rules! runtime_error {
   };
 }
 
-pub(crate) fn load_stdlib(context: &mut Rant)
+pub fn load_stdlib(context: &mut Rant)
 {
   macro_rules! load_func {
     ($fname:ident) => {{
       let func = $fname.into_rant_func();
-      context.set_global_force(stringify!($fname), RantValue::Function(Rc::new(func)), true);
+      let name = stringify!($fname).replace("_", "-");
+      context.set_global_force(name.as_str(), RantValue::Function(Rc::new(func)), true);
     }};
     ($fname:ident, $id:literal) => {{
       let func = $fname.into_rant_func();
@@ -82,33 +82,24 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     alt, call, cat, either, len, get_type as "type", seed, tap, print, range, require, irange, fork, unfork, try_ as "try",
 
     // Data source functions
-    ds_request as "ds-request", ds_query_sources as "ds-query-sources",
+    ds_request, ds_query_sources,
 
     // Assertion functions
-    assert as "assert", assert_not as "assert-not", assert_eq as "assert-eq", assert_neq as "assert-neq",
+    assert, assert_not, assert_eq, assert_neq,
 
     // Formatting functions
-    ws_fmt as "ws-fmt", 
-    num_fmt as "num-fmt",
-    num_fmt_system as "num-fmt-system", 
-    num_fmt_alt as "num-fmt-alt",
-    num_fmt_padding as "num-fmt-padding",
-    num_fmt_precision as "num-fmt-precision",
-    num_fmt_upper as "num-fmt-upper",
-    num_fmt_endian as "num-fmt-endian",
-    num_fmt_sign as "num-fmt-sign",
-    num_fmt_infinity as "num-fmt-infinity",
-    num_fmt_group_sep as "num-fmt-group-sep",
-    num_fmt_decimal_sep as "num-fmt-decimal-sep",
+    ws_fmt, 
+    num_fmt, num_fmt_system, num_fmt_alt, num_fmt_padding, num_fmt_precision, num_fmt_upper, 
+    num_fmt_endian, num_fmt_sign, num_fmt_infinity, num_fmt_group_sep, num_fmt_decimal_sep,
 
     // Attribute functions
-    if_ as "if", elseif as "elseif", else_ as "else", mksel, rep, sel, sep, mut_ as "mut",
+    if_ as "if", elseif as "elseif", else_ as "else", mksel, rep, sel, sep, mut_ as "mut", sel_skip, sel_freeze, sel_frozen,
 
     // Attribute frame stack functions
-    reset_attrs as "reset-attrs",
+    reset_attrs,
 
     // Block state functions
-    step, step_index as "step-index", step_count as "step-count",
+    step, step_index, step_count,
 
     // Boolean functions
     and, not, or, xor,
@@ -117,34 +108,31 @@ pub(crate) fn load_stdlib(context: &mut Rant)
     eq, neq, gt, lt, ge, le,
 
     // Verification functions
-    is_string as "is-string", is_int as "is-int", is_float as "is-float", 
-    is_number as "is-number", is_bool as "is-bool", is_nothing as "is-empty", is_nan as "is-nan",
-    is_odd as "is-odd", is_even as "is-even", is_factor as "is-factor",
-    is_between as "is-between", is_some as "is-some", is,
+    is_string, is_int, is_float, is_number, is_bool, is_nothing, is_nan, is_odd, is_even, is_factor, is_between, is_some, is,
 
     // Math functions
-    abs, add, sub, mul, div, mul_add as "mul-add", mod_ as "mod", neg, pow, recip, 
+    abs, add, sub, mul, div, mul_add, mod_ as "mod", neg, pow, recip, 
     clamp, min, max, floor, ceil, frac,
     asin, sin, acos, cos, atan, atan2, tan, sqrt, 
 
     // Conversion functions
-    to_int as "to-int", to_float as "to-float", to_string as "to-string", to_bool as "to-bool", to_list as "to-list", to_tuple as "to-tuple",
+    to_int, to_float, to_string, to_bool, to_list, to_tuple,
 
     // Generator functions
-    alpha, dig, digh, dignz, maybe, pick, pick_sparse as "pick-sparse",
-    rand, randf, rand_list as "rand-list", randf_list as "randf-list", rand_list_sum as "rand-list-sum",
+    alpha, dig, digh, dignz, maybe, pick, pick_sparse,
+    rand, randf, rand_list, randf_list, rand_list_sum,
 
     // Prototype functions
-    proto, set_proto as "set-proto",
+    proto, set_proto,
 
     // Collection functions
-    assoc, augment, augment_self as "augment-self", augment_thru as "augment-thru", chunks, clear, list, tuple, has, keys, index_of as "index-of", insert, last_index_of as "last-index-of", 
-    nlist, remove, rev, sift_self as "sift-self", sift_thru as "sift-thru", sift, squish_self as "squish-self", squish_thru as "squish-thru", squish, take, translate, values,
-    filter, join, map, sort_self as "sort-self", sort_thru as "sort-thru", sort, shuffle_self as "shuffle-self", shuffle_thru as "shuffle-thru", shuffle, sum,
-    list_push as "push", list_pop as "pop", oxford_join as "oxford-join", zip,
+    assoc, augment, augment_self, augment_thru, chunks, clear, list, tuple, has, keys, index_of, insert, last_index_of, 
+    nlist, remove, rev, sift_self, sift_thru, sift, squish_self, squish_thru, squish, take, translate, values,
+    filter, join, map, sort_self, sort_thru, sort, shuffle_self, shuffle_thru, shuffle, sum,
+    push, pop, oxford_join, zip,
 
     // String functions
-    lower, upper, seg, split, lines, indent, string_replace as "string-replace",
+    lower, upper, seg, split, lines, indent, string_replace,
 
     // Error functions
     error

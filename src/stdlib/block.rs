@@ -1,7 +1,22 @@
 use super::*;
 use crate::runtime::resolver::{SelectorMode, Reps, Selector};
 
-pub(crate) fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
+pub fn if_(vm: &mut VM, condition: bool) -> RantStdResult {
+  vm.resolver_mut().attrs_mut().make_if(condition);
+  Ok(())
+}
+
+pub fn elseif(vm: &mut VM, condition: bool) -> RantStdResult {
+  vm.resolver_mut().attrs_mut().make_else_if(condition);
+  Ok(())
+}
+
+pub fn else_(vm: &mut VM, _: ()) -> RantStdResult {
+  vm.resolver_mut().attrs_mut().make_else();
+  Ok(())
+}
+
+pub fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
   vm.resolver_mut().attrs_mut().reps = match reps {
     RantValue::Int(n) => Reps::Repeat(n.max(0) as usize),
     RantValue::String(s) => match s.as_str() {
@@ -23,42 +38,42 @@ pub(crate) fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn sep(vm: &mut VM, separator: RantValue) -> RantStdResult {
+pub fn sep(vm: &mut VM, separator: RantValue) -> RantStdResult {
   vm.resolver_mut().attrs_mut().separator = separator;
   Ok(())
 }
 
-pub(crate) fn mut_(vm: &mut VM, mutator_func: Option<RantFunctionHandle>) -> RantStdResult {
+pub fn mut_(vm: &mut VM, mutator_func: Option<RantFunctionHandle>) -> RantStdResult {
   vm.resolver_mut().attrs_mut().mutator = mutator_func;
   Ok(())
 }
 
-pub(crate) fn step_index(vm: &mut VM, _: ()) -> RantStdResult {
+pub fn step_index(vm: &mut VM, _: ()) -> RantStdResult {
   let n = vm.resolver().active_block().map_or(0, |block| block.step_index());
   vm.cur_frame_mut().write(n as i64);
   Ok(())
 }
 
-pub(crate) fn step(vm: &mut VM, _: ()) -> RantStdResult {
+pub fn step(vm: &mut VM, _: ()) -> RantStdResult {
   let n = vm.resolver().active_block().map_or(0, |block| block.step());
   vm.cur_frame_mut().write(n as i64);
   Ok(())
 }
 
-pub(crate) fn step_count(vm: &mut VM, _: ()) -> RantStdResult {
+pub fn step_count(vm: &mut VM, _: ()) -> RantStdResult {
   let n = vm.resolver().active_block().map_or(0, |block| block.step_count());
   vm.cur_frame_mut().write(n as i64);
   Ok(())
 }
 
-pub(crate) fn mksel(vm: &mut VM, mode: SelectorMode) -> RantStdResult {
+pub fn mksel(vm: &mut VM, mode: SelectorMode) -> RantStdResult {
   let selector = Rc::new(RefCell::new(Selector::new(mode)));
   let special = RantSpecial::Selector(selector);
   vm.cur_frame_mut().write(special);
   Ok(())
 }
 
-pub(crate) fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
+pub fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
   vm.resolver_mut().attrs_mut().selector = match selector {
     Some(RantValue::Special(RantSpecial::Selector(selector))) => {
       Some(Rc::clone(&selector))
@@ -84,7 +99,41 @@ pub(crate) fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
   Ok(())
 }
 
-pub(crate) fn reset_attrs(vm: &mut VM, _: ()) -> RantStdResult {
+pub fn sel_skip(vm: &mut VM, (selector, n): (RantValue, Option<usize>)) -> RantStdResult {
+  if let RantValue::Special(RantSpecial::Selector(sel)) = selector {
+    let mut sel = sel.borrow_mut();
+    let count = sel.count();
+    let n = n.unwrap_or(1);
+    for _ in 0..n {
+      sel.select(count, vm.rng()).into_runtime_result()?;
+    }
+  } else {
+    runtime_error!(RuntimeErrorType::ArgumentError, "sel-skip only works on selectors, but a value of type '{}' was provided", selector.type_name())
+  }
+  Ok(())
+}
+
+pub fn sel_freeze(vm: &mut VM, (selector, frozen): (RantValue, Option<bool>)) -> RantStdResult {
+  if let RantValue::Special(RantSpecial::Selector(sel)) = selector {
+    let mut sel = sel.borrow_mut();
+    sel.set_frozen(frozen.unwrap_or(true));
+  } else {
+    runtime_error!(RuntimeErrorType::ArgumentError, "sel-skip only works on selectors, but a value of type '{}' was provided", selector.type_name())
+  }
+  Ok(())
+}
+
+pub fn sel_frozen(vm: &mut VM, (selector, frozen): (RantValue, bool)) -> RantStdResult {
+  if let RantValue::Special(RantSpecial::Selector(sel)) = selector {
+    let sel = sel.borrow();
+    vm.cur_frame_mut().write(sel.is_frozen());
+  } else {
+    runtime_error!(RuntimeErrorType::ArgumentError, "sel-skip only works on selectors, but a value of type '{}' was provided", selector.type_name())
+  }
+  Ok(())
+}
+
+pub fn reset_attrs(vm: &mut VM, _: ()) -> RantStdResult {
   vm.resolver_mut().reset_attrs();
   Ok(())
 }

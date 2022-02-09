@@ -400,7 +400,7 @@ pub struct AttributeFrame {
   /// Conditional value used by previous block
   pub prev_condval: Option<bool>,
   /// Indicates if the next attribute frame should receive the current condval
-  pub no_propagate_condval: bool,
+  pub skip_propagate_condval: bool,
   /// Repetition value
   pub reps: Reps,
   /// Separator value
@@ -415,7 +415,7 @@ impl AttributeFrame {
   /// Creates a new frame, propagating the condval of the specified frame if able.
   pub fn propagate(frame: &AttributeFrame) -> Self {
     Self {
-      prev_condval: if frame.no_propagate_condval { None } else { frame.condval },
+      prev_condval: if frame.skip_propagate_condval { None } else { frame.condval },
       .. Default::default()
     }
   }
@@ -424,14 +424,14 @@ impl AttributeFrame {
   pub fn make_if(&mut self, cond_val: bool) {
     self.condval = Some(cond_val);
     // Propagate if false
-    self.no_propagate_condval = cond_val;
+    self.skip_propagate_condval = cond_val;
   }
 
   #[inline]
   pub fn make_else(&mut self) {
     self.condval = Some(self.prev_condval.map(|b| !b).unwrap_or(false));
     // Do not propagate condvals for else-clauses
-    self.no_propagate_condval = true;
+    self.skip_propagate_condval = true;
   }
 
   #[inline]
@@ -442,7 +442,7 @@ impl AttributeFrame {
     // If there is no previous condval, add false non-propagating condval
     self.condval = Some(self.prev_condval.map(|b| !b && cond_val).unwrap_or(false));
     // Only propagate condval if it is false
-    self.no_propagate_condval = cond_val || has_propagated_condval;
+    self.skip_propagate_condval = cond_val || has_propagated_condval;
   }
 }
 
@@ -451,7 +451,7 @@ impl Default for AttributeFrame {
     Self {
       condval: None,
       prev_condval: None,
-      no_propagate_condval: false,
+      skip_propagate_condval: false,
       reps: Reps::Once,
       separator: RantValue::Nothing,
       selector: None,
@@ -468,29 +468,74 @@ pub struct Selector {
   index: usize,
   /// Element count of the selector
   count: usize,
-  /// True if the pass is odd (used by ping/pong and mirror modes)
+  /// True if the pass is odd (used by modes with alternating pass behaviors, such as mirror modes)
   parity: bool,
+  /// If set to true, keeps selecting the last selected index.
+  frozen: bool,
   /// Jump table used by some selector modes (won't allocate if unused)
   jump_table: Vec<usize>,
 }
 
 impl Selector {
+  /// Creates a new selector.
   #[inline]
   pub fn new(mode: SelectorMode) -> Self {
     Self {
       mode,
       index: 0,
       count: 0,
+      frozen: false,
       parity: false,
       jump_table: Default::default(),
     }
   }
 
+  /// The mode assigned to the selector.
+  #[inline]
+  pub fn mode(&self) -> SelectorMode {
+    self.mode
+  }
+
+  /// The next index to be selected.
+  #[inline]
+  pub fn index(&self) -> usize {
+    self.index
+  }
+
+  /// The number of block elements that this selector is initialized for.
+  /// 
+  /// A value of 0 indicates that the selector is uninitialized (as selecting over 0 branches is impossible).
+  #[inline]
+  pub fn count(&self) -> usize {
+    self.count
+  }
+
+  /// Indicates the parity state of the selector. Some selectors use two alternating passes (such as mirror modes).
+  /// The parity indicates which of these passes is currently active.
+  #[inline]
+  pub fn parity(&self) -> bool {
+    self.parity
+  }
+
+  /// Indicates whether the selector is frozen.
+  #[inline]
+  pub fn is_frozen(&self) -> bool {
+    self.frozen
+  }
+
+  /// Sets the frozen state of the selector.
+  #[inline]
+  pub fn set_frozen(&mut self, frozen: bool) {
+    self.frozen = frozen;
+  }
+
+  /// Indicates whether the selector has been initialized with [`Selector::init`].
   #[inline]
   pub fn is_initialized(&self) -> bool {
     self.count > 0
   }
 
+  /// Initializes the selector state using the specified element count.
   #[inline]
   pub fn init(&mut self, rng: &RantRng, elem_count: usize) -> Result<(), SelectorError> {
     if elem_count == 0 {
@@ -503,11 +548,9 @@ impl Selector {
       SelectorMode::Random | SelectorMode::One | SelectorMode::NoDouble => {
         self.index = rng.next_usize(elem_count);
       },
-      SelectorMode::Forward | SelectorMode::ForwardClamp | SelectorMode::ForwardMirror | SelectorMode::Ping => {
-        self.index = 0;
-      },
+      SelectorMode::Forward | SelectorMode::ForwardClamp | SelectorMode::ForwardMirror | SelectorMode::Ping |
       SelectorMode::Reverse | SelectorMode::ReverseClamp | SelectorMode::ReverseMirror | SelectorMode::Pong => {
-        self.index = elem_count - 1;
+        self.index = 0;
       },
       SelectorMode::Deck | SelectorMode::DeckLoop | SelectorMode::DeckClamp | SelectorMode::DeckMirror => {
         self.shuffle(rng);
@@ -517,6 +560,7 @@ impl Selector {
     Ok(())
   }
 
+  /// SHuffles the branch indices in the selector's jump table.
   #[inline]
   fn shuffle(&mut self, rng: &RantRng) {
     let jump_table = &mut self.jump_table;
@@ -534,6 +578,7 @@ impl Selector {
     }
   }
 
+  /// Selects the next branch index.
   pub fn select(&mut self, elem_count: usize, rng: &RantRng) -> Result<usize, SelectorError> {
     // Initialize and sanity check
     if !self.is_initialized() {
@@ -546,58 +591,60 @@ impl Selector {
     }
 
     let cur_index = self.index;
+    let cur_index_inv = self.count.saturating_sub(cur_index).saturating_sub(1);
+
+    macro_rules! next_index {
+      ($v:expr) => {
+        if !self.frozen {
+          self.index = $v;
+        }
+      }
+    }
+
+    macro_rules! next_parity {
+      ($v:expr) => {
+        if !self.frozen {
+          self.parity = $v;
+        }
+      }
+    }
 
     // Iterate the selector
     match self.mode {
       SelectorMode::Random => {
-        self.index = rng.next_usize(elem_count);
+        next_index!(rng.next_usize(elem_count));
       },
       SelectorMode::One => {},
-      SelectorMode::Forward => {
-        self.index = (cur_index + 1) % elem_count;
+      mode @ (SelectorMode::Forward | SelectorMode::Reverse) => {
+        next_index!((cur_index + 1) % elem_count);
+        if mode == SelectorMode::Reverse { return Ok(cur_index_inv) }
       },
-      SelectorMode::ForwardClamp => {
-        self.index = (cur_index + 1).min(elem_count - 1);
+      mode @ (SelectorMode::ForwardClamp | SelectorMode::ReverseClamp) => {
+        next_index!((cur_index + 1).min(elem_count - 1));
+        if mode == SelectorMode::ReverseClamp { return Ok(cur_index_inv) }
       },
-      SelectorMode::ForwardMirror => {
+      mode @ (SelectorMode::ForwardMirror | SelectorMode::ReverseMirror) => {
         let prev_parity = self.parity;
         if (prev_parity && cur_index == 0) || (!prev_parity && cur_index == elem_count - 1) {
-          self.parity = !prev_parity;
+          next_parity!(!prev_parity);
         } else if self.parity {
-          self.index = cur_index.saturating_sub(1);
+          next_index!(cur_index.saturating_sub(1));
         } else {
-          self.index = (cur_index + 1) % elem_count;
+          next_index!((cur_index + 1) % elem_count);
         }
-      },
-      SelectorMode::Reverse => {
-        self.index = if cur_index == 0 {
-          elem_count
-        } else {
-          cur_index
-        } - 1;
-      },
-      SelectorMode::ReverseClamp => {
-        self.index = cur_index.saturating_sub(1);
-      },
-      SelectorMode::ReverseMirror => {
-        let prev_parity = self.parity;
-        if (!prev_parity && cur_index == 0) || (prev_parity && cur_index == elem_count - 1) {
-          self.parity = !prev_parity;
-        } else if self.parity {
-          self.index = (cur_index + 1) % elem_count;
-        } else {
-          self.index = cur_index.saturating_sub(1);
-        }
+        if mode == SelectorMode::ReverseMirror { return Ok(cur_index_inv) }
       },
       SelectorMode::Deck => {
         // Store the return value before reshuffling to avoid accidental early duplicates
         let jump_index = self.jump_table[cur_index];
 
-        if cur_index >= elem_count - 1 {
-          self.shuffle(rng);
-          self.index = 0;
-        } else {
-          self.index = cur_index + 1;
+        if !self.frozen {
+          if cur_index >= elem_count - 1 {
+            self.shuffle(rng);
+            next_index!(0);
+          } else {
+            next_index!(cur_index + 1);
+          }
         }
 
         return Ok(jump_index)
@@ -605,62 +652,57 @@ impl Selector {
       SelectorMode::DeckMirror => {
         // Store the return value before reshuffling to avoid accidental early duplicates
         let jump_index = self.jump_table[cur_index];
-        let cur_parity = self.parity;
-
-        // Flip parity after boundary elements
-        if (cur_parity && cur_index == 0) || (!cur_parity && cur_index >= elem_count - 1) {
-          // If previous parity was odd, reshuffle
-          if cur_parity {
-            self.shuffle(rng);
-          }
+        
+        if !self.frozen {
+          let cur_parity = self.parity;
           
-          self.parity = !cur_parity;
-        } else if self.parity {
-          self.index = cur_index.saturating_sub(1);
-        } else {
-          self.index = (cur_index + 1).min(elem_count - 1);
+          // Flip parity after boundary elements
+          if (cur_parity && cur_index == 0) || (!cur_parity && cur_index >= elem_count - 1) {
+            // If previous parity was odd, reshuffle
+            if cur_parity {
+              self.shuffle(rng);
+            }
+            
+            next_parity!(!cur_parity);
+          } else if self.parity {
+            next_index!(cur_index.saturating_sub(1));
+          } else {
+            next_index!((cur_index + 1).min(elem_count - 1))
+          }
         }
 
         return Ok(jump_index)
       },
       SelectorMode::DeckLoop => {
-        self.index = (cur_index + 1) % elem_count;
+        next_index!((cur_index + 1) % elem_count);
         return Ok(self.jump_table[cur_index])
       },
       SelectorMode::DeckClamp => {
-        self.index = (cur_index + 1).min(elem_count - 1);
+        next_index!((cur_index + 1).min(elem_count - 1));
         return Ok(self.jump_table[cur_index])
       },
-      SelectorMode::Ping => {
-        let prev_parity = self.parity;
-        if (prev_parity && cur_index == 0) || (!prev_parity && cur_index >= elem_count - 1) {
-          self.parity = !prev_parity;
+      mode @ (SelectorMode::Ping | SelectorMode::Pong) => {
+        if !self.frozen {
+          let prev_parity = self.parity;
+          if (prev_parity && cur_index == 0) || (!prev_parity && cur_index >= elem_count - 1) {
+            next_parity!(!prev_parity);
+          }
+
+          if self.parity {
+            next_index!(cur_index.saturating_sub(1));
+          } else {
+            next_index!((cur_index + 1) % elem_count);
+          }
         }
 
-        if self.parity {
-          self.index = cur_index.saturating_sub(1);
-        } else {
-          self.index = (cur_index + 1) % elem_count;
-        }
-      },
-      SelectorMode::Pong => {
-        let prev_parity = self.parity;
-        if (!prev_parity && cur_index == 0) || (prev_parity && cur_index >= elem_count - 1) {
-          self.parity = !prev_parity;
-        }
-
-        if self.parity {
-          self.index = (cur_index + 1) % elem_count;
-        } else {
-          self.index = cur_index.saturating_sub(1);
-        }
+        if mode == SelectorMode::Pong { return Ok(cur_index_inv) }
       },
       SelectorMode::NoDouble => {
-        self.index = if elem_count > 1 {
+        next_index!(if elem_count > 1 {
           (cur_index + 1 + rng.next_usize(elem_count - 1)) % elem_count
         } else {
           0
-        };
+        });
       },
     }
 
@@ -668,9 +710,12 @@ impl Selector {
   }
 }
 
+/// Represents error states of a selector.
 #[derive(Debug)]
 pub enum SelectorError {
+  /// The requested element count was different than what the selector was initialized for.
   ElementCountMismatch { expected: usize, found: usize },
+  /// The specified element count is not supported.
   InvalidElementCount(usize),
 }
 
@@ -703,7 +748,8 @@ impl<T> IntoRuntimeResult<T> for Result<T, SelectorError> {
   }
 }
 
-#[derive(Debug)]
+/// Defines available branch selection modes for selectors.
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
 pub enum SelectorMode {
   /// Selects a random element each time.
@@ -763,10 +809,10 @@ impl TryFromRant for SelectorMode {
           "ping" =>           SelectorMode::Ping,
           "pong" =>           SelectorMode::Pong,
           "no-double" =>      SelectorMode::NoDouble,
-          _ => return Err(ValueError::InvalidConversion {
+          invalid => return Err(ValueError::InvalidConversion {
             from: val.type_name(),
             to: "selector mode",
-            message: Some(format!("invalid selector mode: '{}'", s))
+            message: Some(format!("invalid selector mode: '{invalid}'"))
           })
         })
       },
@@ -776,9 +822,5 @@ impl TryFromRant for SelectorMode {
         message: None,
       })
     }
-  }
-
-  fn is_optional_param_type() -> bool {
-    false
   }
 }

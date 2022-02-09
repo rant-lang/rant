@@ -4,7 +4,7 @@ use crate::format::*;
 /// `[$ws-fmt: mode? (string); custom-value? (any)]`
 ///
 /// Gets or sets the whitespace normalization mode for the current scope.
-pub(crate) fn ws_fmt(vm: &mut VM, (mode, custom): (Option<String>, Option<RantValue>)) -> RantStdResult {
+pub fn ws_fmt(vm: &mut VM, (mode, custom): (Option<String>, Option<RantValue>)) -> RantStdResult {
   if let Some(mode) = mode.as_deref() {
     let mode = match mode {
       "default" =>    WhitespaceNormalizationMode::Default,
@@ -32,7 +32,7 @@ pub(crate) fn ws_fmt(vm: &mut VM, (mode, custom): (Option<String>, Option<RantVa
   Ok(())
 }
 
-pub(crate) fn num_fmt(vm: &mut VM, (options, depth): (Option<RantMapHandle>, Option<usize>)) -> RantStdResult {
+pub fn num_fmt(vm: &mut VM, (options, depth): (Option<RantMapHandle>, Option<usize>)) -> RantStdResult {
   const KEY_SYSTEM: &str = "system";
   const KEY_ALT: &str = "alt";
   const KEY_PRECISION: &str = "precision";
@@ -133,7 +133,7 @@ pub(crate) fn num_fmt(vm: &mut VM, (options, depth): (Option<RantMapHandle>, Opt
   Ok(())
 }
 
-pub(crate) fn num_fmt_system(vm: &mut VM, (system, depth): (Option<NumeralSystem>, Option<usize>)) -> RantStdResult {
+pub fn num_fmt_system(vm: &mut VM, (system, depth): (Option<NumeralSystem>, Option<usize>)) -> RantStdResult {
   let actual_depth = depth.unwrap_or(0).saturating_add(1);
 
   if let Some(system) = system {
@@ -154,7 +154,7 @@ pub(crate) fn num_fmt_system(vm: &mut VM, (system, depth): (Option<NumeralSystem
   Ok(())
 }
 
-pub(crate) fn num_fmt_alt(vm: &mut VM, (alt, depth): (Option<bool>, Option<usize>)) -> RantStdResult {
+pub fn num_fmt_alt(vm: &mut VM, (alt, depth): (Option<bool>, Option<usize>)) -> RantStdResult {
   let actual_depth = depth.unwrap_or(0).saturating_add(1);
 
   if let Some(alt) = alt {
@@ -174,7 +174,7 @@ pub(crate) fn num_fmt_alt(vm: &mut VM, (alt, depth): (Option<bool>, Option<usize
   Ok(())
 }
 
-pub(crate) fn num_fmt_padding(vm: &mut VM, (padding, depth): (Option<u16>, Option<usize>)) -> RantStdResult {
+pub fn num_fmt_padding(vm: &mut VM, (padding, depth): (Option<u16>, Option<usize>)) -> RantStdResult {
   let actual_depth = depth.unwrap_or(0).saturating_add(1);
 
   if let Some(padding) = padding {
@@ -194,7 +194,7 @@ pub(crate) fn num_fmt_padding(vm: &mut VM, (padding, depth): (Option<u16>, Optio
   Ok(())
 }
 
-pub(crate) fn num_fmt_precision(vm: &mut VM, (precision, depth): (Option<i16>, Option<usize>)) -> RantStdResult {
+pub fn num_fmt_precision(vm: &mut VM, (precision, depth): (Option<i16>, Option<usize>)) -> RantStdResult {
   const DEFAULT_PRECISION: i64 = -1;
   let actual_depth = depth.unwrap_or(0).saturating_add(1);
 
@@ -215,7 +215,7 @@ pub(crate) fn num_fmt_precision(vm: &mut VM, (precision, depth): (Option<i16>, O
   Ok(())
 }
 
-pub(crate) fn num_fmt_upper(vm: &mut VM, (upper, depth): (Option<bool>, Option<usize>)) -> RantStdResult {
+pub fn num_fmt_upper(vm: &mut VM, (upper, depth): (Option<bool>, Option<usize>)) -> RantStdResult {
   let actual_depth = depth.unwrap_or(0).saturating_add(1);
 
   if let Some(upper) = upper {
@@ -235,7 +235,7 @@ pub(crate) fn num_fmt_upper(vm: &mut VM, (upper, depth): (Option<bool>, Option<u
   Ok(())
 }
 
-pub(crate) fn num_fmt_endian(vm: &mut VM, (endianness, depth): (Option<Endianness>, Option<usize>)) -> RantStdResult {
+pub fn num_fmt_endian(vm: &mut VM, (endianness, depth): (Option<Endianness>, Option<usize>)) -> RantStdResult {
   let actual_depth = depth.unwrap_or(0).saturating_add(1);
 
   if let Some(endianness) = endianness {
@@ -255,7 +255,7 @@ pub(crate) fn num_fmt_endian(vm: &mut VM, (endianness, depth): (Option<Endiannes
   Ok(())
 }
 
-pub(crate) fn num_fmt_sign(vm: &mut VM, (sign_style, depth): (Option<SignStyle>, Option<usize>)) -> RantStdResult {
+pub fn num_fmt_sign(vm: &mut VM, (sign_style, depth): (Option<SignStyle>, Option<usize>)) -> RantStdResult {
   let actual_depth = depth.unwrap_or(0).saturating_add(1);
 
   if let Some(sign_style) = sign_style {
@@ -275,7 +275,7 @@ pub(crate) fn num_fmt_sign(vm: &mut VM, (sign_style, depth): (Option<SignStyle>,
   Ok(())
 }
 
-pub(crate) fn num_fmt_infinity(vm: &mut VM, (infinity_style, depth): (Option<InfinityStyle>, Option<usize>)) -> RantStdResult {
+pub fn num_fmt_infinity(vm: &mut VM, (infinity_style, depth): (Option<InfinityStyle>, Option<usize>)) -> RantStdResult {
   let actual_depth = depth.unwrap_or(0).saturating_add(1);
 
   if let Some(infinity_style) = infinity_style {
@@ -295,7 +295,7 @@ pub(crate) fn num_fmt_infinity(vm: &mut VM, (infinity_style, depth): (Option<Inf
   Ok(())
 }
 
-pub(crate) fn num_fmt_group_sep(vm: &mut VM, (group_sep, depth): (Option<InternalString>, Option<usize>)) -> RantStdResult {
+pub fn num_fmt_group_sep(vm: &mut VM, (group_sep, depth): (Option<InternalString>, Option<usize>)) -> RantStdResult {
   let actual_depth = depth.unwrap_or(0).saturating_add(1);
 
   if let Some(group_sep) = group_sep {
@@ -316,7 +316,7 @@ pub(crate) fn num_fmt_group_sep(vm: &mut VM, (group_sep, depth): (Option<Interna
   Ok(())
 }
 
-pub(crate) fn num_fmt_decimal_sep(vm: &mut VM, (decimal_sep, depth): (Option<InternalString>, Option<usize>)) -> RantStdResult {
+pub fn num_fmt_decimal_sep(vm: &mut VM, (decimal_sep, depth): (Option<InternalString>, Option<usize>)) -> RantStdResult {
   let actual_depth = depth.unwrap_or(0).saturating_add(1);
 
   if let Some(decimal_sep) = decimal_sep {
