@@ -1,6 +1,5 @@
 use crate::{RantFunction, RantString, lang::Slice, util};
-use crate::{collections::*, TryFromRant, IntoRant};
-use crate::runtime::resolver::*;
+use crate::{collections::*, TryFromRant, IntoRant, RantSelectorHandle};
 use crate::runtime::*;
 use crate::util::*;
 use std::ops::Deref;
@@ -17,7 +16,7 @@ pub const TYPENAME_TUPLE: &str = "tuple";
 pub const TYPENAME_LIST: &str = "list";
 pub const TYPENAME_MAP: &str = "map";
 pub const TYPENAME_FUNCTION: &str = "function";
-pub const TYPENAME_SPECIAL: &str = "special";
+pub const TYPENAME_SELECTOR: &str = "selector";
 pub const TYPENAME_RANGE: &str = "range";
 pub const TYPENAME_NOTHING: &str = "nothing";
 
@@ -75,13 +74,66 @@ pub type RantFunctionHandle = Rc<RantFunction>;
 /// Rant's "nothing" value.
 pub struct RantNothing;
 
+/// A lightweight representation of a Rant value's type.
+#[derive(Copy, Clone, Debug, PartialEq)]
+#[repr(u8)]
+pub enum RantValueType {
+  /// The `string` type.
+  String,
+  /// The `float` type.
+  Float,
+  /// The `int` type.
+  Int,
+  /// The `bool` type.
+  Boolean,
+  /// The `function` type.
+  Function,
+  /// The `list` type.
+  List,
+  /// The `tuple` type.
+  Tuple,
+  /// The `map` type.
+  Map,
+  /// The `selector` type.
+  Selector,
+  /// The `range` type.
+  Range,
+  /// The `nothing` type.
+  Nothing
+}
+
+impl RantValueType {
+  /// Gets a string slice representing the type.
+  pub fn name(&self) -> &'static str {
+    match self {
+      Self::String =>      TYPENAME_STRING,
+      Self::Float =>       TYPENAME_FLOAT,
+      Self::Int =>         TYPENAME_INT,
+      Self::Boolean =>     TYPENAME_BOOL,
+      Self::Function =>    TYPENAME_FUNCTION,
+      Self::List =>        TYPENAME_LIST,
+      Self::Tuple =>       TYPENAME_TUPLE,
+      Self::Map =>         TYPENAME_MAP,
+      Self::Selector =>    TYPENAME_SELECTOR,
+      Self::Range =>       TYPENAME_RANGE,
+      Self::Nothing =>     TYPENAME_NOTHING,
+    }
+  }
+}
+
+impl Display for RantValueType {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.name())
+  }
+}
+
 /// A dynamically-typed Rant value.
 ///
 /// ## Cloning
 ///
-/// It is important to note that calling `clone()` on a `RantValue` will not shallow-copy collections.
-/// Since collection types like `list` and `map` are represented in `RantValue` as handles to their actual contents, cloning these will
-/// only make copies of these handles; both copies will still point to the same data.
+/// Calling `clone()` on a by-ref Rant value type (such as `list`) will only clone its handle; both copies will point to the same contents.
+/// 
+/// If you want to shallow-copy a by-ref value, use the `shallow_copy` method instead.
 #[derive(Clone)]
 pub enum RantValue {
   /// A Rant value of type `string`. Passed by-value.
@@ -102,20 +154,28 @@ pub enum RantValue {
   Map(RantMapHandle),
   /// A Rant value of type `range`. Passed by-value.
   Range(RantRange),
-  /// A Rant value of type `special`. Passed by-value.
-  Special(RantSpecial),
+  /// A Rant value of type `selector`. Passed by-value.
+  Selector(RantSelectorHandle),
   /// A Rant unit value of type `nothing`. Passed by-value.
   Nothing,
 }
 
 impl RantValue {
+  /// Not a Number (NaN).
   pub const NAN: Self = Self::Float(f64::NAN);
+  /// Positive infinity.
   pub const INFINITY: Self = Self::Float(f64::INFINITY);
+  /// Negative infinity.
   pub const NEG_INFINITY: Self = Self::Float(f64::NEG_INFINITY);
+  /// The lowest possible finite value for the `float` type.
   pub const MIN_FLOAT: Self = Self::Float(f64::MIN);
+  /// The highest possible finite value for the `float` type.
   pub const MAX_FLOAT: Self = Self::Float(f64::MAX);
+  /// The smallest possible `float` value greater than zero.
   pub const EPSILON: Self = Self::Float(f64::EPSILON);
+  /// The lowest possible value for the `int` type.
   pub const MIN_INT: Self = Self::Int(i64::MIN);
+  /// The highest possible value for the `int` type.
   pub const MAX_INT: Self = Self::Int(i64::MAX);
 
   /// Returns true if the value is of type `nothing`.
@@ -164,7 +224,7 @@ impl RantValue {
       Self::Tuple(_) => true,
       Self::Map(m) => !m.borrow().is_empty(),
       Self::Range(r) => !r.is_empty(),
-      Self::Special(_) => true,
+      Self::Selector(_) => true,
       Self::Nothing => false,
     }
   }
@@ -318,7 +378,7 @@ impl RantValue {
       Self::List(list) => RantValue::List(list.cloned()),
       Self::Map(map) => RantValue::Map(map.cloned()),
       Self::Tuple(tuple) => RantValue::Tuple(tuple.cloned()),
-      Self::Special(special) => RantValue::Special(special.clone()),
+      Self::Selector(special) => RantValue::Selector(special.clone()),
       _ => self.clone(),
     }
   }
@@ -336,7 +396,7 @@ impl RantValue {
       Self::Tuple(_) =>      RantValueType::Tuple,
       Self::Map(_) =>        RantValueType::Map,
       Self::Range(_) =>      RantValueType::Range,
-      Self::Special(_) =>    RantValueType::Special,
+      Self::Selector(_) =>    RantValueType::Selector,
       Self::Nothing =>         RantValueType::Nothing,
     }
   }
@@ -577,59 +637,6 @@ impl Default for RantValue {
   }
 }
 
-/// A lightweight representation of a Rant value's type.
-#[derive(Copy, Clone, Debug, PartialEq)]
-#[repr(u8)]
-pub enum RantValueType {
-  /// The `string` type.
-  String,
-  /// The `float` type.
-  Float,
-  /// The `int` type.
-  Int,
-  /// The `bool` type.
-  Boolean,
-  /// The `function` type.
-  Function,
-  /// The `list` type.
-  List,
-  /// The `tuple` type.
-  Tuple,
-  /// The `map` type.
-  Map,
-  /// The `special` type.
-  Special,
-  /// The `range` type.
-  Range,
-  /// The `nothing` type.
-  Nothing
-}
-
-impl RantValueType {
-  /// Gets a string slice representing the type.
-  pub fn name(&self) -> &'static str {
-    match self {
-      Self::String =>      TYPENAME_STRING,
-      Self::Float =>       TYPENAME_FLOAT,
-      Self::Int =>         TYPENAME_INT,
-      Self::Boolean =>     TYPENAME_BOOL,
-      Self::Function =>    TYPENAME_FUNCTION,
-      Self::List =>        TYPENAME_LIST,
-      Self::Tuple =>       TYPENAME_TUPLE,
-      Self::Map =>         TYPENAME_MAP,
-      Self::Special =>     TYPENAME_SPECIAL,
-      Self::Range =>       TYPENAME_RANGE,
-      Self::Nothing =>     TYPENAME_NOTHING,
-    }
-  }
-}
-
-impl Display for RantValueType {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.name())
-  }
-}
-
 /// Error produced by a RantValue operator or conversion.
 #[derive(Debug)]
 pub enum ValueError {
@@ -752,22 +759,6 @@ impl Display for SliceError {
   }
 }
 
-/// Represents Rant's `special` type, which stores internal runtime data.
-#[derive(Debug, Clone)]
-#[non_exhaustive]
-pub enum RantSpecial {
-  /// Selector state
-  Selector(SelectorRef),
-}
-
-impl PartialEq for RantSpecial {
-  fn eq(&self, other: &Self) -> bool {
-    match (self, other) {
-      (RantSpecial::Selector(a), RantSpecial::Selector(b)) => a.as_ptr() == b.as_ptr(),
-    }
-  }
-}
-
 /// Represents a dynamically-typed Rant number.
 /// 
 /// Implements `TryFromRant` and can therefore be used on native functions to accept any number type (`int` or `float`), 
@@ -838,7 +829,7 @@ impl Debug for RantValue {
       Self::Tuple(t) => write!(f, "[tuple({})]", t.len()),
       Self::Map(m) => write!(f, "[map({})]", m.borrow().raw_len()),
       Self::Range(range) => write!(f, "{}", range),
-      Self::Special(special) => write!(f, "[special({:?})]", special),
+      Self::Selector(special) => write!(f, "[special({:?})]", special),
       Self::Nothing => write!(f, "[empty]"),
     }
   }
@@ -921,7 +912,7 @@ fn get_display_string(value: &RantValue, max_depth: usize) -> String {
       buf.push(')');
       buf
     },
-    RantValue::Special(_) => "[special]".to_owned(),
+    RantValue::Selector(_) => "[special]".to_owned(),
     RantValue::Range(range) => range.to_string(),
     RantValue::Nothing => (if max_depth < MAX_DISPLAY_STRING_DEPTH { "<>" } else { "" }).to_owned(),
   }
@@ -947,7 +938,7 @@ impl PartialEq for RantValue {
       (Self::List(a), Self::List(b)) => a.eq(b),
       (Self::Tuple(a), Self::Tuple(b)) => a.eq(b),
       (Self::Map(a), Self::Map(b)) => a.eq(b),
-      (Self::Special(a), Self::Special(b)) => a == b,
+      (Self::Selector(a), Self::Selector(b)) => a == b,
       _ => false
     }
   }

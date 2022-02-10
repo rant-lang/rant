@@ -219,7 +219,8 @@ converts_into_rant!(v: RantList { RantValue::List(v.into_handle()) });
 converts_into_rant!(v: RantListHandle { RantValue::List(v) });
 converts_into_rant!(v: RantTuple { RantValue::Tuple(v.into_handle()) });
 converts_into_rant!(v: RantTupleHandle { RantValue::Tuple(v) });
-converts_into_rant!(v: RantSpecial { RantValue::Special(v) });
+converts_into_rant!(v: RantSelector { RantValue::Selector(v.into_handle()) });
+converts_into_rant!(v: RantSelectorHandle { RantValue::Selector(v) });
 converts_into_rant!(v: RantRange { RantValue::Range(v) });
 
 impl<'a> IntoRant for &'a str {
@@ -363,6 +364,16 @@ impl TryFromRant for RantFunctionHandle {
       Ok(func_ref)
     } else {
       Err(ValueError::InvalidConversion { from: val.type_name(), to: RantValueType::Function.name(), message: None })
+    }
+  }
+}
+
+impl TryFromRant for RantSelectorHandle {
+  fn try_from_rant(val: RantValue) -> Result<Self, ValueError> {
+    if let RantValue::Selector(sel_ref) = val {
+      Ok(sel_ref)
+    } else {
+      Err(ValueError::InvalidConversion { from: val.type_name(), to: RantValueType::Selector.name(), message: None })
     }
   }
 }

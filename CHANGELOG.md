@@ -9,10 +9,16 @@
   * `[sel-frozen]`
 
 ### Changes
+* Renamed type `special` to `selector` because it's only used for selectors
 * Renamed type `empty` to `nothing` to make its meaning clearer and avoid API confusion
 * Renamed stdlib functions:
   * `[is-empty]` &rarr; `[is-nothing]`
 * Changed behavior of `[sel]` so that it now prints the current selector when no arguments are passed
+* Updated the Rust API to reflect the selector type changes:
+  * Renamed `Selector` to `RantSelector` for consistency.
+  * `RantSelector` has its own handle type, `RantSelectorHandle`.
+  * `RantSelectorHandle` can be directly accepted by native functions. 
+* Exposed some read-only fields on `RantSelector` through public methods
 
 ### Fixes
 * CLI: Fixed accidental REPL activation when launched with redirected stdin

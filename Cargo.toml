@@ -1,6 +1,6 @@
 [package]
 name = "rant"
-version = "4.0.0-alpha.30"
+version = "4.0.0-alpha.31"
 edition = "2021"
 description = "The Rant procedural templating language"
 license = "MIT OR Apache-2.0"

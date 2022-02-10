@@ -1,8 +1,6 @@
 use std::{error::Error, fmt::Display};
 
-use crate::{IndexError, KeyError, ModuleResolveError, SliceError, ValueError, data::DataSourceError};
-
-use super::{resolver::SelectorError};
+use crate::{IndexError, KeyError, ModuleResolveError, SliceError, ValueError, data::DataSourceError, SelectorError};
 
 /// Type alias for `Result<T, RuntimeError>`
 pub type RuntimeResult<T> = Result<T, RuntimeError>;

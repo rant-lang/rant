@@ -1,5 +1,5 @@
 use super::*;
-use crate::runtime::resolver::{SelectorMode, Reps, Selector};
+use crate::runtime::resolver::Reps;
 
 pub fn if_(vm: &mut VM, condition: bool) -> RantStdResult {
   vm.resolver_mut().attrs_mut().make_if(condition);
@@ -22,7 +22,7 @@ pub fn rep(vm: &mut VM, reps: RantValue) -> RantStdResult {
     RantValue::String(s) => match s.as_str() {
       "once" => Reps::Once,
       "all" => Reps::All,
-      "forever" => Reps::RepeatForever,
+      "forever" => Reps::Forever,
       _ => return Err(RuntimeError {
         error_type: RuntimeErrorType::ArgumentError,
         description: Some(format!("unknown repetition mode: '{}'", s)),
@@ -67,20 +67,19 @@ pub fn step_count(vm: &mut VM, _: ()) -> RantStdResult {
 }
 
 pub fn mksel(vm: &mut VM, mode: SelectorMode) -> RantStdResult {
-  let selector = Rc::new(RefCell::new(Selector::new(mode)));
-  let special = RantSpecial::Selector(selector);
-  vm.cur_frame_mut().write(special);
+  let sel = RantSelector::new(mode);
+  vm.cur_frame_mut().write(sel);
   Ok(())
 }
 
 pub fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
   match selector {
-    Some(RantValue::Special(RantSpecial::Selector(selector))) => {
-      vm.resolver_mut().attrs_mut().selector = Some(Rc::clone(&selector));
+    Some(RantValue::Selector(handle)) => {
+      vm.resolver_mut().attrs_mut().selector = Some(handle.clone());
     },
     Some(val @ RantValue::String(_)) => {
       let mode = SelectorMode::try_from_rant(val).into_runtime_result()?;
-      let selector = Rc::new(RefCell::new(Selector::new(mode)));
+      let selector = RantSelector::new(mode).into_handle();
       vm.resolver_mut().attrs_mut().selector = Some(selector);
     },
     Some(val) => {
@@ -96,9 +95,8 @@ pub fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
     },
     None => {
       let selector = vm.resolver().attrs().selector
-        .as_ref()
-        .map(Rc::clone)
-        .map(|s| RantValue::Special(RantSpecial::Selector(s)))
+        .clone()
+        .map(|s| s.into_rant())
         .unwrap_or(RantValue::Nothing);
       vm.cur_frame_mut().write(selector);
     },
@@ -106,37 +104,25 @@ pub fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
   Ok(())
 }
 
-pub fn sel_skip(vm: &mut VM, (selector, n): (RantValue, Option<usize>)) -> RantStdResult {
-  if let RantValue::Special(RantSpecial::Selector(sel)) = selector {
-    let mut sel = sel.borrow_mut();
-    let count = sel.count();
-    let n = n.unwrap_or(1);
-    for _ in 0..n {
-      sel.select(count, vm.rng()).into_runtime_result()?;
-    }
-  } else {
-    runtime_error!(RuntimeErrorType::ArgumentError, "sel-skip only works on selectors, but a value of type '{}' was provided", selector.type_name())
+pub fn sel_skip(vm: &mut VM, (selector, n): (RantSelectorHandle, Option<usize>)) -> RantStdResult {
+  let mut sel = selector.borrow_mut();
+  let count = sel.count();
+  let n = n.unwrap_or(1);
+  for _ in 0..n {
+    sel.select(count, vm.rng()).into_runtime_result()?;
   }
   Ok(())
 }
 
-pub fn sel_freeze(vm: &mut VM, (selector, frozen): (RantValue, Option<bool>)) -> RantStdResult {
-  if let RantValue::Special(RantSpecial::Selector(sel)) = selector {
-    let mut sel = sel.borrow_mut();
-    sel.set_frozen(frozen.unwrap_or(true));
-  } else {
-    runtime_error!(RuntimeErrorType::ArgumentError, "sel-freeze only works on selectors, but a value of type '{}' was provided", selector.type_name())
-  }
+pub fn sel_freeze(vm: &mut VM, (selector, frozen): (RantSelectorHandle, Option<bool>)) -> RantStdResult {
+  let mut sel = selector.borrow_mut();
+  sel.set_frozen(frozen.unwrap_or(true));
   Ok(())
 }
 
-pub fn sel_frozen(vm: &mut VM, (selector, frozen): (RantValue, bool)) -> RantStdResult {
-  if let RantValue::Special(RantSpecial::Selector(sel)) = selector {
-    let sel = sel.borrow();
-    vm.cur_frame_mut().write(sel.is_frozen());
-  } else {
-    runtime_error!(RuntimeErrorType::ArgumentError, "sel-frozen only works on selectors, but a value of type '{}' was provided", selector.type_name())
-  }
+pub fn sel_frozen(vm: &mut VM, (selector, frozen): (RantSelectorHandle, bool)) -> RantStdResult {
+  let sel = selector.borrow();
+  vm.cur_frame_mut().write(sel.is_frozen());
   Ok(())
 }
 

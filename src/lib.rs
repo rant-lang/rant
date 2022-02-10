@@ -44,6 +44,7 @@ mod func;
 mod lang;
 mod modres;
 mod rng;
+mod selector;
 mod stdlib;
 mod string;
 mod util;
@@ -58,6 +59,7 @@ pub use crate::value::*;
 pub use crate::func::*;
 pub use crate::var::*;
 pub use crate::modres::*;
+pub use crate::selector::*;
 
 use crate::compiler::*;
 use crate::lang::Sequence;
@@ -65,7 +67,7 @@ use crate::rng::RantRng;
 use crate::runtime::{RuntimeResult, IntoRuntimeResult, RuntimeError, RuntimeErrorType, VM};
 
 use std::error::Error;
-use std::{path::Path, rc::Rc, cell::RefCell, fmt::Display, path::PathBuf, collections::HashMap};
+use std::{path::Path, rc::Rc, fmt::Display, path::PathBuf, collections::HashMap};
 use std::env;
 use data::DataSource;
 use fnv::FnvBuildHasher;
