@@ -6,7 +6,7 @@ Here's a brief overview of how you can contribute:
 
 ## Developer resources
 
-* [Rant Discord](https://discord.gg/5n7bnAD)
+* [Rant Discord]https://discord.gg/U8Bj6gSshJ)
 * [Rant Reference](https://docs.rant-lang.org/)
 
 ## Ways to contribute
@@ -25,8 +25,6 @@ A bug report should provide a detailed description of the following:
 2. Compiler info as applicable (Rust version, build profiles, etc.)
 3. Steps to reproduce the bug
 4. The expected and actual behaviors
-
-(TODO: Issue template)
 
 ### Feature requests
 
