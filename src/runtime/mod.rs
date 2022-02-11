@@ -728,7 +728,7 @@ impl<'rant> VM<'rant> {
           } else {
             let mut cache = RantMap::new();
             cache.raw_set(&module_name, module.clone());
-            self.engine.set_global(crate::MODULES_CACHE_KEY, RantValue::Map(RantMap::from(cache).into_handle()));
+            self.engine.set_global(crate::MODULES_CACHE_KEY, cache.into_rant());
           }
 
           self.def_var_value(&module_name, VarAccessMode::Descope(descope), module, true)?;
@@ -1397,7 +1397,7 @@ impl<'rant> VM<'rant> {
         }
 
         // This won't be added to args because we need to check default arguments
-        let mut vararg = func.is_variadic().then(|| RantValue::List(RantList::from(args_iter.collect::<RantList>()).into_handle()));
+        let mut vararg = func.is_variadic().then(|| args_iter.collect::<RantList>().into_rant());
 
         // Push the function onto the call stack
         self.push_frame_flavored(Rc::clone(user_func), func.flavor.unwrap_or(StackFrameFlavor::FunctionBody))?;
@@ -1574,7 +1574,7 @@ impl<'rant> VM<'rant> {
 
   #[inline]
   fn get_pipeval(&self) -> RuntimeResult<RantValue> {
-    self.pipeval_overlay_stack.last().cloned().map(|v| RuntimeResult::Ok(v)).unwrap_or_else(|| self.get_var_value(PIPE_VALUE_NAME, VarAccessMode::Local, false))
+    self.pipeval_overlay_stack.last().cloned().map(RuntimeResult::Ok).unwrap_or_else(|| self.get_var_value(PIPE_VALUE_NAME, VarAccessMode::Local, false))
   }
 
   /// Runs a getter. 
@@ -2194,7 +2194,7 @@ fn expand_complex_arg(out_targs: &mut Vec<RantValue>, arg: &RantValue, arg_index
     },
     // Argument with parametric spread
     (ArgumentSpreadMode::Parametric, _) => {
-      if expand_parametric_spread_arg(out_targs, &arg)? {
+      if expand_parametric_spread_arg(out_targs, arg)? {
         return Ok(true)
       }
       out_targs.push(arg.clone());

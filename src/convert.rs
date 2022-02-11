@@ -324,7 +324,7 @@ impl<T: IntoRant> IntoRant for Vec<T> {
 impl<T: TryIntoRant> TryIntoRant for Vec<T> {
   fn try_into_rant(mut self) -> Result<RantValue, ValueError> {
     let list = self.drain(..).map(|v| v.try_into_rant()).collect::<Result<RantList, ValueError>>()?;
-    Ok(RantValue::List(RantList::from(list).into_handle()))
+    Ok(list.into_rant())
   }
 }
 

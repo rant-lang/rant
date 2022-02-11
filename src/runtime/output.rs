@@ -191,7 +191,7 @@ impl OutputWriter {
                 _ => {}
               }
             }
-            RantValue::List(RantList::from(output).into_handle())
+            RantValue::List(output.into_handle())
           },
           OutputPrintMode::Tuple => {
             let mut output: Vec<RantValue> = vec![];
@@ -209,13 +209,13 @@ impl OutputWriter {
                 output.extend(map.borrow())
               }
             }
-            RantValue::Map(RantMap::from(output).into_handle())
+            RantValue::Map(output.into_handle())
           },
           OutputPrintMode::Concat => {
             let mut val = RantValue::Nothing;
             for buf in self.buffers {
               if let OutputBuffer::Value(bufval) = buf {
-                val = val.concat(bufval);
+                val = val + bufval;
               }
             }
             val

@@ -405,11 +405,11 @@ impl Rant {
 
       // Cache the module
       if let Some(RantValue::Map(module_cache_ref)) = self.get_global(MODULES_CACHE_KEY) {
-        module_cache_ref.borrow_mut().raw_set(&module_name, module.clone());
+        module_cache_ref.borrow_mut().raw_set(&module_name, module);
       } else {
         let mut cache = RantMap::new();
-        cache.raw_set(&module_name, module.clone());
-        self.set_global(MODULES_CACHE_KEY, RantValue::Map(RantMap::from(cache).into_handle()));
+        cache.raw_set(&module_name, module);
+        self.set_global(MODULES_CACHE_KEY, cache.into_rant());
       }
 
       Ok(())

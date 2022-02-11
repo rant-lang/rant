@@ -2,7 +2,7 @@ use crate::{RantFunction, RantString, lang::Slice, util};
 use crate::{collections::*, TryFromRant, IntoRant, RantSelectorHandle};
 use crate::runtime::*;
 use crate::util::*;
-use std::ops::Deref;
+use std::ops::{Deref};
 use std::{fmt::{Display, Debug}, ops::{Add, Div, Mul, Neg, Not, Rem, Sub}, rc::Rc};
 use std::error::Error;
 use std::cmp::Ordering;
@@ -300,39 +300,6 @@ impl RantValue {
       tuple @ RantValue::Tuple(_) => return tuple,
       _ => return RantValue::Nothing,
     }.into_handle())
-  }
-
-  /// Concatenates two values.
-  #[inline]
-  pub fn concat(self, rhs: Self) -> Self {
-    match (self, rhs) {
-      (Self::Nothing, Self::Nothing) => Self::Nothing,
-      (lhs, Self::Nothing) => lhs,
-      (Self::Nothing, rhs) => rhs,
-      (Self::Int(a), Self::Int(b)) => Self::Int(a.saturating_add(b)),
-      (Self::Int(a), Self::Float(b)) => Self::Float(f64(a) + b),
-      (Self::Int(a), Self::Boolean(b)) => Self::Int(a.saturating_add(bi64(b))),
-      (Self::Float(a), Self::Float(b)) => Self::Float(a + b),
-      (Self::Float(a), Self::Int(b)) => Self::Float(a + f64(b)),
-      (Self::Float(a), Self::Boolean(b)) => Self::Float(a + bf64(b)),
-      (Self::String(a), Self::String(b)) => Self::String(a + b),
-      (Self::String(a), rhs) => Self::String(a + rhs.to_string().into()),
-      (Self::Boolean(a), Self::Boolean(b)) => Self::Boolean(a || b),
-      (Self::Boolean(a), Self::Int(b)) => Self::Int(bi64(a).saturating_add(b)),
-      (Self::Boolean(a), Self::Float(b)) => Self::Float(bf64(a) + b),
-      (Self::List(a), Self::List(b)) => Self::List(RantList::from(a.borrow().iter().cloned().chain(b.borrow().iter().cloned()).collect::<Vec<RantValue>>()).into_handle()),
-      (Self::Map(a), Self::Map(b)) => {
-        let mut map = RantMap::new();
-        for (k, v) in a.borrow().raw_pairs_internal() {
-          map.raw_set(k, v.clone());
-        }
-        for (k, v) in b.borrow().raw_pairs_internal() {
-          map.raw_set(k, v.clone());
-        }
-        map.into_rant()
-      },
-      (lhs, rhs) => Self::String(RantString::from(format!("{}{}", lhs, rhs)))
-    }
   }
 
   /// Gets the length of the value.
@@ -997,8 +964,20 @@ impl Add for RantValue {
       (Self::Boolean(a), Self::Boolean(b)) => Self::Int(bi64(a) + bi64(b)),
       (Self::Boolean(a), Self::Int(b)) => Self::Int(bi64(a).saturating_add(b)),
       (Self::Boolean(a), Self::Float(b)) => Self::Float(bf64(a) + b),
-      (Self::Tuple(a), Self::Tuple(b)) => Self::Tuple(a.iter().cloned().chain(b.iter().cloned()).collect::<RantTuple>().into_handle()),
-      (Self::List(a), Self::List(b)) => Self::List(a.borrow().iter().cloned().chain(b.borrow().iter().cloned()).collect::<RantList>().into_handle()),
+      (Self::Tuple(a), Self::Tuple(b)) => (a + b).into_rant(),
+      (Self::Tuple(a), Self::List(b)) => (a + b).into_rant(),
+      (Self::List(a), Self::List(b)) => (a + b).into_rant(),
+      (Self::List(a), Self::Tuple(b)) => (a + b).into_rant(),
+      (Self::Map(a), Self::Map(b)) => {
+        let mut map = RantMap::new();
+        for (k, v) in a.borrow().raw_pairs_internal() {
+          map.raw_set(k, v.clone());
+        }
+        for (k, v) in b.borrow().raw_pairs_internal() {
+          map.raw_set(k, v.clone());
+        }
+        map.into_rant()
+      },
       (lhs, rhs) => Self::String(RantString::from(format!("{}{}", lhs, rhs)))
     }
   }

@@ -1385,7 +1385,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }
       }
     } else {
-      self.report_error(Problem::NothingToPipe, &span);
+      self.report_error(Problem::NothingToPipe, span);
     }
   }
 
@@ -1682,7 +1682,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
           },
           SequenceEndType::ProgramEnd => {
             // If this was the first element, we won't know whether it's a tuple yet, so give a more general error
-            if sequences.len() == 0 {
+            if sequences.is_empty() {
               self.report_error(Problem::UnclosedParens, &super_range(start_span, &self.reader.last_token_span()));
             } else {
               self.report_error(Problem::UnclosedTuple, &super_range(start_span, &self.reader.last_token_span()));
@@ -2381,7 +2381,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               Some((PipeValue, _span)) => {
                 idparts.push(AccessPathComponent::PipeValue);
                 let pipeval_span = &self.reader.last_token_span();
-                self.track_pipeval_read(&pipeval_span);
+                self.track_pipeval_read(pipeval_span);
               }
               // Full- or to-slice
               Some((DoubleDot, _)) => {

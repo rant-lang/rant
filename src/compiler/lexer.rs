@@ -309,7 +309,7 @@ fn parse_escape(lex: &mut Lexer<RantToken>) -> ParsedEscape {
 
 fn parse_byte_escape(lex: &mut Lexer<RantToken>) -> ParsedEscape {
   let slice = &lex.slice()[2..];
-  let c = u8::from_str_radix(slice, 16).ok().map(|cp| char::from(cp));
+  let c = u8::from_str_radix(slice, 16).ok().map(char::from);
   match c {
     Some(c) => ParsedEscape::Char(c),
     None => ParsedEscape::InvalidUnicode(slice.to_owned()),

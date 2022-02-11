@@ -75,7 +75,7 @@ pub fn mksel(vm: &mut VM, mode: SelectorMode) -> RantStdResult {
 pub fn sel(vm: &mut VM, selector: Option<RantValue>) -> RantStdResult {
   match selector {
     Some(RantValue::Selector(handle)) => {
-      vm.resolver_mut().attrs_mut().selector = Some(handle.clone());
+      vm.resolver_mut().attrs_mut().selector = Some(handle);
     },
     Some(val @ RantValue::String(_)) => {
       let mode = SelectorMode::try_from_rant(val).into_runtime_result()?;

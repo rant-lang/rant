@@ -353,7 +353,7 @@ pub fn augment_self(vm: &mut VM, (to_map, from_map): (RantMapHandle, RantMapHand
   for (key, val) in from_map.borrow().raw_pairs_internal() {
     let orig_val = to_map.borrow().get(key).map(|v| v.as_ref().clone());
     if let Some(orig_val) = orig_val {
-      to_map.borrow_mut().raw_set(key, orig_val.concat(val.clone()));
+      to_map.borrow_mut().raw_set(key, orig_val + val.clone());
     } else {
       to_map.borrow_mut().raw_set(key, val.clone());
     }
