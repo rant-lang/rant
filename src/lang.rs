@@ -65,7 +65,7 @@ pub(crate) fn is_valid_ident(name: &str) -> bool {
 }
 
 /// A single bound index for a slice expression.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SliceIndex {
   /// Static index.
   Static(i64),
@@ -83,7 +83,7 @@ impl Display for SliceIndex {
 }
 
 /// An unevaluated list slice.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SliceExpr {
   /// Unbounded slice.
   Full,
@@ -148,7 +148,7 @@ pub enum Slice {
 }
 
 /// Component in an accessor path.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AccessPathComponent {
   /// Name of variable or map item
   Name(Identifier),
@@ -202,7 +202,7 @@ impl VarAccessMode {
 }
 
 /// Describes the location of a value.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AccessPath {
   path: Vec<AccessPathComponent>,
   mode: VarAccessMode,
@@ -214,6 +214,19 @@ impl AccessPath {
     Self {
       path,
       mode: kind
+    }
+  }
+
+  /// Adds the specified amount of descopes to the path.
+  #[inline]
+  pub fn add_descope(self, n: usize) -> Self {
+    Self {
+      mode: match self.mode {
+        VarAccessMode::Local => VarAccessMode::Descope(n),
+        VarAccessMode::Descope(d) => VarAccessMode::Descope(d + n),
+        VarAccessMode::ExplicitGlobal => VarAccessMode::ExplicitGlobal,
+      },
+      .. self
     }
   }
 

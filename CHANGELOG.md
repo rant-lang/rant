@@ -15,6 +15,7 @@
 * CLI: Program-global variables now persist between lines in the REPL
 * CLI: Added functions to display copyright notice & credits
 * Closures can now be used to create Rant functions
+* Added compound assignment support for all arithmetic and logic operators
 
 ### Changes
 * Renamed type `special` to `selector` because it's only used for selectors

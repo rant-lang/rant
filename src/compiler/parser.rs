@@ -3019,47 +3019,115 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 _ => unreachable!()
               }
             },
-            // If we hit a setter operator here, it's a setter
-            Equals => {
-              self.reader.skip_ws();
-              let ParsedSequence {
-                sequence: setter_rhs_expr,
-                end_type: setter_rhs_end,
-                ..
-              } = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
-              
-              let rhs_end_span = self.reader.last_token_span();
-              let setter_span = super_range(&access_start_span, &rhs_end_span);
+            // Check for setters (direct and compound assignments)
+            other => {
+              if other == RantToken::Equals {
+                // Direct assignment
+                self.reader.skip_ws();
+                let ParsedSequence {
+                  sequence: setter_rhs_expr,
+                  end_type: setter_rhs_end,
+                  ..
+                } = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
+                
+                let rhs_end_span = self.reader.last_token_span();
+                let setter_span = super_range(&access_start_span, &rhs_end_span);
 
-              // Don't allow setters directly on anonymous values
-              if var_path.is_anonymous_target() {
-                self.report_error(Problem::AnonValueAssignment, &setter_span);
+                // Don't allow setters directly on anonymous values
+                if var_path.is_anonymous_target() {
+                  self.report_error(Problem::AnonValueAssignment, &setter_span);
+                }
+
+                self.track_variable_access(&var_path, var_path.is_variable_target(), false, &setter_span, None);
+                add_accessor!(Expression::Set(Setter { path: Rc::new(var_path), value: Rc::new(setter_rhs_expr) }));
+
+                match setter_rhs_end {
+                  // Accessor was terminated
+                  SequenceEndType::VariableAccessEnd => {                  
+                    break 'read;
+                  },
+                  // Expression ended with delimiter
+                  SequenceEndType::VariableAssignDelim => {
+                    continue 'read;
+                  },
+                  // Error
+                  SequenceEndType::ProgramEnd => {
+                    self.report_error(Problem::UnclosedAccessor, &self.reader.last_token_span());
+                    return Err(())
+                  },
+                  _ => unreachable!()
+                }
+              } else if let Some(op) = OrderedOperator::from_token(&other).filter(|op| op.op_type() == OrderedOperatorType::Infix) {
+                // Compound assignment
+                let setter_op_start_span = self.reader.last_token_span();
+                self.reader.skip_ws();
+                if !self.reader.eat(RantToken::Equals) {
+                  self.report_expected_token_error("=", &self.reader.last_token_span());
+                }
+
+                self.reader.skip_ws();
+                let ParsedSequence {
+                  sequence: setter_rhs_expr,
+                  end_type: setter_rhs_end,
+                  ..
+                } = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
+                
+                let rhs_end_span = self.reader.last_token_span();
+                let setter_span = super_range(&access_start_span, &rhs_end_span);
+
+                // Don't allow setters directly on anonymous values
+                if var_path.is_anonymous_target() {
+                  self.report_error(Problem::AnonValueAssignment, &setter_span);
+                }
+
+                self.track_variable_access(&var_path, var_path.is_variable_target(), false, &setter_span, None);
+
+                let op_lhs = Rc::new(Sequence::one(Expression::Get(Getter { path: Rc::new(var_path.clone().add_descope(1)), fallback: None }), &self.info));
+                let op_rhs = Rc::new(setter_rhs_expr);
+                let setter_path = Rc::new(var_path);
+
+                add_accessor!(Expression::Set(Setter {
+                  path: setter_path,
+                  value: Rc::new(Sequence::one(match op {
+                    OrderedOperator::Add => Expression::Add(op_lhs, op_rhs),
+                    OrderedOperator::Subtract => Expression::Subtract(op_lhs, op_rhs),
+                    OrderedOperator::Multiply => Expression::Multiply(op_lhs, op_rhs),
+                    OrderedOperator::Divide => Expression::Divide(op_lhs, op_rhs),
+                    OrderedOperator::Modulo => Expression::Modulo(op_lhs, op_rhs),
+                    OrderedOperator::Power => Expression::Power(op_lhs, op_rhs),
+                    OrderedOperator::LogicAnd => Expression::LogicAnd(op_lhs, op_rhs),
+                    OrderedOperator::LogicOr => Expression::LogicOr(op_lhs, op_rhs),
+                    OrderedOperator::LogicNand => Expression::LogicNand(op_lhs, op_rhs),
+                    OrderedOperator::LogicNor => Expression::LogicNor(op_lhs, op_rhs),
+                    OrderedOperator::LogicXor => Expression::LogicXor(op_lhs, op_rhs),
+                    _unsupported_op => {
+                      self.report_unexpected_token_error(&setter_op_start_span);
+                      Expression::Nop
+                    }
+                  }, &self.info)) 
+                }));
+
+                match setter_rhs_end {
+                  // Accessor was terminated
+                  SequenceEndType::VariableAccessEnd => {                  
+                    break 'read;
+                  },
+                  // Expression ended with delimiter
+                  SequenceEndType::VariableAssignDelim => {
+                    continue 'read;
+                  },
+                  // Error
+                  SequenceEndType::ProgramEnd => {
+                    self.report_error(Problem::UnclosedAccessor, &self.reader.last_token_span());
+                    return Err(())
+                  },
+                  _ => unreachable!()
+                }
+              } else {
+                // Anything else is an error
+                self.report_unexpected_last_token_error();
+                return Err(())
               }
-
-              self.track_variable_access(&var_path, var_path.is_variable_target(), false, &setter_span, None);
-              add_accessor!(Expression::Set(Setter { path: Rc::new(var_path), value: Rc::new(setter_rhs_expr) }));
-
-              match setter_rhs_end {
-                // Accessor was terminated
-                SequenceEndType::VariableAccessEnd => {                  
-                  break 'read;
-                },
-                // Expression ended with delimiter
-                SequenceEndType::VariableAssignDelim => {
-                  continue 'read;
-                },
-                // Error
-                SequenceEndType::ProgramEnd => {
-                  self.report_error(Problem::UnclosedAccessor, &self.reader.last_token_span());
-                  return Err(())
-                },
-                _ => unreachable!()
-              }
-            },
-            // Anything else is an error
-            _ => {
-              self.report_unexpected_last_token_error();
-              return Err(())
             }
           }
         } else {
