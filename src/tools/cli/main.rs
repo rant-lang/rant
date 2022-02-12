@@ -10,7 +10,9 @@ use ctrlc;
 use exitcode::{self, ExitCode};
 use rand::Rng;
 use rant::*;
-use rant::compiler::CompilerMessage;
+use rant::compiler::{CompilerMessage, Reporter, Problem};
+use rant::runtime::VM;
+use std::ops::Deref;
 use std::{path::Path, time::Instant};
 use std::io::{self, Write, Read};
 use std::process;
@@ -100,13 +102,14 @@ fn main() {
     use_stdlib: true,
     debug_mode: !opts.no_debug,
     seed: opts.seed.unwrap_or_else(|| rand::thread_rng().gen()),
-    .. Default::default()
   });
+
+  register_cli_globals(&mut rant);
   
   // Check if the user supplied a source to run
   if let Some(code) = in_str {
     // Run inline code from cmdline args
-    let code = run_rant(&mut rant, ProgramSource::Inline(code.to_owned()), &opts);
+    let code = run_rant(&mut rant, ProgramSource::Inline(code.to_owned()), &opts, false);
     process::exit(code);
   } else if let Some(path) = in_file {
     // Run input file from cmdline args
@@ -114,7 +117,7 @@ fn main() {
       log_error!("file not found: {}", path);
       process::exit(exitcode::NOINPUT);
     }
-    let code = run_rant(&mut rant, ProgramSource::FilePath(path.to_owned()), &opts);
+    let code = run_rant(&mut rant, ProgramSource::FilePath(path.to_owned()), &opts, false);
     process::exit(code);
   } else if atty::isnt(Stream::Stdin) {
     // Run piped input from stdin
@@ -124,7 +127,7 @@ fn main() {
       process::exit(exitcode::SOFTWARE);
     }
     let source = String::from_utf8_lossy(&buf).into_owned();
-    let code = run_rant(&mut rant, ProgramSource::Stdin(source), &opts);
+    let code = run_rant(&mut rant, ProgramSource::Stdin(source), &opts, false);
     process::exit(code);
   }
 
@@ -133,7 +136,8 @@ fn main() {
 
 fn repl(rant: &mut Rant, opts: &RantCliOptions) {
   println!("{}", format!("Rant {} (build {})", rant::RANT_LANG_VERSION, rant::BUILD_VERSION).white());
-  println!("{}\n", "Write a Rant expression and press Enter to run it.".truecolor(148, 148, 148).italic());
+  println!("{}", "Write an expression and press Enter to run it.".truecolor(148, 148, 148).italic());
+  println!("{}\n", "More info: [credits], [copyright]".truecolor(148, 148, 148).italic());
   loop {
     print!("{} ", ">>".cyan());
     io::stdout().flush().unwrap();
@@ -141,17 +145,69 @@ fn repl(rant: &mut Rant, opts: &RantCliOptions) {
     
     match io::stdin().read_line(&mut input) {
       Ok(_) => {
-        run_rant(rant, ProgramSource::Stdin(input), opts);
+        run_rant(rant, ProgramSource::Stdin(input), opts, true);
       },
       Err(_) => log_error!("failed to read input")
     }
   }
 }
 
-fn run_rant(ctx: &mut Rant, source: ProgramSource, opts: &RantCliOptions) -> ExitCode {
+struct CliReporter {
+  is_repl: bool,
+  problems: Vec<CompilerMessage>,
+}
+
+impl CliReporter {
+  fn new(is_repl: bool) -> Self {
+    Self { 
+      is_repl,
+      problems: Default::default()
+    }
+  }
+}
+
+impl Reporter for CliReporter {
+  fn report(&mut self, msg: CompilerMessage) {
+    if self.is_repl && msg.is_warning() {
+      match &msg.info() {
+        // Since we share program-global variables between lines in the REPL, 
+        // it makes sense to ignore these types of warnings.
+        Problem::UnusedVariable(_) | Problem::UnusedFunction(_) => return,
+        _ => {}
+      }
+    }
+    self.problems.push(msg);
+  }
+}
+
+impl Deref for CliReporter {
+  type Target = Vec<CompilerMessage>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.problems
+  }
+}
+
+fn register_cli_globals(rant: &mut Rant) {
+  // Add [credits] function
+  rant.set_global_const("credits", RantValue::from_func(|vm: &mut VM, _: ()| {
+    vm.cur_frame_mut().render_and_reset_output();
+    vm.cur_frame_mut().write(include_str!("./_credits.txt"));
+    Ok(())
+  }));
+
+  // Add [copyright] function
+  rant.set_global_const("copyright", RantValue::from_func(|vm: &mut VM, _: ()| {
+    vm.cur_frame_mut().render_and_reset_output();
+    vm.cur_frame_mut().write(include_str!("./_copyright.txt"));
+    Ok(())
+  }));
+}
+
+fn run_rant(ctx: &mut Rant, source: ProgramSource, opts: &RantCliOptions, is_repl: bool) -> ExitCode {
   let show_stats = opts.bench_mode;
   let start_time = Instant::now();
-  let mut problems: Vec<CompilerMessage> = vec![];
+  let mut problems = CliReporter::new(is_repl);
 
   let compile_result = match &source {
     ProgramSource::Inline(source) => ctx.compile_named(source, &mut problems, "cmdline"),

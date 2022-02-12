@@ -1,0 +1,20 @@
+              RRRRRRRRR
+              RR       RRRRRRRRR
+              RR                RR
+              RR         RRRRRR   RR
+              RR        RRRRRRRR    RR
+              RR        RRRRRRRR      RR
+              RR          RRRRRRRRR     RR
+              RR               RRRRRR     RR
+                RR                 RRRRR   RR
+                  RR                  RRRRR  RR
+                    RR                  RRRRRRRRR
+                      RR                   RRRRRRRRR
+                        RRRRRRRRRRRRRRRRRRRRRR
+
+             Designed and developed by Robin Pederson
+
+This project exists thanks to the collective feedback and support 
+of developers and community members over the years, in particular: 
+
+Ashley Rogers, Tamme Schichler, Dr. Sajid Farooq, and many others. 

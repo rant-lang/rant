@@ -1,5 +1,5 @@
 use crate::{RantFunction, RantString, lang::Slice, util};
-use crate::{collections::*, TryFromRant, IntoRant, RantSelectorHandle};
+use crate::{collections::*, TryFromRant, IntoRant, RantSelectorHandle, IntoRantFunction, FromRantArgs};
 use crate::runtime::*;
 use crate::util::*;
 use std::ops::{Deref};
@@ -203,6 +203,11 @@ impl RantValue {
 
 #[allow(clippy::len_without_is_empty)]
 impl RantValue {
+  #[inline]
+  pub fn from_func<P: FromRantArgs, F: 'static + Fn(&mut VM, P) -> Result<(), RuntimeError>>(func: F) -> Self {
+    Self::Function(RantFunctionHandle::new(func.into_rant_func()))
+  }
+
   /// Interprets this value as a boolean value according to Rant's truthiness rules.
   ///
   /// Types are converted as follows:

@@ -255,6 +255,14 @@ impl<I> CallStack<I> {
   /// This function does not perform any identifier validation.
   #[inline]
   pub fn def_var_value(&mut self, context: &mut Rant, id: &str, access: VarAccessMode, val: RantValue, is_const: bool) -> RuntimeResult<()> {
+    // In CLI mode, skip the program's root variable scope when defining variables.
+    #[cfg(feature = "cli")]
+    let access = match access {
+      VarAccessMode::Local if self.locals.depth() <= 2 => VarAccessMode::ExplicitGlobal,
+      VarAccessMode::Descope(n) if self.locals.depth() - n <= 2 => VarAccessMode::ExplicitGlobal,
+      other => other,
+    };
+
     match access {
       VarAccessMode::Local => {
         // Don't allow redefs of local constants

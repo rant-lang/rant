@@ -4,9 +4,17 @@
 
 ### New
 * Added stdlib functions:
+  * `[fill-self]`
+  * `[fill-thru]`
+  * `[pickn]`
   * `[sel-skip]`
   * `[sel-freeze]`
   * `[sel-frozen]`
+  * `[trim]`
+* CLI: Added `[credits]` function
+* CLI: Program-global variables now persist between lines in the REPL
+* CLI: Added functions to display copyright notice & credits
+* Closures can now be used to create Rant functions
 
 ### Changes
 * Renamed type `special` to `selector` because it's only used for selectors

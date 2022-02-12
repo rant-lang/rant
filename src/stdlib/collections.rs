@@ -649,3 +649,20 @@ pub fn chunks(vm: &mut VM, (collection, chunk_count): (RantValue, usize)) -> Ran
   vm.cur_frame_mut().write(chunks);
   Ok(())
 }
+
+pub fn fill_self(vm: &mut VM, (list, value): (RantListHandle, RantValue)) -> RantStdResult {
+  let len = list.borrow().len();
+  let mut list = list.borrow_mut();
+  for i in 0..len {
+    if let Some(item) = list.get_mut(i) {
+      *item = value.clone();
+    }
+  }
+  Ok(())
+}
+
+pub fn fill_thru(vm: &mut VM, (list, value): (RantListHandle, RantValue)) -> RantStdResult {
+  fill_self(vm, (list.clone(), value))?;
+  vm.cur_frame_mut().write(list);
+  Ok(())
+}

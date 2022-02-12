@@ -173,6 +173,17 @@ pub fn pick(vm: &mut VM, list: RantValue) -> RantStdResult {
   Ok(())
 }
 
+pub fn pickn(vm: &mut VM, (input, count): (RantOrderedCollection, usize)) -> RantStdResult {
+  let rng = vm.rng();
+  let len = input.len();
+  let list = (0..count)
+  .into_iter()
+  .map(|_| input.index_get(rng.next_usize(len).try_into().unwrap_or(i64::MAX)).into_runtime_result())
+  .collect::<RuntimeResult<RantList>>()?;
+  vm.cur_frame_mut().write(list);
+  Ok(())
+}
+
 pub fn pick_sparse(vm: &mut VM, mut items: RequiredVarArgs<RantValue>) -> RantStdResult {
   let len_sum = items
     .iter()

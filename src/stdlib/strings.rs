@@ -51,3 +51,8 @@ pub fn string_replace(vm: &mut VM, (input, query, replacement): (RantString, Ran
   vm.cur_frame_mut().write_frag(input.as_str().replace(query.as_str(), replacement.as_str()).as_str());
   Ok(())
 }
+
+pub fn trim(vm: &mut VM, s: RantString) -> RantStdResult {
+  vm.cur_frame_mut().write(s.as_str().trim());
+  Ok(())
+}

@@ -618,7 +618,7 @@ pub trait IntoRantFunction<Params: FromRantArgs> {
   fn into_rant_func(self) -> RantFunction;
 }
 
-impl<Params: FromRantArgs, Function: Fn(&mut VM, Params) -> RantStdResult> IntoRantFunction<Params> for &'static Function {
+impl<Params: FromRantArgs, Function: 'static + Fn(&mut VM, Params) -> RantStdResult> IntoRantFunction<Params> for Function {
   fn into_rant_func(self) -> RantFunction {
     let body = RantFunctionInterface::Foreign(Rc::new(move |vm, args| {
       self(vm, Params::from_rant_args(args).into_runtime_result()?)

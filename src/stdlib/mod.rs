@@ -62,7 +62,7 @@ pub fn load_stdlib(context: &mut Rant)
   macro_rules! load_func {
     ($fname:ident) => {{
       let func = $fname.into_rant_func();
-      let name = stringify!($fname).replace("_", "-");
+      let name = stringify!($fname).trim_end_matches('_').replace("_", "-");
       context.set_global_force(name.as_str(), RantValue::Function(Rc::new(func)), true);
     }};
     ($fname:ident, $id:literal) => {{
@@ -79,7 +79,7 @@ pub fn load_stdlib(context: &mut Rant)
 
   load_funcs!(
     // General functions
-    alt, call, cat, either, len, get_type as "type", seed, tap, print, range, require, irange, fork, unfork, try_ as "try",
+    alt, call, cat, either, len, type_, seed, tap, print, range, require, irange, fork, unfork, try_,
 
     // Data source functions
     ds_request, ds_query_sources,
@@ -93,7 +93,7 @@ pub fn load_stdlib(context: &mut Rant)
     num_fmt_endian, num_fmt_sign, num_fmt_infinity, num_fmt_group_sep, num_fmt_decimal_sep,
 
     // Attribute functions
-    if_ as "if", elseif as "elseif", else_ as "else", mksel, rep, sel, sep, mut_ as "mut", sel_skip, sel_freeze, sel_frozen,
+    if_, elseif, else_, mksel, rep, sel, sep, mut_, sel_skip, sel_freeze, sel_frozen,
 
     // Attribute frame stack functions
     reset_attrs,
@@ -111,7 +111,7 @@ pub fn load_stdlib(context: &mut Rant)
     is_string, is_int, is_float, is_number, is_bool, is_nothing, is_nan, is_odd, is_even, is_factor, is_between, is_some, is,
 
     // Math functions
-    abs, add, sub, mul, div, mul_add, mod_ as "mod", neg, pow, recip, 
+    abs, add, sub, mul, div, mul_add, mod_, neg, pow, recip, 
     clamp, min, max, floor, ceil, frac,
     asin, sin, acos, cos, atan, atan2, tan, sqrt, 
 
@@ -119,20 +119,20 @@ pub fn load_stdlib(context: &mut Rant)
     to_int, to_float, to_string, to_bool, to_list, to_tuple,
 
     // Generator functions
-    alpha, dig, digh, dignz, maybe, pick, pick_sparse,
+    alpha, dig, digh, dignz, maybe, pick, pickn, pick_sparse,
     rand, randf, rand_list, randf_list, rand_list_sum,
 
     // Prototype functions
     proto, set_proto,
 
     // Collection functions
-    assoc, augment, augment_self, augment_thru, chunks, clear, list, tuple, has, keys, index_of, insert, last_index_of, 
+    assoc, augment, augment_self, augment_thru, chunks, clear, fill_self, fill_thru, has, index_of, insert, keys, last_index_of, list,
     nlist, remove, rev, sift_self, sift_thru, sift, squish_self, squish_thru, squish, take, translate, values,
-    filter, join, map, sort_self, sort_thru, sort, shuffle_self, shuffle_thru, shuffle, sum,
+    filter, join, map, sort_self, sort_thru, sort, shuffle_self, shuffle_thru, shuffle, sum, tuple,
     push, pop, oxford_join, zip,
 
     // String functions
-    lower, upper, seg, split, lines, indent, string_replace,
+    lower, upper, seg, split, lines, indent, string_replace, trim,
 
     // Error functions
     error

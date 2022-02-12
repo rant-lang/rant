@@ -41,7 +41,7 @@ impl RantFunction {
 #[derive(Clone)]
 pub enum RantFunctionInterface {
   /// Represents a foreign function as a wrapper function accepting a variable number of arguments.
-  Foreign(Rc<dyn Fn(&mut VM, Vec<RantValue>) -> RantStdResult>),
+  Foreign(Rc<dyn 'static + Fn(&mut VM, Vec<RantValue>) -> RantStdResult>),
   /// Represents a user function as an RST.
   User(Rc<Sequence>)
 }

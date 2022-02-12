@@ -5,9 +5,7 @@ use data::DataSourceError;
 use super::*;
 use crate::lang::{VarAccessMode};
 
-/// `[$alt: a (any); b+ (any)]`
-///
-/// Prints the first argument that isn't an `empty`.
+/// Prints the first argument that isn't of type `nothing`.
 pub fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> RantStdResult {
   if !a.is_nothing() {
     vm.cur_frame_mut().write(a);
@@ -23,6 +21,7 @@ pub fn alt(vm: &mut VM, (a, mut b): (RantValue, RequiredVarArgs<RantValue>)) -> 
   }
 }
 
+/// Calls a function with the specified arguments.
 pub fn call(vm: &mut VM, (func, args): (RantFunctionHandle, Option<Vec<RantValue>>)) -> RantStdResult {
   vm.push_val(RantValue::Function(Rc::clone(&func)))?;
   let argc = args.as_ref().map(|args| args.len()).unwrap_or(0);
@@ -35,6 +34,7 @@ pub fn call(vm: &mut VM, (func, args): (RantFunctionHandle, Option<Vec<RantValue
   Ok(())
 }
 
+/// Combines and prints the specified values.
 pub fn cat(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult {
   let frame = vm.cur_frame_mut();
   for val in args.drain(..) {
@@ -44,6 +44,7 @@ pub fn cat(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult {
   Ok(())
 }
 
+/// Prints the specified values to the calling scope.
 pub fn print(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult {
   if args.len() < 2 {
     let frame = vm.cur_frame_mut();
@@ -59,16 +60,12 @@ pub fn print(vm: &mut VM, mut args: VarArgs<RantValue>) -> RantStdResult {
   Ok(())
 }
 
-/// `[$copy: val (any)]`
-///
 /// Returns a copy of a value.
 pub fn copy(vm: &mut VM, val: RantValue) -> RantStdResult {
   vm.cur_frame_mut().write(val.shallow_copy());
   Ok(())
 }
 
-/// `[$either: cond (bool); a (any); b (any)]`
-///
 /// Prints `a` if `cond` is true, or `b` otherwise.
 pub fn either(vm: &mut VM, (cond, a, b): (bool, RantValue, RantValue)) -> RantStdResult {
   let val = if cond { a } else { b };
@@ -76,8 +73,6 @@ pub fn either(vm: &mut VM, (cond, a, b): (bool, RantValue, RantValue)) -> RantSt
   Ok(())
 }
 
-/// `$[fork: seed? (string|int)]`
-///
 /// Forks the RNG with the specified seed.
 pub fn fork(vm: &mut VM, seed: Option<RantValue>) -> RantStdResult {
   let rng = match seed {
@@ -90,13 +85,12 @@ pub fn fork(vm: &mut VM, seed: Option<RantValue>) -> RantStdResult {
   Ok(())
 }
 
-pub fn get_type(vm: &mut VM, val: RantValue) -> RantStdResult {
+/// Prints the type name of `val`.
+pub fn type_(vm: &mut VM, val: RantValue) -> RantStdResult {
   vm.cur_frame_mut().write_frag(val.type_name());
   Ok(())
 }
 
-/// `$[unfork]`
-///
 /// Unforks the RNG down one level.
 pub fn unfork(vm: &mut VM, _: ()) -> RantStdResult {
   if vm.pop_rng().is_none() {
@@ -110,8 +104,6 @@ pub fn tap(vm: &mut VM, _: VarArgs<RantNothing>) -> RantStdResult {
   Ok(())
 }
 
-/// `[$seed]`
-///
 /// Prints the RNG seed currently in use.
 pub fn seed(vm: &mut VM, _: ()) -> RantStdResult {
   let signed_seed = unsafe {
@@ -122,11 +114,13 @@ pub fn seed(vm: &mut VM, _: ()) -> RantStdResult {
   Ok(())
 }
 
+/// Prints the length of `val`.
 pub fn len(vm: &mut VM, val: RantValue) -> RantStdResult {
   vm.cur_frame_mut().write(val.len().try_into_rant().into_runtime_result()?);
   Ok(())
 }
 
+/// Raises a runtime error.
 pub fn error(vm: &mut VM, msg: Option<String>) -> RantStdResult {
   const DEFAULT_ERROR_MESSAGE: &str = "user error";
   Err(RuntimeError {
@@ -136,6 +130,7 @@ pub fn error(vm: &mut VM, msg: Option<String>) -> RantStdResult {
   })
 }
 
+/// Generates a `range` value with an inclusive start bound and exclusive end bound.
 pub fn range(vm: &mut VM, (a, b, step): (i64, Option<i64>, Option<u64>)) -> RantStdResult {
   let step = step.unwrap_or(1);
   
@@ -149,6 +144,7 @@ pub fn range(vm: &mut VM, (a, b, step): (i64, Option<i64>, Option<u64>)) -> Rant
   Ok(())
 }
 
+/// Generates a `range` value with inclusive bounds.
 pub fn irange(vm: &mut VM, (a, b, step): (i64, Option<i64>, Option<u64>)) -> RantStdResult {
   let step = step.unwrap_or(1);
   
@@ -162,6 +158,7 @@ pub fn irange(vm: &mut VM, (a, b, step): (i64, Option<i64>, Option<u64>)) -> Ran
   Ok(())
 }
 
+/// Imports a module.
 pub fn require(vm: &mut VM, module_path: String) -> RantStdResult {
   // Get name of module from path
   if let Some(module_name) = 
@@ -194,18 +191,15 @@ pub fn require(vm: &mut VM, module_path: String) -> RantStdResult {
   }
 }
 
-pub fn try_(vm: &mut VM, (context, handler): (RantValue, Option<RantFunctionHandle>)) -> RantStdResult {
+/// Attempts to call the `context` function. If it raises a runtime error, calls the `handler` function and passes in the error information.
+pub fn try_(vm: &mut VM, (context, handler): (RantFunctionHandle, Option<RantFunctionHandle>)) -> RantStdResult {
   vm.push_unwind_state(handler);
   vm.cur_frame_mut().push_intent(Intent::DropStaleUnwinds);
-  match context {
-    RantValue::Function(func) => {
-      vm.call_func(func, vec![], false)?;
-    },
-    other => runtime_error!(RuntimeErrorType::ArgumentError, "try: cannot protect '{}' value; only functions and blocks can be protected", other.get_type())
-  }
+  vm.call_func(context, vec![], false)?;
   Ok(())
 }
 
+/// Requests data from a data source whose ID matches `dsid`.
 pub fn ds_request(vm: &mut VM, (dsid, args): (InternalString, VarArgs<RantValue>)) -> RantStdResult {
   match vm.context().data_source(dsid.as_str()) {
     Some(ds) => {
@@ -219,6 +213,7 @@ pub fn ds_request(vm: &mut VM, (dsid, args): (InternalString, VarArgs<RantValue>
   Ok(())
 }
 
+/// Prints a list of available data source IDs.
 pub fn ds_query_sources(vm: &mut VM, _: ()) -> RantStdResult {
   let sources = vm.context().iter_data_sources().map(|(id, _)| id.into_rant()).collect::<RantList>();
   vm.cur_frame_mut().write(sources);
