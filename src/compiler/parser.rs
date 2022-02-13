@@ -3041,7 +3041,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               }
             },
             // If we hit a compound assignment operator... well, it's a COMPOUND ASSIGNMENT setter!
-            comp_op @ (PlusEquals | MinusEquals | StarEquals | SlashEquals | DoubleStarEquals | AndEquals | VertBarEquals)  => {
+            comp_op @ (PlusEquals | MinusEquals | StarEquals | SlashEquals | DoubleStarEquals | PercentEquals | AndEquals | VertBarEquals)  => {
               self.reader.skip_ws();
               
               let ParsedSequence {

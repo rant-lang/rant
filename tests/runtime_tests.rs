@@ -831,3 +831,43 @@ fn ops_or_short_circuit() {
 fn ops_xor() {
   test_rant_file!("sources/ops/xor.rant")
 }
+
+#[test]
+fn access_add_assign() {
+  test_rant_file!("sources/access/add_assign.rant");
+}
+
+#[test]
+fn access_sub_assign() {
+  test_rant_file!("sources/access/sub_assign.rant");
+}
+
+#[test]
+fn access_mul_assign() {
+  test_rant_file!("sources/access/mul_assign.rant");
+}
+
+#[test]
+fn access_div_assign() {
+  test_rant_file!("sources/access/div_assign.rant");
+}
+
+#[test]
+fn access_pow_assign() {
+  test_rant_file!("sources/access/pow_assign.rant");
+}
+
+#[test]
+fn access_mod_assign() {
+  test_rant_file!("sources/access/mod_assign.rant");
+}
+
+#[test]
+fn access_and_assign() {
+  test_rant_file!("sources/access/and_assign.rant");
+}
+
+#[test]
+fn access_or_assign() {
+  test_rant_file!("sources/access/or_assign.rant");
+}

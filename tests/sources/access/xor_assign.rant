@@ -1,0 +1,3 @@
+<$x = @true>
+<x ^= @true>
+[assert-eq: <x>; @false]
