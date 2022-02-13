@@ -24,13 +24,8 @@ pub const KW_TEXT: &str = "text";
 pub const KW_EDIT: &str = "edit";
 
 // Infix operator keywords
-pub const KW_AND: &str = "and";
-pub const KW_OR: &str = "or";
 pub const KW_NEG: &str = "neg";
 pub const KW_NOT: &str = "not";
-pub const KW_NAND: &str = "nand";
-pub const KW_NOR: &str = "nor";
-pub const KW_XOR: &str = "xor";
 pub const KW_EQ: &str = "eq";
 pub const KW_NEQ: &str = "neq";
 pub const KW_GT: &str = "gt";
@@ -43,7 +38,7 @@ pub fn is_valid_keyword_name(kw_name: &str) -> bool {
     KW_REQUIRE |
     KW_RETURN | KW_BREAK | KW_CONTINUE | KW_WEIGHT | KW_IF | KW_ELSEIF | KW_ELSE |
     KW_TRUE | KW_FALSE | KW_TEXT | KW_EDIT |
-    KW_AND | KW_OR | KW_NEG | KW_NOT | KW_NAND | KW_NOR | KW_XOR | 
+    KW_NEG | KW_NOT |
     KW_EQ | KW_NEQ | KW_GT | KW_GE | KW_LT | KW_LE
   )
 }
@@ -92,8 +87,13 @@ pub enum RantToken {
   #[regex(r"[\r\n]+\s*|\s*[\r\n]+", logos::skip, priority = 3)]
   IgnoredWhitespace,
 
+  /// `-`
   #[token("-", priority = 10)]
   Minus,
+
+  /// `-=`
+  #[token("-=", priority = 11)]
+  MinusEquals,
   
   /// `{`
   #[token("{")]
@@ -102,6 +102,10 @@ pub enum RantToken {
   /// `|`
   #[token("|")]
   VertBar,
+
+  /// `|=`
+  #[token("|=")]
+  VertBarEquals,
   
   /// `}`
   #[token("}")]
@@ -158,6 +162,10 @@ pub enum RantToken {
   /// `**`
   #[token("**")]
   DoubleStar,
+
+  /// `**=`
+  #[token("**=")]
+  DoubleStarEquals,
   
   /// Labeled temporal operator, e.g. `*a*`
   #[regex(r"\*[\w\-_][\w\d\-_]*\*", parse_temporal_spread_label)]
@@ -166,10 +174,18 @@ pub enum RantToken {
   /// `*`
   #[token("*")]
   Star,
+
+  /// `*=`
+  #[token("*=")]
+  StarEquals,
   
   /// `+`
   #[token("+")]
   Plus,
+
+  /// `+=`
+  #[token("+=")]
+  PlusEquals,
 
   /// `=`
   #[token("=")]
@@ -195,9 +211,17 @@ pub enum RantToken {
   #[token("/")]
   Slash,
 
+  /// `/=`
+  #[token("/=")]
+  SlashEquals,
+
   /// `^`
   #[token("^")]
   Caret,
+
+  /// `^=`
+  #[token("^=")]
+  CaretEquals,
   
   /// `$`
   #[token("$")]
@@ -206,6 +230,10 @@ pub enum RantToken {
   /// `%`
   #[token("%")]
   Percent,
+
+  /// `%=`
+  #[token("%=")]
+  PercentEquals,
   
   /// ```
   #[token("`")]
@@ -214,6 +242,14 @@ pub enum RantToken {
   /// `~`
   #[token("~")]
   Sink,
+
+  /// `&`
+  #[token("&")]
+  And,
+
+  /// `&=`
+  #[token("&=")]
+  AndEquals,
   
   /// Unsigned integer literal
   #[regex(r"[0-9]+", parse_integer, priority = 2)]

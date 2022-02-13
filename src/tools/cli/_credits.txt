@@ -14,7 +14,13 @@
 
              Designed and developed by Robin Pederson
 
-This project exists thanks to the collective feedback and support 
-of developers and community members over the years, in particular: 
+Over the years, there have been many developers and community members 
+whose efforts and feedback helped to shape Rant into what it is today.
 
-Ashley Rogers, Tamme Schichler, Dr. Sajid Farooq, and many others. 
+In particular, I want to thank:
+
+Ashley Rogers (@dialupnoises)
+Dr. Sajid Farooq
+Tamme Schichler (@Tamschi)
+
+... and the many others who tested, submitted issues/PRs, and donated.

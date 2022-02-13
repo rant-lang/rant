@@ -145,7 +145,7 @@ fn repl(rant: &mut Rant, opts: &RantCliOptions) {
     
     match io::stdin().read_line(&mut input) {
       Ok(_) => {
-        run_rant(rant, ProgramSource::Stdin(input), opts, true);
+        run_rant(rant, ProgramSource::Stdin(input.trim_end_matches(&['\r', '\n']).to_owned()), opts, true);
       },
       Err(_) => log_error!("failed to read input")
     }

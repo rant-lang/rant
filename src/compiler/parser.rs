@@ -38,8 +38,6 @@ enum OrderedOperator {
   LogicNot,
   LogicAnd,
   LogicOr,
-  LogicNand,
-  LogicNor,
   LogicXor,
   Equals,
   NotEquals,
@@ -58,8 +56,8 @@ enum OrderedOperatorType {
 impl OrderedOperator {
 
   #[inline]
-  fn is_keyword_supported(kw_name: &str) -> bool {
-    matches!(kw_name, KW_NEG | KW_NOT | KW_AND | KW_OR | KW_NAND | KW_NOR | KW_XOR | KW_EQ | KW_NEQ | KW_GT | KW_GE | KW_LT | KW_LE)
+  fn is_kw_supported(kw_name: &str) -> bool {
+    matches!(kw_name, KW_NEG | KW_NOT | KW_EQ | KW_NEQ | KW_GT | KW_GE | KW_LT | KW_LE)
   }
 
   #[inline]
@@ -79,14 +77,12 @@ impl OrderedOperator {
       Slash => Self::Divide,
       Percent => Self::Modulo,
       DoubleStar => Self::Power,
+      And => Self::LogicAnd,
+      VertBar => Self::LogicOr,
+      Caret => Self::LogicXor,
       Keyword(kw) if kw.is_valid => match kw.name.as_str() {
         KW_NEG => Self::Negate,
         KW_NOT => Self::LogicNot,
-        KW_AND => Self::LogicAnd,
-        KW_OR => Self::LogicOr,
-        KW_NAND => Self::LogicNand,
-        KW_NOR => Self::LogicNor,
-        KW_XOR => Self::LogicXor,
         KW_EQ => Self::Equals,
         KW_NEQ => Self::NotEquals,
         KW_GT => Self::Greater,
@@ -117,10 +113,8 @@ impl OrderedOperator {
       Self::Equals =>       PREC_EQUALITY,
       Self::NotEquals =>    PREC_EQUALITY,
       Self::LogicAnd =>     PREC_CONJUNCTIVE,
-      Self::LogicNor =>     PREC_CONJUNCTIVE,
       Self::LogicXor =>     PREC_XOR,
       Self::LogicOr =>      PREC_DISJUNCTIVE,
-      Self::LogicNand =>    PREC_DISJUNCTIVE,
     }
   }
 }
@@ -620,7 +614,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
 
         // Prefix keyword
-        Keyword(KeywordInfo { name: kw, is_valid: is_kw_valid }) if is_kw_valid && !OrderedOperator::is_keyword_supported(kw.as_str()) => {
+        Keyword(KeywordInfo { name: kw, is_valid: is_kw_valid }) if is_kw_valid && !OrderedOperator::is_kw_supported(kw.as_str()) => {
           let kwstr = kw.as_str();
           match kwstr {            
             // Boolean constants
@@ -789,24 +783,16 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         },
         
         // Block element delimiter (when in block parsing mode)
-        VertBar => no_flags!({
+        VertBar if mode == SequenceParseMode::BlockElement => no_flags!({
           // Ignore pending whitespace
           whitespace!(ignore prev);
-          match mode {
-            SequenceParseMode::BlockElement => {
-              return Ok(ParsedSequence {
-                sequence: sequence.with_name_str("block element"),
-                end_type: SequenceEndType::BlockDelim,
-                is_auto_hinted: is_seq_text,
-                extras: None,
-                next_infix_op: None,
-              })
-            },
-            SequenceParseMode::FunctionBodyBlock => {
-              self.report_error(Problem::FunctionBodyBlockMultiElement, &span);
-            },
-            _ => unexpected_token_error!()
-          }
+          return Ok(ParsedSequence {
+            sequence: sequence.with_name_str("block element"),
+            end_type: SequenceEndType::BlockDelim,
+            is_auto_hinted: is_seq_text,
+            extras: None,
+            next_infix_op: None,
+          })
         }),
         
         // Block/func body/dynamic key end
@@ -1298,8 +1284,6 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                     OrderedOperator::Power => Expression::Power(lhs, rhs),
                     OrderedOperator::LogicAnd => Expression::LogicAnd(lhs, rhs),
                     OrderedOperator::LogicOr => Expression::LogicOr(lhs, rhs),
-                    OrderedOperator::LogicNand => Expression::LogicNand(lhs, rhs),
-                    OrderedOperator::LogicNor => Expression::LogicNor(lhs, rhs),
                     OrderedOperator::LogicXor => Expression::LogicXor(lhs, rhs),
                     OrderedOperator::Equals => Expression::Equals(lhs, rhs),
                     OrderedOperator::NotEquals => Expression::NotEquals(lhs, rhs),
@@ -3019,115 +3003,104 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                 _ => unreachable!()
               }
             },
-            // Check for setters (direct and compound assignments)
-            other => {
-              if other == RantToken::Equals {
-                // Direct assignment
-                self.reader.skip_ws();
-                let ParsedSequence {
-                  sequence: setter_rhs_expr,
-                  end_type: setter_rhs_end,
-                  ..
-                } = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
-                
-                let rhs_end_span = self.reader.last_token_span();
-                let setter_span = super_range(&access_start_span, &rhs_end_span);
+            // If we hit a `=`, it's a DIRECT ASSIGNMENT setter
+            Equals => {
+              self.reader.skip_ws();
+              let ParsedSequence {
+                sequence: setter_rhs_expr,
+                end_type: setter_rhs_end,
+                ..
+              } = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
+              
+              let rhs_end_span = self.reader.last_token_span();
+              let setter_span = super_range(&access_start_span, &rhs_end_span);
 
-                // Don't allow setters directly on anonymous values
-                if var_path.is_anonymous_target() {
-                  self.report_error(Problem::AnonValueAssignment, &setter_span);
-                }
-
-                self.track_variable_access(&var_path, var_path.is_variable_target(), false, &setter_span, None);
-                add_accessor!(Expression::Set(Setter { path: Rc::new(var_path), value: Rc::new(setter_rhs_expr) }));
-
-                match setter_rhs_end {
-                  // Accessor was terminated
-                  SequenceEndType::VariableAccessEnd => {                  
-                    break 'read;
-                  },
-                  // Expression ended with delimiter
-                  SequenceEndType::VariableAssignDelim => {
-                    continue 'read;
-                  },
-                  // Error
-                  SequenceEndType::ProgramEnd => {
-                    self.report_error(Problem::UnclosedAccessor, &self.reader.last_token_span());
-                    return Err(())
-                  },
-                  _ => unreachable!()
-                }
-              } else if let Some(op) = OrderedOperator::from_token(&other).filter(|op| op.op_type() == OrderedOperatorType::Infix) {
-                // Compound assignment
-                let setter_op_start_span = self.reader.last_token_span();
-                self.reader.skip_ws();
-                if !self.reader.eat(RantToken::Equals) {
-                  self.report_expected_token_error("=", &self.reader.last_token_span());
-                }
-
-                self.reader.skip_ws();
-                let ParsedSequence {
-                  sequence: setter_rhs_expr,
-                  end_type: setter_rhs_end,
-                  ..
-                } = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
-                
-                let rhs_end_span = self.reader.last_token_span();
-                let setter_span = super_range(&access_start_span, &rhs_end_span);
-
-                // Don't allow setters directly on anonymous values
-                if var_path.is_anonymous_target() {
-                  self.report_error(Problem::AnonValueAssignment, &setter_span);
-                }
-
-                self.track_variable_access(&var_path, var_path.is_variable_target(), false, &setter_span, None);
-
-                let op_lhs = Rc::new(Sequence::one(Expression::Get(Getter { path: Rc::new(var_path.clone().add_descope(1)), fallback: None }), &self.info));
-                let op_rhs = Rc::new(setter_rhs_expr);
-                let setter_path = Rc::new(var_path);
-
-                add_accessor!(Expression::Set(Setter {
-                  path: setter_path,
-                  value: Rc::new(Sequence::one(match op {
-                    OrderedOperator::Add => Expression::Add(op_lhs, op_rhs),
-                    OrderedOperator::Subtract => Expression::Subtract(op_lhs, op_rhs),
-                    OrderedOperator::Multiply => Expression::Multiply(op_lhs, op_rhs),
-                    OrderedOperator::Divide => Expression::Divide(op_lhs, op_rhs),
-                    OrderedOperator::Modulo => Expression::Modulo(op_lhs, op_rhs),
-                    OrderedOperator::Power => Expression::Power(op_lhs, op_rhs),
-                    OrderedOperator::LogicAnd => Expression::LogicAnd(op_lhs, op_rhs),
-                    OrderedOperator::LogicOr => Expression::LogicOr(op_lhs, op_rhs),
-                    OrderedOperator::LogicNand => Expression::LogicNand(op_lhs, op_rhs),
-                    OrderedOperator::LogicNor => Expression::LogicNor(op_lhs, op_rhs),
-                    OrderedOperator::LogicXor => Expression::LogicXor(op_lhs, op_rhs),
-                    _unsupported_op => {
-                      self.report_unexpected_token_error(&setter_op_start_span);
-                      Expression::Nop
-                    }
-                  }, &self.info)) 
-                }));
-
-                match setter_rhs_end {
-                  // Accessor was terminated
-                  SequenceEndType::VariableAccessEnd => {                  
-                    break 'read;
-                  },
-                  // Expression ended with delimiter
-                  SequenceEndType::VariableAssignDelim => {
-                    continue 'read;
-                  },
-                  // Error
-                  SequenceEndType::ProgramEnd => {
-                    self.report_error(Problem::UnclosedAccessor, &self.reader.last_token_span());
-                    return Err(())
-                  },
-                  _ => unreachable!()
-                }
-              } else {
-                // Anything else is an error
-                self.report_unexpected_last_token_error();
-                return Err(())
+              // Don't allow setters directly on anonymous values
+              if var_path.is_anonymous_target() {
+                self.report_error(Problem::AnonValueAssignment, &setter_span);
               }
+
+              self.track_variable_access(&var_path, var_path.is_variable_target(), false, &setter_span, None);
+              add_accessor!(Expression::Set(Setter { path: Rc::new(var_path), value: Rc::new(setter_rhs_expr) }));
+
+              match setter_rhs_end {
+                // Accessor was terminated
+                SequenceEndType::VariableAccessEnd => {                  
+                  break 'read;
+                },
+                // Expression ended with delimiter
+                SequenceEndType::VariableAssignDelim => {
+                  continue 'read;
+                },
+                // Error
+                SequenceEndType::ProgramEnd => {
+                  self.report_error(Problem::UnclosedAccessor, &self.reader.last_token_span());
+                  return Err(())
+                },
+                _ => unreachable!()
+              }
+            },
+            // If we hit a compound assignment operator... well, it's a COMPOUND ASSIGNMENT setter!
+            comp_op @ (PlusEquals | MinusEquals | StarEquals | SlashEquals | DoubleStarEquals | AndEquals | VertBarEquals)  => {
+              self.reader.skip_ws();
+              
+              let ParsedSequence {
+                sequence: setter_rhs_expr,
+                end_type: setter_rhs_end,
+                ..
+              } = self.parse_sequence(SequenceParseMode::VariableAssignment)?;
+              
+              let rhs_end_span = self.reader.last_token_span();
+              let setter_span = super_range(&access_start_span, &rhs_end_span);
+
+              // Don't allow setters directly on anonymous values
+              if var_path.is_anonymous_target() {
+                self.report_error(Problem::AnonValueAssignment, &setter_span);
+              }
+
+              self.track_variable_access(&var_path, var_path.is_variable_target(), false, &setter_span, None);
+
+              let op_lhs = Rc::new(Sequence::one(Expression::Get(Getter { path: Rc::new(var_path.clone().add_descope(1)), fallback: None }), &self.info));
+              let op_rhs = Rc::new(setter_rhs_expr);
+              let setter_path = Rc::new(var_path);
+
+              add_accessor!(Expression::Set(Setter {
+                path: setter_path,
+                value: Rc::new(Sequence::one(match comp_op {
+                  PlusEquals => Expression::Add(op_lhs, op_rhs),
+                  MinusEquals => Expression::Subtract(op_lhs, op_rhs),
+                  StarEquals => Expression::Multiply(op_lhs, op_rhs),
+                  SlashEquals => Expression::Divide(op_lhs, op_rhs),
+                  PercentEquals => Expression::Modulo(op_lhs, op_rhs),
+                  DoubleStarEquals => Expression::Power(op_lhs, op_rhs),
+                  AndEquals => Expression::LogicAnd(op_lhs, op_rhs),
+                  VertBarEquals => Expression::LogicOr(op_lhs, op_rhs),
+                  CaretEquals => Expression::LogicXor(op_lhs, op_rhs),
+                  _ => unreachable!(),
+                }, &self.info))
+              }));
+
+              match setter_rhs_end {
+                // Accessor was terminated
+                SequenceEndType::VariableAccessEnd => {                  
+                  break 'read;
+                },
+                // Expression ended with delimiter
+                SequenceEndType::VariableAssignDelim => {
+                  continue 'read;
+                },
+                // Error
+                SequenceEndType::ProgramEnd => {
+                  self.report_error(Problem::UnclosedAccessor, &self.reader.last_token_span());
+                  return Err(())
+                },
+                _ => unreachable!()
+              }
+            },
+            _ => {
+              // Anything else is an error
+              self.report_unexpected_last_token_error();
+              return Err(())
             }
           }
         } else {

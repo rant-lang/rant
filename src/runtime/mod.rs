@@ -818,16 +818,6 @@ impl<'rant> VM<'rant> {
           let lhs = self.pop_val()?;
           self.push_val(lhs.or(rhs))?;
         },
-        Intent::LogicNand => {
-          let rhs = self.pop_val()?;
-          let lhs = self.pop_val()?;
-          self.push_val(!lhs.and(rhs))?;
-        },
-        Intent::LogicNor => {
-          let rhs = self.pop_val()?;
-          let lhs = self.pop_val()?;
-          self.push_val(!lhs.or(rhs))?;
-        },
         Intent::LogicXor => {
           let rhs = self.pop_val()?;
           let lhs = self.pop_val()?;
@@ -1219,28 +1209,6 @@ impl<'rant> VM<'rant> {
             rhs: Rc::clone(rhs),
             short_circuit_result: LogicShortCircuitHandling::Passthrough,
             gen_op_intent: Box::new(|| Intent::LogicOr),
-          });
-          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
-          return Ok(true)
-        },
-        Expression::LogicNand(lhs, rhs) => {
-          self.cur_frame_mut().push_intent(Intent::PrintLast);
-          self.cur_frame_mut().push_intent(Intent::LogicShortCircuit {
-            on_truthiness: false,
-            rhs: Rc::clone(rhs),
-            short_circuit_result: LogicShortCircuitHandling::OverrideWith(true),
-            gen_op_intent: Box::new(|| Intent::LogicNand),
-          });
-          self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
-          return Ok(true)
-        },
-        Expression::LogicNor(lhs, rhs) => {
-          self.cur_frame_mut().push_intent(Intent::PrintLast);
-          self.cur_frame_mut().push_intent(Intent::LogicShortCircuit {
-            on_truthiness: true,
-            rhs: Rc::clone(rhs),
-            short_circuit_result: LogicShortCircuitHandling::OverrideWith(false),
-            gen_op_intent: Box::new(|| Intent::LogicNor),
           });
           self.cur_frame_mut().push_intent(Intent::CallOperand { sequence: Rc::clone(lhs) });
           return Ok(true)

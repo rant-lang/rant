@@ -124,10 +124,6 @@ pub enum Intent {
   LogicAnd,
   /// Pops two values, performs logical OR, and pushes the result.
   LogicOr,
-  /// Pops two values (RHS, LHS), performs logical NAND, and pushes the result.
-  LogicNand,
-  /// Pops two values (RHS, LHS), performs logical NOR, and pushes the result.
-  LogicNor,
   /// Pops two values (RHS, LHS), performs logical XOR, and pushes the result.
   LogicXor,
   /// Pops two values (RHS, LHS), calculates `LHS == RHS`, and pushes the result.
@@ -186,8 +182,6 @@ impl Intent {
       Self::LogicNot => "not",
       Self::LogicAnd => "and",
       Self::LogicOr => "or",
-      Self::LogicNand => "nand",
-      Self::LogicNor => "nor",
       Self::LogicXor => "xor",
       Self::Equals => "equals",
       Self::NotEquals => "not_equals",

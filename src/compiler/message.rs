@@ -140,7 +140,6 @@ pub enum Problem {
   FileNotFound(String),
   FileSystemError(String),
   FloatLiteralOutOfRange,
-  FunctionBodyBlockMultiElement,
   IntegerLiteralOutOfRange,
   InvalidEscapeChar(char),
   InvalidEscapeCodePoint(String),
@@ -233,7 +232,6 @@ impl Problem {
       
       // Blocks (0040 - 0059)
       Self::DynamicKeyBlockMultiElement =>                      rcode!(0040),
-      Self::FunctionBodyBlockMultiElement =>                    rcode!(0041),
 
       // Accessors (0060 - 0099)
       Self::AnonValueAssignment =>                              rcode!(0060),
@@ -295,7 +293,6 @@ impl Problem {
       Self::FileNotFound(file) => rmsg!("file not found: '{}'", file),
       Self::FileSystemError(err) => rmsg!("filesystem error: {}", err),
       Self::FloatLiteralOutOfRange => rmsg!("float literal is out of range for the `float` type; consider changing it (or if applicable, using a string instead)"),
-      Self::FunctionBodyBlockMultiElement => rmsg!("function body blocks can't have more than one element; if branching is desired, create an inner block"),
       Self::IntegerLiteralOutOfRange => rmsg!("integer literal is out of range for the `int` type; consider changing it (or if applicable, using a string instead)"),
       Self::InvalidEscapeChar(c) => rmsg!("invalid escape character: '{}'", c),
       Self::InvalidEscapeCodePoint(cp) => rmsg!("invalid code point in unicode escape: '{}'", cp),
@@ -347,7 +344,6 @@ impl Problem {
       Self::DuplicateParameter(_) => rmsg!("rename parameter to something unique"),
       Self::DynamicKeyBlockMultiElement => rmsg!("multiple elements not allowed here"),
       Self::ExpectedToken(token) => rmsg!("expected '{}'", token),
-      Self::FunctionBodyBlockMultiElement => rmsg!("multiple elements not allowed here"),
       Self::InvalidHint | Self::InvalidHintOn(_) => rmsg!("hint not allowed here"),
       Self::InvalidIdentifier(_) => rmsg!("invalid identifier"),
       Self::InvalidParameter(_) => rmsg!("invalid parameter"),

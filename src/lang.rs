@@ -854,14 +854,10 @@ pub enum Expression {
   NotEquals(Rc<Sequence>, Rc<Sequence>),
   /// Logical AND
   LogicAnd(Rc<Sequence>, Rc<Sequence>),
-  /// Logical NOR
-  LogicNor(Rc<Sequence>, Rc<Sequence>),
   /// Logical XOR
   LogicXor(Rc<Sequence>, Rc<Sequence>),
   /// Logical OR
   LogicOr(Rc<Sequence>, Rc<Sequence>),
-  /// Logical NAND
-  LogicNand(Rc<Sequence>, Rc<Sequence>),
   /// Conditional branch
   Conditional { conditions: Rc<Vec<(Rc<Sequence>, Rc<Block>)>>, fallback: Option<Rc<Block>> },
   /// Provides debug information about the next sequence element
@@ -912,10 +908,8 @@ impl Expression {
       Self::Equals(_, _) =>                    "equals",
       Self::NotEquals(_, _) =>                 "not equals",
       Self::LogicAnd(_, _) =>                  "and",
-      Self::LogicNor(_, _) =>                  "nor",
       Self::LogicXor(_, _) =>                  "xor",
       Self::LogicOr(_, _) =>                   "or",
-      Self::LogicNand(_, _) =>                 "nand",
       Self::DebugCursor(_) =>                  "debug cursor",
       Self::Conditional { .. } =>              "conditional",
       Self::Require { .. } =>                  "require",

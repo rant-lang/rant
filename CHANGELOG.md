@@ -1,5 +1,22 @@
 # Changelog
 
+## 4.0.0-alpha.31 (unreleased)
+
+### New
+
+### Changes
+* Changed `@and` operator to a symbol: `&`
+* Changed `@or` operator to a symbol: `|` (must use within parentheses in block element context)
+* Changed `@xor` operator to a symbol: `^`
+* Compound assignment operator symbols are now monomorphic -- meaning you can't insert whitespace before the `=` anymore.
+
+### Fixes
+* Fixed parser bug caused by `/=` operator
+* Fixed trailing newline on REPL input
+
+### Removed
+* Removed `@nand` and `@nor`
+
 ## 4.0.0-alpha.31
 
 (2/12/2022)
