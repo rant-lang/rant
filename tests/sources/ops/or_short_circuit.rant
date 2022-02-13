@@ -11,17 +11,17 @@
   <rhs>
 }
 
-# Test @true @or @false
+# Test @true | @false
 <lhs = @true; rhs = @false>
-[tap: [get-lhs] @or [get-rhs]]
+[tap: [get-lhs] | [get-rhs]]
 [assert-eq: <lhs-reads>; 1]
 [assert-eq: <rhs-reads>; 0]
 
 # Reset stats
 <lhs-reads = 0; rhs-reads = 0>
 
-# Test @false @or @true
+# Test @false | @true
 <lhs = @false; rhs = @true>
-[tap: [get-lhs] @or [get-rhs]]
+[tap: [get-lhs] | [get-rhs]]
 [assert-eq: <lhs-reads>; 1]
 [assert-eq: <rhs-reads>; 1]

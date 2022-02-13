@@ -813,26 +813,6 @@ fn ops_math() {
 }
 
 #[test]
-fn ops_nand() {
-  test_rant_file!("sources/ops/nand.rant")
-}
-
-#[test]
-fn ops_nand_short_circuit() {
-  test_rant_file!("sources/ops/nand_short_circuit.rant")
-}
-
-#[test]
-fn ops_nor() {
-  test_rant_file!("sources/ops/nor.rant")
-}
-
-#[test]
-fn ops_nor_short_circuit() {
-  test_rant_file!("sources/ops/nor_short_circuit.rant")
-}
-
-#[test]
 fn ops_not() {
   test_rant_file!("sources/ops/not.rant")
 }
