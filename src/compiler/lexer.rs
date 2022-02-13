@@ -235,7 +235,7 @@ pub enum RantToken {
   #[token("%=")]
   PercentEquals,
   
-  /// ```
+  /// <code>`</code>
   #[token("`")]
   Hint,
   
