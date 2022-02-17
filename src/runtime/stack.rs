@@ -334,9 +334,6 @@ pub struct StackFrame<I> {
   has_scope: bool,
   /// Program Counter (as index in sequence) for the current frame
   pc: usize,
-  /// Has frame sequence started running?
-  /// TODO: Get rid of this field.
-  started: bool,
   /// Output for the frame
   output: OutputWriter,
   /// Intent queue for the frame
@@ -356,7 +353,6 @@ impl<I> StackFrame<I> {
       origin: Rc::clone(&sequence.origin),
       sequence: Some(sequence),
       output: OutputWriter::new(prev_output),
-      started: false,
       has_scope: true,
       pc: 0,
       intents: Default::default(),
@@ -379,7 +375,6 @@ impl<I> StackFrame<I> {
       origin,
       sequence,
       output: OutputWriter::new(prev_output),
-      started: false,
       has_scope,
       pc: 0,
       intents: Default::default(),
@@ -417,14 +412,12 @@ impl<I> StackFrame<I> {
       return None
     }
     
-    // Increment PC
-    if self.started {
-      self.pc += 1;
-    } else {
-      self.started = true;
-    }
+    let next = self.sequence.as_ref().and_then(|seq| seq.get(self.pc).map(Rc::clone));
     
-    self.sequence.as_ref().and_then(|seq| seq.get(self.pc).map(Rc::clone))
+    // Increment PC
+    self.pc += 1;
+    
+    next
   }
   
   /// Gets the Program Counter (PC) for the frame.
