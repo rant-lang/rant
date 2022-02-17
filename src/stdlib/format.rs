@@ -13,9 +13,9 @@ pub fn ws_fmt(vm: &mut VM, (mode, custom): (Option<String>, Option<RantValue>)) 
       "custom" =>     WhitespaceNormalizationMode::Custom(custom.unwrap_or(RantValue::Nothing)),
       bad_mode => runtime_error!(RuntimeErrorType::ArgumentError, "invalid whitespace normalization mode: '{}'", bad_mode),
     };
-    vm.parent_frame_mut(1).unwrap().output_mut().format_mut().ws_norm_mode = mode;
+    vm.parent_frame_mut(1).unwrap().output_mut().format_mut().whitespace_format = mode;
   } else {
-    let mode = vm.cur_frame().output().format().ws_norm_mode.clone();
+    let mode = vm.cur_frame().output().format().whitespace_format.clone();
     let frame = vm.cur_frame_mut();
     match mode {
       WhitespaceNormalizationMode::Custom(custom_val) => {
@@ -51,7 +51,7 @@ pub fn num_fmt(vm: &mut VM, (options, depth): (Option<RantMapHandle>, Option<usi
       let options = options.borrow();
       if options.is_empty() { return Ok(()) }
 
-      let format = &mut frame.output_mut().format_mut().num_format;
+      let format = &mut frame.output_mut().format_mut().number_format;
 
       for (k, v) in options.raw_pairs_internal() {
         let v = v.clone();
@@ -110,7 +110,7 @@ pub fn num_fmt(vm: &mut VM, (options, depth): (Option<RantMapHandle>, Option<usi
     }
   } else {
     let fmt = match vm.parent_frame(actual_depth) {
-      Some(frame) => frame.output().format().num_format.clone(),
+      Some(frame) => frame.output().format().number_format.clone(),
       None => Default::default(),
     };
 
@@ -139,12 +139,12 @@ pub fn num_fmt_system(vm: &mut VM, (system, depth): (Option<NumeralSystem>, Opti
   if let Some(system) = system {
     if let Some(frame) = vm.parent_frame_mut(actual_depth) {
       let output = frame.output_mut();
-      output.format_mut().num_format.system = system;
+      output.format_mut().number_format.system = system;
       output.update_number_format();
     }
   } else {
     let cur_system = match vm.parent_frame_mut(actual_depth) {
-      Some(frame) => frame.output().format().num_format.system,
+      Some(frame) => frame.output().format().number_format.system,
       None => Default::default(),
     }.try_into_rant().into_runtime_result()?;
       
@@ -160,12 +160,12 @@ pub fn num_fmt_alt(vm: &mut VM, (alt, depth): (Option<bool>, Option<usize>)) -> 
   if let Some(alt) = alt {
     if let Some(frame) = vm.parent_frame_mut(actual_depth) {
       let output = frame.output_mut();
-      output.format_mut().num_format.alternate = alt;
+      output.format_mut().number_format.alternate = alt;
       output.update_number_format();
     }
   } else {
     let cur_alternate = match vm.parent_frame(actual_depth) {
-      Some(frame) => frame.output().format().num_format.alternate,
+      Some(frame) => frame.output().format().number_format.alternate,
       None => false
     }.try_into_rant().into_runtime_result()?;
     vm.cur_frame_mut().write(cur_alternate);
@@ -180,12 +180,12 @@ pub fn num_fmt_padding(vm: &mut VM, (padding, depth): (Option<u16>, Option<usize
   if let Some(padding) = padding {
     if let Some(frame) = vm.parent_frame_mut(actual_depth) {
       let output = frame.output_mut();
-      output.format_mut().num_format.padding = padding;
+      output.format_mut().number_format.padding = padding;
       output.update_number_format();
     }
   } else {
     let cur_padding = match vm.parent_frame(actual_depth) {
-        Some(frame) => frame.output().format().num_format.padding,
+        Some(frame) => frame.output().format().number_format.padding,
         None => 0,
     }.try_into_rant().into_runtime_result()?;
     vm.cur_frame_mut().write(cur_padding);
@@ -201,12 +201,12 @@ pub fn num_fmt_precision(vm: &mut VM, (precision, depth): (Option<i16>, Option<u
   if let Some(precision) = precision {
     if let Some(frame) = vm.parent_frame_mut(actual_depth) {
       let output = frame.output_mut();
-      output.format_mut().num_format.precision = (precision >= 0).then(|| precision as u16);
+      output.format_mut().number_format.precision = (precision >= 0).then(|| precision as u16);
       output.update_number_format();
     }
   } else {
     let cur_precision = match vm.parent_frame(actual_depth) {
-        Some(frame) => frame.output().format().num_format.precision.map(|p| p as i64).unwrap_or(-DEFAULT_PRECISION),
+        Some(frame) => frame.output().format().number_format.precision.map(|p| p as i64).unwrap_or(-DEFAULT_PRECISION),
         None => DEFAULT_PRECISION,
     }.try_into_rant().into_runtime_result()?;
     vm.cur_frame_mut().write(cur_precision);
@@ -221,12 +221,12 @@ pub fn num_fmt_upper(vm: &mut VM, (upper, depth): (Option<bool>, Option<usize>))
   if let Some(upper) = upper {
     if let Some(frame) = vm.parent_frame_mut(actual_depth) {
       let output = frame.output_mut();
-      output.format_mut().num_format.uppercase = upper;
+      output.format_mut().number_format.uppercase = upper;
       output.update_number_format();
     }
   } else {
     let cur_upper = match vm.parent_frame(actual_depth) {
-      Some(frame) => frame.output().format().num_format.uppercase,
+      Some(frame) => frame.output().format().number_format.uppercase,
       None => false
     }.try_into_rant().into_runtime_result()?;
     vm.cur_frame_mut().write(cur_upper);
@@ -241,12 +241,12 @@ pub fn num_fmt_endian(vm: &mut VM, (endianness, depth): (Option<Endianness>, Opt
   if let Some(endianness) = endianness {
     if let Some(frame) = vm.parent_frame_mut(actual_depth) {
       let output = frame.output_mut();
-      output.format_mut().num_format.endianness = endianness;
+      output.format_mut().number_format.endianness = endianness;
       output.update_number_format();
     }
   } else {
     let cur_endianness = match vm.parent_frame(actual_depth) {
-      Some(frame) => frame.output().format().num_format.endianness,
+      Some(frame) => frame.output().format().number_format.endianness,
       None => Default::default()
     }.try_into_rant().into_runtime_result()?;
     vm.cur_frame_mut().write(cur_endianness);
@@ -261,12 +261,12 @@ pub fn num_fmt_sign(vm: &mut VM, (sign_style, depth): (Option<SignStyle>, Option
   if let Some(sign_style) = sign_style {
     if let Some(frame) = vm.parent_frame_mut(actual_depth) {
       let output = frame.output_mut();
-      output.format_mut().num_format.sign = sign_style;
+      output.format_mut().number_format.sign = sign_style;
       output.update_number_format();
     }
   } else {
     let cur_sign_style = match vm.parent_frame(actual_depth) {
-      Some(frame) => frame.output().format().num_format.sign,
+      Some(frame) => frame.output().format().number_format.sign,
       None => Default::default()
     }.try_into_rant().into_runtime_result()?;
     vm.cur_frame_mut().write(cur_sign_style);
@@ -281,12 +281,12 @@ pub fn num_fmt_infinity(vm: &mut VM, (infinity_style, depth): (Option<InfinitySt
   if let Some(infinity_style) = infinity_style {
     if let Some(frame) = vm.parent_frame_mut(actual_depth) {
       let output = frame.output_mut();
-      output.format_mut().num_format.infinity = infinity_style;
+      output.format_mut().number_format.infinity = infinity_style;
       output.update_number_format();
     }
   } else {
     let cur_infinity_style = match vm.parent_frame(actual_depth) {
-      Some(frame) => frame.output().format().num_format.infinity,
+      Some(frame) => frame.output().format().number_format.infinity,
       None => Default::default()
     }.try_into_rant().into_runtime_result()?;
     vm.cur_frame_mut().write(cur_infinity_style);
@@ -301,12 +301,12 @@ pub fn num_fmt_group_sep(vm: &mut VM, (group_sep, depth): (Option<InternalString
   if let Some(group_sep) = group_sep {
     if let Some(frame) = vm.parent_frame_mut(actual_depth) {
       let output = frame.output_mut();
-      output.format_mut().num_format.group_sep = (!group_sep.is_empty()).then(|| group_sep);
+      output.format_mut().number_format.group_sep = (!group_sep.is_empty()).then(|| group_sep);
       output.update_number_format();
     }
   } else {
     let cur_group_sep = match vm.parent_frame(actual_depth) {
-      Some(frame) => frame.output().format().num_format.group_sep.clone().unwrap_or_default(),
+      Some(frame) => frame.output().format().number_format.group_sep.clone().unwrap_or_default(),
       None => Default::default()
     }.try_into_rant().into_runtime_result()?;
 
@@ -322,12 +322,12 @@ pub fn num_fmt_decimal_sep(vm: &mut VM, (decimal_sep, depth): (Option<InternalSt
   if let Some(decimal_sep) = decimal_sep {
     if let Some(frame) = vm.parent_frame_mut(actual_depth) {
       let output = frame.output_mut();
-      output.format_mut().num_format.decimal_sep = (!decimal_sep.is_empty()).then(|| decimal_sep);
+      output.format_mut().number_format.decimal_sep = (!decimal_sep.is_empty()).then(|| decimal_sep);
       output.update_number_format();
     }
   } else {
     let cur_decimal_sep = match vm.parent_frame(actual_depth) {
-      Some(frame) => frame.output().format().num_format.decimal_sep.clone().unwrap_or_default(),
+      Some(frame) => frame.output().format().number_format.decimal_sep.clone().unwrap_or_default(),
       None => Default::default()
     }.try_into_rant().into_runtime_result()?;
 

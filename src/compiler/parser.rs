@@ -344,6 +344,13 @@ struct ParsedConditional {
   is_auto_hinted: bool,
 }
 
+/// Contains information about a successfully parsed parenthetical expression or collection initializer.
+struct ParsedGroupOrCollection {
+  node: Expression,
+  is_collection: bool,
+  is_auto_hinted: bool,
+}
+
 /// A parser that turns Rant code into an RST (Rant Syntax Tree).
 pub struct RantParser<'source, 'report, R: Reporter> {
   /// A string slice containing the source code being parsed.
@@ -862,9 +869,22 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         },
         
         // Group or collection initializer
-        LeftParen => no_flags!(on {
-          self.parse_group_or_collection_init(&span)?
-        }),
+        LeftParen => {
+          let ParsedGroupOrCollection {
+            node,
+            is_collection,
+            is_auto_hinted
+          } = self.parse_group_or_collection_init(&span)?;
+
+          if is_collection {
+            // Flags are redundant on collection initializers since they're always non-text
+            no_flags!();
+          } else if is_seq_text && is_auto_hinted {
+            whitespace!(allow);
+          }
+
+          emit!(node);
+        },
         
         // Collection init termination
         RightParen => no_flags!({
@@ -1021,7 +1041,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
         
         // Escape sequences
-        Escape(esc) => no_flags!(on {
+        Escape(esc) => {
           whitespace!(allow);
           is_seq_text = true;
           let mut frag = InternalString::new();
@@ -1037,8 +1057,8 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             },
           }
           consume_fragments!(frag);
-          Expression::Fragment(frag)
-        }),
+          emit!(Expression::Fragment(frag))
+        },
 
         // Minus (considered a const negation only if it's in text or at the start of a sequence)
         Minus if is_seq_text || sequence.is_empty() => {
@@ -1478,7 +1498,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
   }
   
   /// Parses a group or list/map/tuple initializer.
-  fn parse_group_or_collection_init(&mut self, start_span: &Range<usize>) -> ParseResult<Expression> {
+  fn parse_group_or_collection_init(&mut self, start_span: &Range<usize>) -> ParseResult<ParsedGroupOrCollection> {
     self.reader.skip_ws();
     let collection_type_token_info = self.reader.take_where(|t| matches!(t, Some((RantToken::Colon | RantToken::DoubleColon, ..))));
     self.reader.skip_ws();
@@ -1489,7 +1509,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         RantToken::Colon => {
           // Exit early on empty list
           if self.reader.eat_where(|token| matches!(token, Some((RightParen, ..)))) {
-            return Ok(Expression::ListInit(Rc::new(vec![])))
+            return Ok(ParsedGroupOrCollection {
+              node: Expression::ListInit(Rc::new(vec![])),
+              is_collection: true,
+              is_auto_hinted: false,
+            })
           }
           
           let mut sequences = vec![];
@@ -1522,7 +1546,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           }
 
-          Ok(Expression::ListInit(Rc::new(sequences)))
+          Ok(ParsedGroupOrCollection {
+            node: Expression::ListInit(Rc::new(sequences)),
+            is_collection: true, 
+            is_auto_hinted: false,
+          })
         },
         // Is it a map?
         RantToken::DoubleColon => {
@@ -1635,7 +1663,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
             }
           }
           
-          Ok(Expression::MapInit(Rc::new(pairs)))
+          Ok(ParsedGroupOrCollection {
+            node: Expression::MapInit(Rc::new(pairs)),
+            is_collection: true,
+            is_auto_hinted: false,
+          })
         },
         _ => unreachable!()
       }
@@ -1646,7 +1678,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
       loop {
         self.reader.skip_ws();
         
-        let ParsedSequence { sequence, end_type: seq_end, .. } = self.parse_sequence(SequenceParseMode::CollectionInit)?;
+        let ParsedSequence { sequence, end_type: seq_end, is_auto_hinted, .. } = self.parse_sequence(SequenceParseMode::CollectionInit)?;
         
         match seq_end {
           SequenceEndType::CollectionInitDelim => {
@@ -1659,7 +1691,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
               if sequence.is_empty() {
                 break
               }
-              return Ok(Expression::Sequence(Rc::new(sequence)))
+              return Ok(ParsedGroupOrCollection {
+                node: Expression::Sequence(Rc::new(sequence)),
+                is_collection: false,
+                is_auto_hinted,
+              })
             }
             sequences.push(Rc::new(sequence));
             break
@@ -1684,7 +1720,11 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }
       }
 
-      Ok(Expression::TupleInit(Rc::new(sequences)))
+      Ok(ParsedGroupOrCollection {
+        node: Expression::TupleInit(Rc::new(sequences)),
+        is_collection: true,
+        is_auto_hinted: false,
+      })
     }
   }
   

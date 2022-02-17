@@ -9,6 +9,7 @@
 * Changed `@or` operator to a symbol: `|` (must use within parentheses in block element context)
 * Changed `@xor` operator to a symbol: `^`
 * Compound assignment operator symbols are now monomorphic -- meaning you can't insert whitespace before the `=` anymore.
+* Allow hints/sinks in more places
 
 ### Fixes
 * Fixed parser bug caused by `/=` operator

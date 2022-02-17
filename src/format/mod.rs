@@ -1,13 +1,14 @@
 mod num;
-mod caps;
+mod text;
 mod ws;
 
 pub use self::num::*;
-pub use self::caps::*;
+pub use self::text::*;
 pub use self::ws::*;
 
 #[derive(Debug, Clone, Default)]
 pub struct OutputFormat {
-  pub ws_norm_mode: WhitespaceNormalizationMode,
-  pub num_format: NumberFormat,
+  pub whitespace_format: WhitespaceNormalizationMode,
+  pub number_format: NumberFormat,
+  pub casing_format: CasingFormat,
 }

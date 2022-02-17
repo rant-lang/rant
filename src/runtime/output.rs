@@ -46,7 +46,7 @@ impl OutputWriter {
 
   #[inline]
   pub fn update_number_format(&mut self) {
-    let fmt = self.format.num_format.clone();
+    let fmt = self.format.number_format.clone();
     if let Some(OutputBuffer::NumberFormatUpdate(upd)) = self.last_buffer_mut() {
       *upd = fmt;
     } else {
@@ -128,7 +128,7 @@ impl OutputWriter {
   /// Writes a whitespace string to the output.
   #[inline]
   pub fn write_ws(&mut self, value: &str) {
-    let ws_str = match &self.format.ws_norm_mode {
+    let ws_str = match &self.format.whitespace_format {
       WhitespaceNormalizationMode::Default => DEFAULT_SPACE,
       WhitespaceNormalizationMode::IgnoreAll => return,
       WhitespaceNormalizationMode::Verbatim => value,
@@ -265,11 +265,11 @@ impl OutputBuffer {
       Self::Fragment(s) => s,
       Self::Whitespace(s) => s,
       Self::Value(RantValue::Nothing) => return None,
-      Self::Value(RantValue::Int(n)) => format.num_format.format_integer(n),
-      Self::Value(RantValue::Float(n)) => format.num_format.format_float(n),
+      Self::Value(RantValue::Int(n)) => format.number_format.format_integer(n),
+      Self::Value(RantValue::Float(n)) => format.number_format.format_float(n),
       Self::Value(v) => InternalString::from(v.to_string()),
       Self::NumberFormatUpdate(fmt) => {
-        format.num_format = fmt;
+        format.number_format = fmt;
         return None
       },
     })

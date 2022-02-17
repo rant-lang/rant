@@ -43,7 +43,7 @@ impl RantString {
 
 impl RantString {
   #[inline]
-  fn graphemes(&self) -> &Graphemes {
+  pub(crate) fn graphemes(&self) -> &Graphemes {
     self.graphemes.get_or_init(|| 
       Some(UnicodeSegmentation::grapheme_indices(self.raw.as_str(), true)
       .map(|(i, slice)| (i, i + slice.len()))
