@@ -1902,7 +1902,7 @@ impl<'rant> VM<'rant> {
       self.call_stack.top().map(|last| last.output()),
       Rc::clone(last_frame.origin()),
       true,
-      last_frame.debug_pos(),
+      last_frame.debug_cursor(),
       StackFrameFlavor::Original
     ).with_flavor(flavor);
 

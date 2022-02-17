@@ -338,8 +338,8 @@ pub struct StackFrame<I> {
   output: OutputWriter,
   /// Intent queue for the frame
   intents: Vec<I>,
-  /// Line/col for debug info
-  debug_pos: (usize, usize),
+  /// Debug cursor (line/col)
+  debug_cursor: (usize, usize),
   /// Origin of sequence
   origin: Rc<RantProgramInfo>,
   /// A usage hint provided by the program element that created the frame.
@@ -356,7 +356,7 @@ impl<I> StackFrame<I> {
       has_scope: true,
       pc: 0,
       intents: Default::default(),
-      debug_pos: (0, 0),
+      debug_cursor: (0, 0),
       flavor: Default::default(),
     }
   }
@@ -378,7 +378,7 @@ impl<I> StackFrame<I> {
       has_scope,
       pc: 0,
       intents: Default::default(),
-      debug_pos,
+      debug_cursor: debug_pos,
       flavor,
     }
   }
@@ -455,8 +455,8 @@ impl<I> StackFrame<I> {
   }
 
   #[inline(always)]
-  pub fn debug_pos(&self) -> (usize, usize) {
-    self.debug_pos
+  pub fn debug_cursor(&self) -> (usize, usize) {
+    self.debug_cursor
   }
 
   #[inline]
@@ -486,7 +486,7 @@ impl<I> StackFrame<I> {
   #[inline]
   pub fn set_debug_info(&mut self, info: &DebugInfo) {
     match info {
-      DebugInfo::Location { line, col } => self.debug_pos = (*line, *col),
+      DebugInfo::Location { line, col } => self.debug_cursor = (*line, *col),
     }
   }
 }
@@ -526,8 +526,8 @@ impl<I> Display for StackFrame<I> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "[{}:{}:{}] in {}", 
       self.origin_name(), 
-      self.debug_pos.0, 
-      self.debug_pos.1,
+      self.debug_cursor.0, 
+      self.debug_cursor.1,
       self.sequence.as_ref()
         .and_then(|seq| seq.name().map(|name| name.as_str()))
         .unwrap_or_else(|| self.flavor.name()), 

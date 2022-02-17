@@ -25,17 +25,26 @@ const PREC_XOR: usize = 2;
 const PREC_DISJUNCTIVE: usize = 1;
 const PREC_SEQUENCE: usize = 0;
 
-// TODO: Reorganize this garbage so that pre/postfix are apparent from this enum
 #[derive(Copy, Clone, PartialEq)]
-enum OrderedOperator {
+enum Op {
+  Infix(InfixOp),
+  Prefix(PrefixOp),
+}
+
+#[derive(Copy, Clone, PartialEq)]
+enum PrefixOp {
+  Negate,
+  LogicNot,
+}
+
+#[derive(Copy, Clone, PartialEq)]
+enum InfixOp {
   Add,
   Subtract,
   Multiply,
   Divide,
   Modulo,
   Power,
-  Negate,
-  LogicNot,
   LogicAnd,
   LogicOr,
   LogicXor,
@@ -47,13 +56,36 @@ enum OrderedOperator {
   LessOrEqual,
 }
 
+impl InfixOp {
+  #[inline]
+  fn precedence(&self) -> usize {
+    match self {
+      Self::Power =>         PREC_EXPONENTIAL,
+      Self::Multiply =>      PREC_MULTIPLICATIVE,
+      Self::Divide =>        PREC_MULTIPLICATIVE,
+      Self::Modulo =>        PREC_MULTIPLICATIVE,
+      Self::Add =>           PREC_ADDITIVE,
+      Self::Subtract =>      PREC_ADDITIVE,
+      Self::Greater =>       PREC_RELATIONAL,
+      Self::GreatOrEqual =>  PREC_RELATIONAL,
+      Self::Less =>          PREC_RELATIONAL,
+      Self::LessOrEqual =>   PREC_RELATIONAL,
+      Self::Equals =>        PREC_EQUALITY,
+      Self::NotEquals =>     PREC_EQUALITY,
+      Self::LogicAnd =>      PREC_CONJUNCTIVE,
+      Self::LogicXor =>      PREC_XOR,
+      Self::LogicOr =>       PREC_DISJUNCTIVE,
+    }
+  }
+}
+
 #[derive(Copy, Clone, PartialEq)]
-enum OrderedOperatorType {
+enum OpType {
   Prefix,
   Infix,
 }
 
-impl OrderedOperator {
+impl Op {
 
   #[inline]
   fn is_kw_supported(kw_name: &str) -> bool {
@@ -61,34 +93,34 @@ impl OrderedOperator {
   }
 
   #[inline]
-  fn op_type(&self) -> OrderedOperatorType {
+  fn op_type(&self) -> OpType {
     match self {
-      Self::Negate | Self::LogicNot => OrderedOperatorType::Prefix,
-      _ => OrderedOperatorType::Infix,
+      Self::Infix(_) => OpType::Infix,
+      Self::Prefix(_) => OpType::Prefix,
     }
   }
 
   #[inline(always)]
-  fn from_token(token: &RantToken) -> Option<OrderedOperator> {
+  fn from_token(token: &RantToken) -> Option<Op> {
     Some(match token {
-      Plus => Self::Add,
-      Minus => Self::Subtract,
-      Star => Self::Multiply,
-      Slash => Self::Divide,
-      Percent => Self::Modulo,
-      DoubleStar => Self::Power,
-      And => Self::LogicAnd,
-      VertBar => Self::LogicOr,
-      Caret => Self::LogicXor,
+      Plus =>               Self::Infix(InfixOp::Add),
+      Minus =>              Self::Infix(InfixOp::Subtract),
+      Star =>               Self::Infix(InfixOp::Multiply),
+      Slash =>              Self::Infix(InfixOp::Divide),
+      Percent =>            Self::Infix(InfixOp::Modulo),
+      DoubleStar =>         Self::Infix(InfixOp::Power),
+      And =>                Self::Infix(InfixOp::LogicAnd),
+      VertBar =>            Self::Infix(InfixOp::LogicOr),
+      Caret =>              Self::Infix(InfixOp::LogicXor),
       Keyword(kw) if kw.is_valid => match kw.name.as_str() {
-        KW_NEG => Self::Negate,
-        KW_NOT => Self::LogicNot,
-        KW_EQ => Self::Equals,
-        KW_NEQ => Self::NotEquals,
-        KW_GT => Self::Greater,
-        KW_GE => Self::GreatOrEqual,
-        KW_LT => Self::Less,
-        KW_LE => Self::LessOrEqual,
+        KW_NEG =>       Self::Prefix(PrefixOp::Negate),
+        KW_NOT =>       Self::Prefix(PrefixOp::LogicNot),
+        KW_EQ =>        Self::Infix(InfixOp::Equals),
+        KW_NEQ =>       Self::Infix(InfixOp::NotEquals),
+        KW_GT =>        Self::Infix(InfixOp::Greater),
+        KW_GE =>        Self::Infix(InfixOp::GreatOrEqual),
+        KW_LT =>        Self::Infix(InfixOp::Less),
+        KW_LE =>        Self::Infix(InfixOp::LessOrEqual),
         _ => return None,
       },
       _ => return None,
@@ -98,23 +130,8 @@ impl OrderedOperator {
   #[inline]
   fn precedence(&self) -> usize {
     match self {
-      Self::Negate =>       PREC_PREFIX,
-      Self::LogicNot =>     PREC_PREFIX,
-      Self::Power =>        PREC_EXPONENTIAL,
-      Self::Multiply =>     PREC_MULTIPLICATIVE,
-      Self::Divide =>       PREC_MULTIPLICATIVE,
-      Self::Modulo =>       PREC_MULTIPLICATIVE,
-      Self::Add =>          PREC_ADDITIVE,
-      Self::Subtract =>     PREC_ADDITIVE,
-      Self::Greater =>      PREC_RELATIONAL,
-      Self::GreatOrEqual => PREC_RELATIONAL,
-      Self::Less =>         PREC_RELATIONAL,
-      Self::LessOrEqual =>  PREC_RELATIONAL,
-      Self::Equals =>       PREC_EQUALITY,
-      Self::NotEquals =>    PREC_EQUALITY,
-      Self::LogicAnd =>     PREC_CONJUNCTIVE,
-      Self::LogicXor =>     PREC_XOR,
-      Self::LogicOr =>      PREC_DISJUNCTIVE,
+      Self::Prefix(_) =>          PREC_PREFIX,
+      Self::Infix(op) =>  op.precedence(),
     }
   }
 }
@@ -304,7 +321,7 @@ struct ParsedSequence {
   end_type: SequenceEndType,
   is_auto_hinted: bool,
   extras: Option<ParsedSequenceExtras>,
-  next_infix_op: Option<OrderedOperator>,
+  next_infix_op: Option<Op>,
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -621,7 +638,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         }),
 
         // Prefix keyword
-        Keyword(KeywordInfo { name: kw, is_valid: is_kw_valid }) if is_kw_valid && !OrderedOperator::is_kw_supported(kw.as_str()) => {
+        Keyword(KeywordInfo { name: kw, is_valid: is_kw_valid }) if is_kw_valid && !Op::is_kw_supported(kw.as_str()) => {
           let kwstr = kw.as_str();
           match kwstr {            
             // Boolean constants
@@ -1203,14 +1220,13 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
         token => {          
           // Check for ordered operator
           // TODO: Split out this horror into its own function PLEASE
-          if let Some(mut next_op) = OrderedOperator::from_token(&token) {
+          if let Some(mut next_op) = Op::from_token(&token) {
             let mut op_end_type = SequenceEndType::Operator;
             loop {
               let op_precedence = next_op.precedence();
-              let op_type = next_op.op_type();
-              match op_type {
+              match next_op {
                 // Check for prefix operator
-                OrderedOperatorType::Prefix => {
+                Op::Prefix(prefix_op) => {
                   // Read operand for prefix op
                   let ParsedSequence {
                     sequence: operand_seq,
@@ -1230,13 +1246,12 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
 
                   let operand = Rc::new(operand_seq);
 
-                  let prefix_op_node = match next_op {
-                    OrderedOperator::Negate => {
+                  let prefix_op_node = match prefix_op {
+                    PrefixOp::Negate => {
                       whitespace!(allow);
                       Expression::Negate(operand)
                     },
-                    OrderedOperator::LogicNot => Expression::LogicNot(operand),
-                    _ => unreachable!()
+                    PrefixOp::LogicNot => Expression::LogicNot(operand),
                   };
                   whitespace!(ignore prev);
                   emit!(prefix_op_node);
@@ -1259,7 +1274,7 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   }
                 },
                 // Check for infix operator
-                OrderedOperatorType::Infix => {
+                Op::Infix(infix_op) => {
                   whitespace!(ignore both);
                   // Make sure LHS is not empty
                   if sequence.is_empty() {
@@ -1295,23 +1310,22 @@ impl<'source, 'report, R: Reporter> RantParser<'source, 'report, R> {
                   let rhs = Rc::new(rhs_seq);              
 
                   // Produce infix operation node
-                  let op_node = match next_op {
-                    OrderedOperator::Add => Expression::Add(lhs, rhs),
-                    OrderedOperator::Subtract => Expression::Subtract(lhs, rhs),
-                    OrderedOperator::Multiply => Expression::Multiply(lhs, rhs),
-                    OrderedOperator::Divide => Expression::Divide(lhs, rhs),
-                    OrderedOperator::Modulo => Expression::Modulo(lhs, rhs),
-                    OrderedOperator::Power => Expression::Power(lhs, rhs),
-                    OrderedOperator::LogicAnd => Expression::LogicAnd(lhs, rhs),
-                    OrderedOperator::LogicOr => Expression::LogicOr(lhs, rhs),
-                    OrderedOperator::LogicXor => Expression::LogicXor(lhs, rhs),
-                    OrderedOperator::Equals => Expression::Equals(lhs, rhs),
-                    OrderedOperator::NotEquals => Expression::NotEquals(lhs, rhs),
-                    OrderedOperator::Greater => Expression::Greater(lhs, rhs),
-                    OrderedOperator::GreatOrEqual => Expression::GreaterOrEqual(lhs, rhs),
-                    OrderedOperator::Less => Expression::Less(lhs, rhs),
-                    OrderedOperator::LessOrEqual => Expression::LessOrEqual(lhs, rhs),
-                    _ => unreachable!()
+                  let op_node = match infix_op {
+                    InfixOp::Add => Expression::Add(lhs, rhs),
+                    InfixOp::Subtract => Expression::Subtract(lhs, rhs),
+                    InfixOp::Multiply => Expression::Multiply(lhs, rhs),
+                    InfixOp::Divide => Expression::Divide(lhs, rhs),
+                    InfixOp::Modulo => Expression::Modulo(lhs, rhs),
+                    InfixOp::Power => Expression::Power(lhs, rhs),
+                    InfixOp::LogicAnd => Expression::LogicAnd(lhs, rhs),
+                    InfixOp::LogicOr => Expression::LogicOr(lhs, rhs),
+                    InfixOp::LogicXor => Expression::LogicXor(lhs, rhs),
+                    InfixOp::Equals => Expression::Equals(lhs, rhs),
+                    InfixOp::NotEquals => Expression::NotEquals(lhs, rhs),
+                    InfixOp::Greater => Expression::Greater(lhs, rhs),
+                    InfixOp::GreatOrEqual => Expression::GreaterOrEqual(lhs, rhs),
+                    InfixOp::Less => Expression::Less(lhs, rhs),
+                    InfixOp::LessOrEqual => Expression::LessOrEqual(lhs, rhs),
                   };
 
                   // Replace current sequence with operation (containing old sequence as LHS)
