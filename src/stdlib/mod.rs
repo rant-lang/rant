@@ -132,7 +132,7 @@ pub fn load_stdlib(context: &mut Rant)
     push, pop, oxford_join, zip,
 
     // String functions
-    lower, upper, seg, split, lines, indent, string_replace, trim,
+    char_, lower, upper, seg, split, lines, indent, string_replace, trim, ord, ord_all,
 
     // Error functions
     error

@@ -208,6 +208,7 @@ converts_from_rant!(v -> String { v.to_string() });
 converts_into_rant!(v: RantValue { v });
 converts_into_rant!(v: RantNothing { RantValue::Nothing });
 converts_into_rant!(v: bool { RantValue::Boolean(v) });
+converts_into_rant!(v: char { RantValue::String(RantString::from(v)) });
 converts_into_rant!(v: f32 { RantValue::Float(v as f64) });
 converts_into_rant!(v: f64 { RantValue::Float(v) });
 converts_into_rant!(v: String { RantValue::String(v.into()) });

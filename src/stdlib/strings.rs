@@ -56,3 +56,25 @@ pub fn trim(vm: &mut VM, s: RantString) -> RantStdResult {
   vm.cur_frame_mut().write(s.as_str().trim());
   Ok(())
 }
+
+pub fn ord(vm: &mut VM, s: InternalString) -> RantStdResult {
+  if s.is_empty() {
+    return Ok(())
+  }
+
+  vm.cur_frame_mut().write(s.chars().next().unwrap() as u32);
+
+  Ok(())
+}
+
+pub fn char_(vm: &mut VM, code_point: u32) -> RantStdResult {
+  if let Some(c) = char::from_u32(code_point) {
+    vm.cur_frame_mut().write(c);
+  }
+  Ok(())
+}
+
+pub fn ord_all(vm: &mut VM, s: InternalString) -> RantStdResult {
+  vm.cur_frame_mut().write(s.chars().map(|c| (c as u32).into_rant()).collect::<RantList>());
+  Ok(())
+}

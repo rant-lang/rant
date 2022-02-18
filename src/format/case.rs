@@ -129,8 +129,7 @@ fn convert_char_upper_invariant(input: char, buffer: &mut InternalString) {
 #[inline]
 fn convert_char_lower_invariant(input: char, buffer: &mut InternalString) {
   match input {
-    'ß' => buffer.push('ẞ'),
-    other => buffer.push_str(&other.to_uppercase().to_string())
+    other => buffer.push_str(&other.to_lowercase().to_string())
   }
 }
 

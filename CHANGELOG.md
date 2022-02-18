@@ -3,6 +3,10 @@
 ## 4.0.0-alpha.32 (unreleased)
 
 ### New
+* Added stdlib functions:
+  * `[char]`
+  * `[ord]`
+  * `[ord-all]`
 
 ### Changes
 * Changed `@and` operator to a symbol: `&`

@@ -1,9 +1,9 @@
 mod num;
-mod text;
+mod case;
 mod ws;
 
 pub use self::num::*;
-pub use self::text::*;
+pub use self::case::*;
 pub use self::ws::*;
 
 #[derive(Debug, Clone, Default)]
