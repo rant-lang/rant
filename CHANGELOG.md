@@ -1,6 +1,8 @@
 # Changelog
 
-## 4.0.0-alpha.32 (unreleased)
+## 4.0.0-alpha.32
+
+(2/17/2022)
 
 ### New
 * Added stdlib functions:
