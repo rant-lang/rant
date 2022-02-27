@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.0.0-alpha.33
+
+### New
+
+### Changes
+* All types are now allowed in block weights. Non-numeric types are converted to integers based on their truthiness.
+
+### Fixes
 ## 4.0.0-alpha.32
 
 (2/17/2022)

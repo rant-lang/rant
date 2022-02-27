@@ -196,9 +196,7 @@ impl<'rant> VM<'rant> {
               weights.push(match weight_value {
                 RantValue::Int(n) => n as f64,
                 RantValue::Float(n) => n,
-                RantValue::Boolean(b) => bf64(b),
-                RantValue::Nothing => 1.0,
-                other => runtime_error!(RuntimeErrorType::ArgumentError, format!("weight values cannot be of type '{}'", other.type_name())),
+                other => bf64(other.to_bool()),
               });
               pop_next_weight = false;
               continue
