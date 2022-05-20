@@ -2,12 +2,17 @@
 
 ## 4.0.0-alpha.33
 
+(5/20/2022)
+
 ### New
 
 ### Changes
 * All types are now allowed in block weights. Non-numeric types are converted to integers based on their truthiness.
 
 ### Fixes
+* Fixed build failure on installation due to missing files
+
+
 ## 4.0.0-alpha.32
 
 (2/17/2022)
