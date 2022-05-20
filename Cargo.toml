@@ -1,6 +1,6 @@
 [package]
 name = "rant"
-version = "4.0.0-alpha.32"
+version = "4.0.0-alpha.33"
 edition = "2021"
 description = "The Rant procedural templating language"
 license = "MIT OR Apache-2.0"
@@ -9,7 +9,7 @@ homepage = "https://rant-lang.org"
 keywords = ["rant", "templating", "procedural", "generation", "procgen"]
 categories = ["text-processing", "game-development", "template-engine"]
 readme = "README.md"
-rust-version = "1.58.1"
+rust-version = "1.61.0"
 include = [
   "**/*.rs", 
   "Cargo.toml",
@@ -17,7 +17,8 @@ include = [
   "LICENSE*",
   "THIRD_PARTY_LICENSES*",
   "CHANGELOG.md",
-  "!tests/unincluded_*.rs"
+  "!tests/unincluded_*.rs",
+  "src/tools/cli/_*.txt"
 ]
 default-run = "rant"
 # publish = false
@@ -50,7 +51,7 @@ quickscope = "0.2.0"              # Powers the variable scoping system.
 rand = "0.8.3"                    # RNG utilities used throughout Rant.
 rand_xoshiro = "0.6.0"            # RNG implementation used by the Rant runtime.
 smallvec = "1.6.1"                # List optimization used throughout Rant.
-smartstring = "0.2.6"             # String optimization used throughout Rant.
+smartstring = "1.0.1"             # String optimization used throughout Rant.
 unicode-segmentation = "1.7.1"    # Used by Rant to index strings by grapheme cluster.
 
 # CLI

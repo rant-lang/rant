@@ -1,5 +1,5 @@
 {
     "editor.tabSize": 2,
     "rust-analyzer.cargo.allFeatures": true,
-    "files.autoSave": "afterDelay",
+    "files.autoSave": "off",
 }

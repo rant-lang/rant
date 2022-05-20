@@ -1,0 +1,10 @@
+# Define A, B, and A x B
+<%a = (1; 2; 3)>
+<%b = (A; B; C)>
+<%axb = [tuple: ** <a>; ** <b> |> tuple]>
+
+# Display the results
+[ws-fmt: verbatim]
+A         = <a>\n
+B         = <b>\n
+A x B     = <axb>\n
